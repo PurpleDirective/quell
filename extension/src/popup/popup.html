@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="hd">
+    <img src="../../icons/icon48.png" alt="" class="logo" />
+    <div class="hd-text">
+      <h1>Quell</h1>
+      <p class="tag">Quiet the web.</p>
+    </div>
+  </header>
+
+  <div class="master">
+    <span class="master-lbl">Quell is <strong id="stateLabel">on</strong><span class="info" tabindex="0" role="img" aria-label="Master switch — pause or resume all of Quell's blocking at once." data-tip="Master switch — pause or resume all of Quell's blocking at once."></span></span>
+    <label class="switch" title="Turn Quell on or off">
+      <input type="checkbox" id="enabled" />
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <main id="main">
+    <!-- AI features — the active hero section -->
+    <section class="grp">
+      <div class="grp-h">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l1.7 5.8 5.8 1.7-5.8 1.7L12 17.5l-1.7-5.8L4.5 10l5.8-1.7z"/></svg>
+        <span class="grp-t">AI features</span>
+        <span class="grp-state on">Active</span>
+      </div>
+
+      <div class="sub">
+        <span class="sub-l">Google<span class="info" tabindex="0" role="img" aria-label="Hide: removes just the AI Overview, keeps the rest of Google. Clean Web: classic link results with zero AI (most reliable). Off: leaves Google's AI as-is." data-tip="Hide: removes just the AI Overview, keeps the rest of Google. Clean Web: classic link results with zero AI (most reliable). Off: leaves Google's AI as-is."></span></span>
+        <div class="opts" role="radiogroup" aria-label="Google AI handling">
+          <label class="opt">
+            <input type="radio" name="gmode" value="hide" />
+            <span class="opt-t">Hide AI Overviews</span>
+          </label>
+          <label class="opt">
+            <input type="radio" name="gmode" value="cleanweb" />
+            <span class="opt-t">Clean Web only</span>
+          </label>
+          <label class="opt">
+            <input type="radio" name="gmode" value="off" />
+            <span class="opt-t">Off</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="row-l">Bing — hide Copilot<span class="info" tabindex="0" role="img" aria-label="Removes the Copilot chat panel and button from Bing search." data-tip="Removes the Copilot chat panel and button from Bing search."></span></span>
+        <label class="switch sm">
+          <input type="checkbox" id="bing" />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Cookie banners -->
+    <section class="grp">
+      <div class="row">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="9.5" r="1.1"/><circle cx="14.5" cy="9" r="1.1"/><circle cx="15" cy="14.5" r="1.1"/><circle cx="9.5" cy="15" r="1.1"/></svg>
+        <span class="row-l">Cookie banners <span class="badge beta">Beta</span><span class="info up" tabindex="0" role="img" aria-label="Blocks the we-use-cookies consent popups. Turning it on asks Chrome for all-sites access — needed to hide banners site-wide." data-tip="Blocks the “we use cookies” consent popups. Turning it on asks Chrome for all-sites access — needed to hide banners site-wide."></span></span>
+        <label class="switch sm" title="Block cookie-consent popups">
+          <input type="checkbox" id="cookies" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="row site-row" id="siteRow" hidden>
+        <span class="row-l">Pause on <span class="host" id="siteHost"></span><span class="info up" tabindex="0" role="img" aria-label="If this site looks broken with cookie blocking on, pause Quell's cookie layer here only. Reload the page after toggling." data-tip="If this site looks broken with cookie blocking on, pause Quell's cookie layer here only. Reload the page after toggling."></span></span>
+        <label class="switch sm" title="Pause cookie blocking on this site">
+          <input type="checkbox" id="siteAllow" />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Annoyances — coming soon -->
+    <section class="grp">
+      <div class="row">
+        <svg class="ic muted" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16V11a6 6 0 0 0-5-5.9V4a1 1 0 0 0-2 0v1.1A6 6 0 0 0 6 11v5l-1.6 1.6V18h15.2v-1.4z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 20.5a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+        <span class="row-l">Pop-ups &amp; nags <span class="badge">Soon</span><span class="info up" tabindex="0" role="img" aria-label="Newsletter sign-up modals and chat-widget pop-ups. Coming soon." data-tip="Newsletter sign-up modals and chat-widget pop-ups. Coming soon."></span></span>
+        <label class="switch sm" title="Coming soon">
+          <input type="checkbox" id="annoyances" disabled />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </section>
+
+    <!-- The satisfying count -->
+    <div class="counter">
+      <span class="counter-n" id="total">0</span>
+      <span class="counter-l">elements quelled so far</span>
+    </div>
+  </main>
+
+  <div class="feedback">
+    <a class="fb" id="rate" href="https://chromewebstore.google.com/" target="_blank" rel="noopener">
+      <svg class="star" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 5.9 6.6 1-4.7 4.6 1.1 6.5L12 17.4 6.1 20.5l1.1-6.5L2.5 9.4l6.6-1z"/></svg>
+      Rate Quell
+    </a>
+    <span class="dot" aria-hidden="true">·</span>
+    <a class="fb" id="feedback" href="mailto:support@purpledirective.com?subject=Quell%20feedback">Send feedback</a>
+  </div>
+
+  <footer>
+    <a class="pd" href="https://purpledirective.com" target="_blank" rel="noopener">by Purple Directive</a>
+    <span class="trust">free · no tracking · open source</span>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

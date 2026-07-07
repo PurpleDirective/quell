@@ -1,0 +1,41 @@
+name: quell-rules-refresh
+
+# Weekly EasyList Cookie → Quell rules regeneration (Phase 2 pipeline).
+# Opens a PR when the generated rules changed; never pushes to main directly.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate rules
+        run: python3 pipeline/build_rules.py
+
+      - name: Open PR if rules changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- extension/rules; then
+            echo "No rule changes this week."
+            exit 0
+          fi
+          BR="quell/rules-refresh-$(date +%Y%m%d)"
+          git config user.name "quell-rules-bot"
+          git config user.email "accounts@purpledirective.com"
+          git checkout -b "$BR"
+          git add extension/rules
+          git commit -m "chore(quell): weekly EasyList Cookie rules refresh"
+          git push -u origin "$BR"
+          gh pr create \
+            --title "chore(quell): weekly cookie-rules refresh $(date +%Y-%m-%d)" \
+            --body "Automated EasyList Cookie List regeneration (pipeline/build_rules.py). Review the diff stats, run tests/run.sh locally, and bump the extension version before any store release."
