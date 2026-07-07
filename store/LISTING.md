@@ -65,8 +65,8 @@ blocks on search engines and cookie-consent pop-ups — entirely locally.
 **Data usage:** Quell does not collect, transmit, sell, or share ANY user data.
 All state is chrome.storage.local on the user's machine.
 
-**Privacy policy URL:** https://purpledirective.com/quell/privacy
-(host `store/privacy-policy.md` there before submitting)
+**Privacy policy URL:** https://github.com/PurpleDirective/quell/blob/main/store/privacy-policy.md
+(live on the public repo)
 
 ## Assets (store/assets/)
 
