@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Quell \u2014 Block AI Overviews, Gemini & Cookie Popups",
-  "version": "0.4.0",
-  "description": "Quiet the web. Turn off AI Overviews, Gemini, Copilot and block cookie-consent popups. Free, no account, no tracking, open source. By Purple Directive.",
+  "name": "Quell — Block AI Overviews, Gemini & Cookie Popups",
+  "version": "0.4.1",
+  "description": "Quiet the web. Turn off AI Overviews, Gemini & Copilot and block cookie-consent pop-ups. Free, private, open source.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

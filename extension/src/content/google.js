@@ -13,7 +13,11 @@
 
   if (s.googleMode === 'cleanweb') {
     const url = new URL(location.href);
-    if (url.searchParams.get('udm') !== '14') {
+    // Rewrite only the default results page (no udm/tbm) and Google's AI Mode
+    // (udm=50). Images/News/Videos/Shopping carry their own udm (or legacy
+    // tbm) — redirecting those too would make every vertical unreachable.
+    const udm = url.searchParams.get('udm');
+    if ((udm === null || udm === '50') && !url.searchParams.has('tbm')) {
       url.searchParams.set('udm', '14');
       location.replace(url.toString());
     }
@@ -25,11 +29,15 @@
   // Maintainable selector list (the part the Phase 2 pipeline keeps fresh).
   // BLOCK_CSS entries are whole AI blocks — they're also counted for the badge.
   const BLOCK_CSS = 'div[data-attrid="AIOverview" i], div[aria-label="AI Overview" i], .M8OgIe, .YzCcne';
+  // The Gemini selectors target upsell chips/promos in Google's own chrome —
+  // NOT organic results. Unscoped they erased legitimate results linking to
+  // gemini.google.com (searching "gemini" lost real links), so exempt anything
+  // inside the organic containers.
   const css = `
     ${BLOCK_CSS},
     [data-hveid] [aria-label*="AI Overview" i],
-    a[href*="gemini.google.com"],
-    [aria-label*="Gemini" i] { display: none !important; }
+    a[href*="gemini.google.com"]:not(#rso *):not(#search *),
+    [aria-label*="Gemini" i]:not(#rso *):not(#search *) { display: none !important; }
   `;
   window.Quell.injectCSS('quell-google', css);
 
@@ -37,13 +45,20 @@
   const LABELS = ['ai overview', 'ai mode', 'generative ai', 'search with ai'];
   const BLOCK_SEL = '#rso > div, #center_col > div, [data-hveid], .MjjYud, .ULSxyf, .hlcw0c';
 
+  // One counted-flag shared by BOTH passes — a block matching BLOCK_CSS whose
+  // label also matches must increment the badge once, not twice (self,
+  // ancestor, or descendant already counted all mean "same block").
+  const alreadyCounted = (el) =>
+    el.closest('[data-quell-counted="1"]') !== null ||
+    el.querySelector('[data-quell-counted="1"]') !== null;
+
   function sweep() {
     let hidden = 0;
 
-    // Count what the CSS layer already hid (once per element).
+    // Count what the CSS layer already hid (once per block).
     for (const el of document.querySelectorAll(BLOCK_CSS)) {
-      if (el.dataset.quellSeen !== '1') {
-        el.dataset.quellSeen = '1';
+      if (!alreadyCounted(el)) {
+        el.dataset.quellCounted = '1';
         hidden++;
       }
     }
@@ -63,7 +78,10 @@
       if (block && block.dataset.quellHidden !== '1') {
         block.style.setProperty('display', 'none', 'important');
         block.dataset.quellHidden = '1';
-        hidden++;
+        if (!alreadyCounted(block)) {
+          block.dataset.quellCounted = '1';
+          hidden++;
+        }
       }
     }
     window.Quell.report(hidden);

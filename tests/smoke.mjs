@@ -17,11 +17,14 @@ const ok = (cond, name) => {
 };
 
 const GOOGLE_FIXTURE = `<!doctype html><html><head><title>q - Google Search</title></head><body>
-<div id="rso">
+<div id="gemini-upsell"><a href="https://gemini.google.com/promo" aria-label="Try Gemini">Try Gemini</a></div>
+<div id="search"><div id="rso">
   <div class="MjjYud" id="ai-block"><div role="heading">AI Overview</div><p>Generated answer…</p></div>
+  <div class="M8OgIe" id="ai-block-css"><div role="heading">AI Overview</div><p>Matches BLOCK_CSS and the label pass…</p></div>
   <div class="MjjYud" id="organic-ai-title"><a href="https://example.com/x"><h3>AI Mode explained — what it means</h3></a></div>
+  <div class="MjjYud" id="organic-gemini"><a href="https://gemini.google.com/app"><h3>Gemini — chat to supercharge your ideas</h3></a></div>
   <div class="MjjYud" id="organic-normal"><a href="https://example.com/y"><h3>Regular result</h3></a></div>
-</div></body></html>`;
+</div></div></body></html>`;
 
 const BING_FIXTURE = `<!doctype html><html><body>
 <div id="b_content">result list</div><div id="b_sydConvCont">Copilot panel</div>
@@ -84,6 +87,54 @@ console.log('Google (clean web):');
   await page.waitForURL(/udm=14/, { timeout: 5000 }).catch(() => {});
   ok(page.url().includes('udm=14'), 'redirected to classic web results (udm=14)');
   await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'hide' }));
+  await page.close();
+}
+
+// --- Google clean-web mode: verticals exempt, AI Mode redirected ---
+console.log('Google (clean web verticals):');
+{
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'cleanweb' }));
+  const page = await ctx.newPage();
+  await page.route('https://www.google.com/search**', (r) =>
+    r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  await page.goto('https://www.google.com/search?q=test&udm=2');
+  await page.waitForTimeout(400);
+  ok(!page.url().includes('udm=14'), 'Images tab (udm=2) NOT redirected');
+  await page.goto('https://www.google.com/search?q=test&tbm=isch');
+  await page.waitForTimeout(400);
+  ok(!page.url().includes('udm=14'), 'legacy vertical (tbm=isch) NOT redirected');
+  await page.goto('https://www.google.com/search?q=test&udm=50');
+  await page.waitForURL(/udm=14/, { timeout: 5000 }).catch(() => {});
+  ok(page.url().includes('udm=14'), 'AI Mode (udm=50) redirected to web results');
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'hide' }));
+  await page.close();
+}
+
+// --- Gemini selector scoping + badge single-count ---
+console.log('Gemini scoping + badge count:');
+{
+  await sw.evaluate(() => chrome.storage.local.set({ totalBlocked: 0 }));
+  const page = await ctx.newPage();
+  await page.route('https://www.google.com/search**', (r) =>
+    r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  await page.goto('https://www.google.com/search?q=gemini');
+  await page.waitForFunction(() =>
+    getComputedStyle(document.getElementById('ai-block')).display === 'none').catch(() => {});
+  ok(await page.evaluate(() => getComputedStyle(document.querySelector('#organic-gemini a')).display) !== 'none',
+    'organic result linking gemini.google.com NOT hidden (false-positive guard)');
+  ok(await page.evaluate(() => getComputedStyle(document.querySelector('#gemini-upsell a')).display) === 'none',
+    'Gemini upsell outside organic containers IS hidden');
+  ok(await page.evaluate(() => getComputedStyle(document.getElementById('ai-block-css')).display) === 'none',
+    'block matching BLOCK_CSS hidden');
+  // Settle: content script → message → serialized badge queue → storage.
+  let total = -1;
+  for (let i = 0; i < 20; i++) {
+    await page.waitForTimeout(150);
+    const t = await sw.evaluate(() => chrome.storage.local.get({ totalBlocked: 0 }).then((s) => s.totalBlocked));
+    if (t === total && t > 0) break;
+    total = t;
+  }
+  ok(total === 2, `two AI blocks counted exactly once each (totalBlocked=${total}, was 3 with the double-count bug)`);
   await page.close();
 }
 
@@ -171,6 +222,26 @@ console.log('Popup:');
   ok(await page.evaluate(() => document.querySelector('input[name="gmode"][value="hide"]').checked), 'google mode radio = hide');
   ok(await page.evaluate(() => getComputedStyle(document.getElementById('siteRow')).display) === 'none',
     'site-pause row actually hidden while cookie feature off (computed style, not just attribute)');
+  ok(await page.evaluate(() => document.getElementById('rate').href
+    .includes('chromewebstore.google.com/detail/hipifmmjmbnkhfajkbmcjkajlfjiehho')),
+    'Rate Quell links the real store listing');
+  ok(await page.evaluate(() => document.getElementById('aiState').textContent) === 'Active',
+    'AI-features badge Active with defaults');
+
+  // Badge honesty: master off → Off; both AI features off → Off.
+  await sw.evaluate(() => chrome.storage.local.set({ enabled: false }));
+  await page.reload();
+  await page.waitForFunction(() => document.getElementById('aiState').textContent === 'Off',
+    { timeout: 3000 }).catch(() => {});
+  ok(await page.evaluate(() => document.getElementById('aiState').textContent) === 'Off',
+    'AI-features badge Off when master switch is off');
+  await sw.evaluate(() => chrome.storage.local.set({ enabled: true, googleMode: 'off', bingEnabled: false }));
+  await page.reload();
+  await page.waitForFunction(() => document.getElementById('aiState').textContent === 'Off',
+    { timeout: 3000 }).catch(() => {});
+  ok(await page.evaluate(() => document.getElementById('aiState').textContent) === 'Off',
+    'AI-features badge Off when every AI feature is off');
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'hide', bingEnabled: true }));
   await page.close();
 }
 

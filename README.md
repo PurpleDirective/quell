@@ -6,6 +6,8 @@ Gemini, Bing Copilot), and growing to cookie-consent nags and other annoyances.
 
 Free. No account. No tracking. Made by Purple Directive.
 
+**[→ Install from the Chrome Web Store](https://chromewebstore.google.com/detail/hipifmmjmbnkhfajkbmcjkajlfjiehho)** — works on Chrome and Edge.
+
 ## Why
 
 Only ~30% of people find new AI features in their apps useful; 40%+ call them an

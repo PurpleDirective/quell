@@ -1,4 +1,4 @@
-# Quell — Chrome Web Store listing (v0.4.0)
+# Quell — Chrome Web Store listing (v0.4.1)
 
 Everything the Developer Dashboard asks for, in order. Upload `dist/quell-<version>.zip`
 (build with `pipeline/package.sh`).
@@ -26,9 +26,9 @@ country domains.
 
 ★ COOKIE BANNERS (beta, opt-in) — blocks the major consent platforms at the
 network layer and hides banners using the full EasyList Cookie List (~15,000
-generic rules + domain-specific rules for ~16,000 sites), refreshed weekly by
-an automated pipeline. A per-site pause switch gives you an instant escape
-hatch if any site misbehaves.
+generic rules + domain-specific rules for ~16,000 sites), rebuilt weekly by
+an automated pipeline and shipped with each extension update. A per-site
+pause switch gives you an instant escape hatch if any site misbehaves.
 
 WHY QUELL?
 • Free forever. No account, no paywall, no "pro" upsell on the blocking core.
@@ -65,8 +65,12 @@ blocks on search engines and cookie-consent pop-ups — entirely locally.
 **Data usage:** Quell does not collect, transmit, sell, or share ANY user data.
 All state is chrome.storage.local on the user's machine.
 
-**Privacy policy URL:** https://github.com/PurpleDirective/quell/blob/main/store/privacy-policy.md
-(live on the public repo)
+**Privacy policy URL:** https://purpledirective.com/quell/privacy/
+(LIVE since 2026-07-14 — trailing slash matters: the bare path 308-redirects,
+the slash URL serves 200 directly. Verified serving the actual policy, not the
+homepage. The v0.4.0 rejection — "Purple Nickel", User Data Privacy — was this
+URL 200-serving the homepage via the CF Pages SPA fallback before the page and
+a real 404.html existed.)
 
 ## Assets (store/assets/)
 
