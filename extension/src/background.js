@@ -66,10 +66,13 @@ async function syncAllowRules(allowlist) {
   await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules }).catch(() => {});
 }
 
-// Seed defaults + reconcile feature state on install/startup.
+// Reconcile feature state on install/startup. Defaults are deliberately NOT
+// written into storage here: every reader merges DEFAULTS at read time via
+// get(DEFAULTS), so seeding added nothing — and its read-then-write raced
+// (and clobbered) any settings write landing in the same window, e.g. a
+// popup toggle right after service-worker start.
 async function init() {
-  const current = await chrome.storage.local.get(DEFAULTS); // merges defaults in
-  await chrome.storage.local.set(current);
+  const current = await chrome.storage.local.get(DEFAULTS);
   chrome.action.setBadgeBackgroundColor({ color: '#5B21B6' });
   await applyCookieBlocking(current.enabled && current.cookieEnabled);
   await syncAllowRules(current.cookieAllowlist);

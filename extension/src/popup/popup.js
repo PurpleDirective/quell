@@ -43,6 +43,21 @@ async function renderSiteRow(s) {
   $('siteAllow').dataset.host = host;
 }
 
+// The AI-features section badge must reflect reality: it was a static
+// "Active" that kept lying with the master switch off (or every AI feature
+// individually off).
+function renderAiState(s) {
+  const badge = $('aiState');
+  if (!badge) return;
+  const active = s.enabled && (s.googleMode !== 'off' || s.bingEnabled);
+  badge.textContent = active ? 'Active' : 'Off';
+  badge.classList.toggle('on', active);
+}
+
+async function refreshAiState() {
+  renderAiState(await store.get(DEFAULTS));
+}
+
 async function load() {
   const s = await store.get(DEFAULTS);
   $('enabled').checked = s.enabled;
@@ -53,20 +68,21 @@ async function load() {
   $('bing').checked = s.bingEnabled;
   if ($('cookies')) $('cookies').checked = s.cookieEnabled;
   $('total').textContent = Number(s.totalBlocked).toLocaleString();
+  renderAiState(s);
   await renderSiteRow(s);
 }
 
 $('enabled').addEventListener('change', (e) => {
-  store.set({ enabled: e.target.checked });
+  store.set({ enabled: e.target.checked }).then(refreshAiState);
   $('stateLabel').textContent = e.target.checked ? 'on' : 'off';
 });
 
 for (const r of document.querySelectorAll('input[name="gmode"]')) {
-  r.addEventListener('change', () => store.set({ googleMode: r.value }));
+  r.addEventListener('change', () => store.set({ googleMode: r.value }).then(refreshAiState));
 }
 
 $('bing').addEventListener('change', (e) => {
-  store.set({ bingEnabled: e.target.checked });
+  store.set({ bingEnabled: e.target.checked }).then(refreshAiState);
 });
 
 // Cookie banners — needs all-sites access for the cosmetic layer, so we request
