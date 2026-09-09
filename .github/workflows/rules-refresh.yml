@@ -70,15 +70,23 @@ jobs:
               'for any store release.')")
           echo "url=$URL" >> "$GITHUB_OUTPUT"
 
-      - name: Install Playwright
+      - name: Install Playwright and a virtual display
         if: steps.changed.outputs.changed == 'true'
         run: |
           npm i -g playwright
           npx --yes playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb
 
+      # The suite loads the unpacked extension, which Chromium will only do with
+      # a real display — it tries headless first and falls back to headed, and in
+      # CI both fail with "could not load the extension in Chromium" unless there
+      # is an X server. xvfb-run supplies one. Without this the gate is red every
+      # week no matter what the rules say, which is a worse failure than the
+      # unmerged backlog it replaced: it looks like a finding and is not one.
       - name: Smoke suite against the regenerated rules
         if: steps.changed.outputs.changed == 'true'
-        run: bash tests/run.sh
+        run: xvfb-run -a bash tests/run.sh
 
       - name: Merge — the suite is the gate
         if: steps.changed.outputs.changed == 'true'
