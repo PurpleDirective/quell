@@ -1,4 +1,4 @@
-# Quell — Chrome Web Store listing (v0.4.1)
+# Quell — Chrome Web Store listing (v0.4.2)
 
 Everything the Developer Dashboard asks for, in order. Upload `dist/quell-<version>.zip`
 (build with `pipeline/package.sh`).

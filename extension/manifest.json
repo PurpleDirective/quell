@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Quell — Block AI Overviews, Gemini & Cookie Popups",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Quiet the web. Turn off AI Overviews, Gemini & Copilot and block cookie-consent pop-ups. Free, private, open source.",
   "icons": {
     "16": "icons/icon16.png",

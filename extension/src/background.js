@@ -48,6 +48,30 @@ async function applyCookieBlocking(on) {
   }
 }
 
+// Chrome only injects registered content scripts on NAVIGATION, so switching
+// the cookie feature on did nothing to tabs the user already had open — it
+// read as "I turned it on and the banner is still there". We can inject into
+// open tabs here because enabling the feature is exactly when the user grants
+// <all_urls>; without that grant this is a no-op.
+// CSS added via insertCSS (unlike the registered content-script CSS) can be
+// pulled back out again, so tabs healed this way also revert cleanly on off.
+async function syncCookieLayerInOpenTabs(on) {
+  const granted = await chrome.permissions.contains({ origins: ['<all_urls>'] }).catch(() => false);
+  if (!granted) return;
+  const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] }).catch(() => []);
+  for (const tab of tabs) {
+    if (!tab.id) continue;
+    const target = { tabId: tab.id };
+    if (on) {
+      chrome.scripting.insertCSS({ target, files: ['rules/cookie-generic.css'] }).catch(() => {});
+      chrome.scripting.executeScript({ target, files: ['src/content/cookies.js'] }).catch(() => {});
+    } else {
+      // Only removes CSS this path inserted; a no-op elsewhere.
+      chrome.scripting.removeCSS({ target, files: ['rules/cookie-generic.css'] }).catch(() => {});
+    }
+  }
+}
+
 // The network layer must also respect the per-site pause: one dNR "allow" rule
 // per allowlisted host exempts requests that site initiates from the static
 // block rules (higher priority wins).
@@ -86,7 +110,9 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area !== 'local') return;
   if (changes.enabled || changes.cookieEnabled || changes.cookieAllowlist) {
     const s = await chrome.storage.local.get(DEFAULTS);
-    await applyCookieBlocking(s.enabled && s.cookieEnabled);
+    const on = s.enabled && s.cookieEnabled;
+    await applyCookieBlocking(on);
+    if (changes.enabled || changes.cookieEnabled) await syncCookieLayerInOpenTabs(on);
     if (changes.cookieAllowlist) await syncAllowRules(s.cookieAllowlist);
   }
 });

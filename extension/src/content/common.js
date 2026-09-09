@@ -19,6 +19,36 @@ window.Quell = window.Quell || {
     (document.head || document.documentElement).appendChild(style);
   },
 
+  // Counterpart to injectCSS — lets a surface undo its own hiding when the
+  // user turns a feature off, without a page reload.
+  removeCSS(id) {
+    document.getElementById(id)?.remove();
+  },
+
+  // Re-run `cb(settings)` whenever any of `keys` changes in storage.local.
+  // This is what makes a popup toggle affect the page the user is ALREADY
+  // looking at. Without it every toggle silently needed a reload, which reads
+  // as "the extension doesn't work" — the top cause of 1-star reviews in this
+  // niche (see store/COMPETITIVE-LANDSCAPE §backlog 2).
+  onSettingsChange(keys, cb) {
+    if (!chrome?.storage?.onChanged) return;
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local') return;
+      if (!keys.some((k) => k in changes)) return;
+      this.getSettings().then(cb).catch(() => {});
+    });
+  },
+
+  // Coalesce mutation bursts into one sweep per frame. requestAnimationFrame
+  // is the right pacing while the tab is visible, but it does NOT fire at all
+  // in a hidden tab — which would defer the text-resilient pass and the badge
+  // count indefinitely for anything opened in a background tab. Fall back to a
+  // macrotask there so background tabs still settle.
+  nextTick(fn) {
+    if (document.hidden) setTimeout(fn, 0);
+    else requestAnimationFrame(fn);
+  },
+
   // Tell the background how many AI elements we just removed (for the badge).
   report(n) {
     if (n > 0) {

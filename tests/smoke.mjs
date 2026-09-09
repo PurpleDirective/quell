@@ -11,10 +11,14 @@ import path from 'node:path';
 
 const EXT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'extension');
 let passed = 0, failed = 0;
+let skipped = 0;
 const ok = (cond, name) => {
   if (cond) { passed++; console.log(`  ✓ ${name}`); }
   else { failed++; console.log(`  ✗ FAIL ${name}`); }
 };
+// Announce loudly rather than passing vacuously when the environment can't
+// set up a precondition — a silent trivial pass is worse than no test.
+const skip = (name, why) => { skipped++; console.log(`  ⊘ SKIP ${name} — ${why}`); };
 
 const GOOGLE_FIXTURE = `<!doctype html><html><head><title>q - Google Search</title></head><body>
 <div id="gemini-upsell"><a href="https://gemini.google.com/promo" aria-label="Try Gemini">Try Gemini</a></div>
@@ -86,8 +90,11 @@ console.log('Google (clean web):');
   await page.goto('https://www.google.com/search?q=test');
   await page.waitForURL(/udm=14/, { timeout: 5000 }).catch(() => {});
   ok(page.url().includes('udm=14'), 'redirected to classic web results (udm=14)');
-  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'hide' }));
+  // Close BEFORE restoring the mode: with live-apply, flipping to hide while
+  // this udm=14 tab is open now sends it back through a redirect, whose sweep
+  // would land in the next test's counter.
   await page.close();
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'hide' }));
 }
 
 // --- Google clean-web mode: verticals exempt, AI Mode redirected ---
@@ -106,8 +113,8 @@ console.log('Google (clean web verticals):');
   await page.goto('https://www.google.com/search?q=test&udm=50');
   await page.waitForURL(/udm=14/, { timeout: 5000 }).catch(() => {});
   ok(page.url().includes('udm=14'), 'AI Mode (udm=50) redirected to web results');
+  await page.close(); // close before restoring the mode — see note above
   await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'hide' }));
-  await page.close();
 }
 
 // --- Gemini selector scoping + badge single-count ---
@@ -213,6 +220,209 @@ console.log('Cookie layer:');
   await paused.close();
 }
 
+// --- LIVE-APPLY: popup toggles must affect the page ALREADY open ---
+// Regression guard for the launch-blocking gap: before this, every toggle
+// silently needed a reload, which reads as "the extension does nothing".
+console.log('Live-apply (no reload):');
+{
+  const page = await ctx.newPage();
+  await page.route('https://www.google.com/search**', (r) =>
+    r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  await page.goto('https://www.google.com/search?q=test');
+  const disp = (id) => page.evaluate(
+    (i) => getComputedStyle(document.getElementById(i)).display, id);
+  const settle = async (id, want) => {
+    await page.waitForFunction(
+      ([i, w]) => getComputedStyle(document.getElementById(i)).display === w,
+      [id, want], { timeout: 4000 }).catch(() => {});
+  };
+
+  await settle('ai-block', 'none');
+  ok(await disp('ai-block') === 'none', 'baseline: AI block hidden in hide mode');
+
+  // hide → off, live
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'off' }));
+  await settle('ai-block', 'block');
+  ok(await disp('ai-block') !== 'none', 'mode → off UNHIDES the open page (no reload)');
+  ok(await page.evaluate(() => !document.getElementById('quell-google')),
+    'stylesheet removed on teardown');
+  ok(await page.evaluate(() => !document.querySelector('[data-quell-hidden="1"]')),
+    'inline display:none cleared on teardown (stylesheet removal alone is not enough)');
+
+  // off → hide, live
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'hide' }));
+  await settle('ai-block', 'none');
+  ok(await disp('ai-block') === 'none', 'mode → hide RE-HIDES the open page (no reload)');
+
+  // master switch, live
+  await sw.evaluate(() => chrome.storage.local.set({ enabled: false }));
+  await settle('ai-block', 'block');
+  ok(await disp('ai-block') !== 'none', 'master off unhides the open page (no reload)');
+  await sw.evaluate(() => chrome.storage.local.set({ enabled: true }));
+  await settle('ai-block', 'none');
+  ok(await disp('ai-block') === 'none', 'master on re-hides the open page (no reload)');
+
+  // Toggling must not re-inflate the lifetime counter on the same page.
+  const t1 = await sw.evaluate(() => chrome.storage.local.get({ totalBlocked: 0 }).then((s) => s.totalBlocked));
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'off' }));
+  await settle('ai-block', 'block');
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'hide' }));
+  await settle('ai-block', 'none');
+  await page.waitForTimeout(600);
+  const t2 = await sw.evaluate(() => chrome.storage.local.get({ totalBlocked: 0 }).then((s) => s.totalBlocked));
+  ok(t2 === t1, `off→on does NOT double-count the same blocks (${t1} → ${t2})`);
+  await page.close();
+}
+
+// --- LIVE-APPLY: Clean Web switches both ways without a reload ---
+console.log('Live-apply (Clean Web round trip):');
+{
+  const page = await ctx.newPage();
+  await page.route('https://www.google.com/search**', (r) =>
+    r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  await page.goto('https://www.google.com/search?q=test');
+
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'cleanweb' }));
+  await page.waitForURL(/udm=14/, { timeout: 5000 }).catch(() => {});
+  ok(page.url().includes('udm=14'), 'hide → Clean Web redirects the open tab (no reload)');
+
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'hide' }));
+  await page.waitForFunction(() => !location.search.includes('udm=14'), null,
+    { timeout: 5000 }).catch(() => {});
+  ok(!page.url().includes('udm=14'), 'Clean Web → hide returns the tab to the normal SERP');
+  await page.close();
+}
+
+// --- Clean Web undo must NOT hijack a user's own udm=14 ---
+console.log('Clean Web undo scoping:');
+{
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'hide' }));
+  const page = await ctx.newPage();
+  await page.route('https://www.google.com/search**', (r) =>
+    r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  // User navigates to udm=14 themselves; Quell never redirected this tab.
+  await page.goto('https://www.google.com/search?q=test&udm=14');
+  await page.waitForTimeout(500);
+  // An unrelated setting changes — must not strip the user's own udm=14.
+  await sw.evaluate(() => chrome.storage.local.set({ bingEnabled: false }));
+  await page.waitForTimeout(600);
+  ok(page.url().includes('udm=14'),
+    "user's own udm=14 preserved (we only undo a redirect we performed)");
+  await sw.evaluate(() => chrome.storage.local.set({ bingEnabled: true }));
+  await page.close();
+}
+
+// --- LIVE-APPLY: Bing ---
+console.log('Live-apply (Bing):');
+{
+  const page = await ctx.newPage();
+  await page.route('https://www.bing.com/search**', (r) =>
+    r.fulfill({ contentType: 'text/html', body: BING_FIXTURE }));
+  await page.goto('https://www.bing.com/search?q=test');
+  const disp = () => page.evaluate(() => getComputedStyle(document.getElementById('b_sydConvCont')).display);
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('b_sydConvCont')).display === 'none',
+    null, { timeout: 4000 }).catch(() => {});
+  ok(await disp() === 'none', 'baseline: Copilot panel hidden');
+  await sw.evaluate(() => chrome.storage.local.set({ bingEnabled: false }));
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('b_sydConvCont')).display !== 'none',
+    null, { timeout: 4000 }).catch(() => {});
+  ok(await disp() !== 'none', 'Bing toggle off unhides Copilot on the open page');
+  await sw.evaluate(() => chrome.storage.local.set({ bingEnabled: true }));
+  await page.waitForFunction(() => getComputedStyle(document.getElementById('b_sydConvCont')).display === 'none',
+    null, { timeout: 4000 }).catch(() => {});
+  ok(await disp() === 'none', 'Bing toggle on re-hides Copilot on the open page');
+  await page.close();
+}
+
+// --- LIVE-APPLY: cookie layer reverts in place (seed + scroll-unlock) ---
+console.log('Live-apply (cookie layer):');
+{
+  const src = readFileSync(path.join(EXT, 'src/content/cookies.js'), 'utf8');
+  // Minimal storage stub with a working onChanged, so the script's own
+  // listener drives the transition exactly as it does in the browser.
+  const stub = `window.__quellState={enabled:true,cookieEnabled:true,cookieAllowlist:[]};
+    window.__quellCbs=[];
+    window.chrome={
+      storage:{local:{get:async(d)=>({...d,...window.__quellState})},
+      onChanged:{addListener:(f)=>window.__quellCbs.push(f)}},
+      runtime:{sendMessage:async()=>({selectors:[]})}
+    };
+    window.__quellSet=(patch)=>{Object.assign(window.__quellState,patch);
+      const ch={};for(const k of Object.keys(patch))ch[k]={newValue:patch[k]};
+      window.__quellCbs.forEach(f=>f(ch,'local'));};`;
+
+  const page = await ctx.newPage();
+  await page.route('http://cmp-fixture.test/**', (r) =>
+    r.fulfill({ contentType: 'text/html', body: CMP_FIXTURE }));
+  await page.goto('http://cmp-fixture.test/');
+  await page.addScriptTag({ content: stub + '\n' + src });
+  await page.waitForTimeout(300);
+  ok(await page.evaluate(() => getComputedStyle(document.getElementById('onetrust-banner-sdk')).display) === 'none',
+    'baseline: banner hidden, scroll unlocked');
+  ok(await page.evaluate(() => getComputedStyle(document.body).overflow) === 'auto',
+    'baseline: CMP scroll-lock released');
+
+  await page.evaluate(() => window.__quellSet({ cookieEnabled: false }));
+  await page.waitForTimeout(400);
+  ok(await page.evaluate(() => getComputedStyle(document.getElementById('onetrust-banner-sdk')).display) !== 'none',
+    'cookie feature off restores the banner in place (no reload)');
+  ok(await page.evaluate(() => getComputedStyle(document.body).overflow) === 'hidden',
+    "scroll-unlock reverted to the site's own overflow (not left forced open)");
+
+  await page.evaluate(() => window.__quellSet({ cookieEnabled: true }));
+  await page.waitForTimeout(400);
+  ok(await page.evaluate(() => getComputedStyle(document.getElementById('onetrust-banner-sdk')).display) === 'none',
+    'cookie feature back on re-hides the banner in place');
+
+  // Per-site pause is live too — the tooltip no longer tells users to reload.
+  await page.evaluate(() => window.__quellSet({ cookieAllowlist: ['cmp-fixture.test'] }));
+  await page.waitForTimeout(400);
+  ok(await page.evaluate(() => getComputedStyle(document.getElementById('onetrust-banner-sdk')).display) !== 'none',
+    'per-site pause applies live');
+  await page.close();
+}
+
+// --- Hidden tab: rAF never fires there, so the sweep must still settle ---
+// Without the nextTick fallback the label pass and badge count are deferred
+// indefinitely for anything opened in a background tab.
+console.log('Hidden-tab sweep:');
+{
+  await sw.evaluate(() => chrome.storage.local.set({ googleMode: 'hide', enabled: true }));
+  const page = await ctx.newPage();
+  await page.route('https://www.google.com/search**', (r) =>
+    r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  // Force a background tab. setPageVisibilityOverride is gone from current
+  // Chrome, so drive it the way a user would: front a different tab.
+  const front = await ctx.newPage();
+  await page.goto('https://www.google.com/search?q=test');
+  await front.bringToFront();
+  await page.waitForTimeout(300);
+  const isHidden = await page.evaluate(() => document.visibilityState === 'hidden');
+
+  if (!isHidden) {
+    // Headless Chromium reports every page visible; asserting here would pass
+    // for the wrong reason and hide a real regression.
+    skip('hidden-tab sweep', 'this Chromium reports all pages visible — rAF still fires, precondition unmet');
+  } else {
+    const rafDead = await page.evaluate(async () => {
+      let fired = false;
+      requestAnimationFrame(() => { fired = true; });
+      await new Promise((r) => setTimeout(r, 500));
+      return !fired;
+    });
+    ok(rafDead, 'precondition: rAF does NOT fire while hidden');
+    await page.waitForFunction(
+      () => document.querySelectorAll('[data-quell-counted="1"]').length > 0,
+      null, { timeout: 5000 }).catch(() => {});
+    ok(await page.evaluate(() => document.querySelectorAll('[data-quell-counted="1"]').length) > 0,
+      'sweep still runs in a hidden tab (rAF fallback)');
+    ok(await page.evaluate(() => getComputedStyle(document.getElementById('ai-block')).display) === 'none',
+      'label-pass block hidden in a hidden tab');
+  }
+  await front.close();
+  await page.close();
+}
+
 // --- Popup renders with defaults ---
 console.log('Popup:');
 {
@@ -288,5 +498,5 @@ console.log('Pipeline artifacts:');
 }
 
 await ctx.close();
-console.log(`\n${passed} passed, ${failed} failed`);
+console.log(`\n${passed} passed, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}`);
 process.exit(failed ? 1 : 0);
