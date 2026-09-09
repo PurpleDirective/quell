@@ -1,7 +1,16 @@
 name: quell-rules-refresh
 
 # Weekly EasyList Cookie → Quell rules regeneration (Phase 2 pipeline).
-# Opens a PR when the generated rules changed; never pushes to main directly.
+#
+# Opens a PR when the generated rules changed, runs the smoke suite against the
+# regenerated rules, and merges the PR only when that suite is green.
+#
+# Why it self-merges (changed 2026-09-09): the original job opened a PR and
+# stopped, on the assumption a human would review it. Six consecutive PRs then
+# sat unmerged from 2026-08-10 to 2026-09-07, so this repo's rules fell five
+# weeks behind the monorepo's while the store shipped a newer build. An
+# unreviewed backlog is not a safety gate — it is just staleness that nobody
+# sees. The suite is the gate now: green merges, red stays open for a human.
 
 on:
   schedule:
@@ -18,17 +27,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Regenerate rules
         run: python3 pipeline/build_rules.py
 
-      - name: Open PR if rules changed
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Stop early if nothing changed
+        id: changed
         run: |
           if git diff --quiet -- extension/rules; then
             echo "No rule changes this week."
-            exit 0
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Open PR
+        if: steps.changed.outputs.changed == 'true'
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           BR="quell/rules-refresh-$(date +%Y%m%d)"
           git config user.name "quell-rules-bot"
           git config user.email "accounts@purpledirective.com"
@@ -36,6 +57,39 @@ jobs:
           git add extension/rules
           git commit -m "chore(quell): weekly EasyList Cookie rules refresh"
           git push -u origin "$BR"
-          gh pr create \
+          URL=$(gh pr create \
             --title "chore(quell): weekly cookie-rules refresh $(date +%Y-%m-%d)" \
-            --body "Automated EasyList Cookie List regeneration (pipeline/build_rules.py). Review the diff stats, run tests/run.sh locally, and bump the extension version before any store release."
+            --body "$(printf '%s\n' \
+              'Automated EasyList Cookie List regeneration (pipeline/build_rules.py).' \
+              '' \
+              'This PR merges itself if the smoke suite passes against the regenerated' \
+              'rules. If it is still open, the suite failed and it needs a human — check' \
+              'the run log.' \
+              '' \
+              'Merging rules does not ship them: bump the extension version and rebuild' \
+              'for any store release.')")
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Install Playwright
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          npm i -g playwright
+          npx --yes playwright install --with-deps chromium
+
+      - name: Smoke suite against the regenerated rules
+        if: steps.changed.outputs.changed == 'true'
+        run: bash tests/run.sh
+
+      - name: Merge — the suite is the gate
+        if: steps.changed.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr merge "${{ steps.pr.outputs.url }}" --squash --delete-branch
+
+      - name: Say why the PR was left open
+        if: failure() && steps.changed.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "${{ steps.pr.outputs.url }}" \
+            --body "The smoke suite failed against these regenerated rules, so this PR was left open instead of merging. Run \`tests/run.sh\` locally against this branch before merging." || true
