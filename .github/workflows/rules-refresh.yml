@@ -53,10 +53,18 @@ jobs:
           BR="quell/rules-refresh-$(date +%Y%m%d)"
           git config user.name "quell-rules-bot"
           git config user.email "accounts@purpledirective.com"
-          git checkout -b "$BR"
+          # Idempotent: a re-dispatch on the same day must update the open PR,
+          # not die on the branch it created an hour ago (run 34389615998).
+          git checkout -B "$BR"
           git add extension/rules
           git commit -m "chore(quell): weekly EasyList Cookie rules refresh"
-          git push -u origin "$BR"
+          git push -f -u origin "$BR"
+          URL=$(gh pr list --head "$BR" --state open --json url --jq '.[0].url')
+          if [ -n "$URL" ]; then
+            echo "Reusing open PR $URL"
+            echo "url=$URL" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           URL=$(gh pr create \
             --title "chore(quell): weekly cookie-rules refresh $(date +%Y-%m-%d)" \
             --body "$(printf '%s\n' \
