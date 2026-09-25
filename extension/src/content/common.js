@@ -3,7 +3,37 @@
 // visible to google.js / bing.js. Guard against double-injection.
 
 window.Quell = window.Quell || {
-  DEFAULTS: { enabled: true, googleMode: 'hide', bingEnabled: true, totalBlocked: 0 },
+  // Per-surface AI switches (Phase 1, 2026-09-10). `hidePaa` defaults to
+  // FALSE on purpose: a People-Also-Ask answer is AI the user clicked to see,
+  // and Google renders it as the same object as an unsolicited AI Overview.
+  // Suppressing what someone explicitly asked for is what earns "this
+  // extension broke Google" reviews. chrome.storage.local.get(DEFAULTS) fills
+  // missing keys, so existing installs pick these up without a migration.
+  DEFAULTS: {
+    enabled: true,
+    googleMode: 'hide',
+    hideOverview: true,
+    hideAiMode: true,
+    hidePaa: false,
+    hideGemini: true,
+    bingEnabled: true,
+    // Bing's suggestion chips carry a real related-search query, so they get
+    // their own switch — default FALSE, same reasoning as hidePaa above.
+    hideBingChips: false,
+    // Per-engine mode: 'off' | 'hide' | 'clean'. 'clean' flips the engine's own
+    // no-AI query parameter, which is selector-proof — but it does so by
+    // REDIRECTING the page, and a redirect is not something to impose on
+    // someone who never asked for it. So 'hide' is the default everywhere and
+    // 'clean' is a deliberate choice, listed first because it is the most
+    // reliable mode once chosen. Yahoo publishes no such parameter at all.
+    ddgMode: 'hide',
+    braveMode: 'hide',
+    yahooMode: 'hide',
+    // Reject-all is opt-in: hiding a banner leaves the choice unmade, while
+    // rejecting makes one on the user's behalf.
+    cookieReject: false,
+    totalBlocked: 0,
+  },
 
   async getSettings() {
     return chrome.storage.local.get(this.DEFAULTS);
@@ -13,10 +43,22 @@ window.Quell = window.Quell || {
   // before <head> exists, by falling back to <html>.
   injectCSS(id, css) {
     if (document.getElementById(id)) return;
+    const root = document.head || document.documentElement;
+    // Retry rather than throw when there is nothing to attach to yet. Chrome's
+    // document_start guarantees a documentElement, but scripts injected via
+    // executeScript into an open tab make no such promise, and an exception
+    // here aborts the caller mid-apply.
+    if (!root) {
+      // Bounded — a document that never regains a root must not spin forever.
+      this._cssRetries = (this._cssRetries || 0) + 1;
+      if (this._cssRetries > 50) return;
+      setTimeout(() => this.injectCSS(id, css), 0);
+      return;
+    }
     const style = document.createElement('style');
     style.id = id;
     style.textContent = css;
-    (document.head || document.documentElement).appendChild(style);
+    root.appendChild(style);
   },
 
   // Counterpart to injectCSS — lets a surface undo its own hiding when the

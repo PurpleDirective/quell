@@ -4,9 +4,9 @@
 didn't ask for — starting with forced AI features (Google AI Overviews, AI Mode,
 Gemini, Bing Copilot), and growing to cookie-consent nags and other annoyances.
 
-Free. No account. No tracking. Made by Purple Directive.
+**[→ Install from the Chrome Web Store](https://chromewebstore.google.com/detail/hipifmmjmbnkhfajkbmcjkajlfjiehho)** — for Chrome, Brave, Vivaldi and other browsers that install from the Chrome Web Store.
 
-**[→ Install from the Chrome Web Store](https://chromewebstore.google.com/detail/hipifmmjmbnkhfajkbmcjkajlfjiehho)** — works on Chrome and Edge.
+Free. No account. No tracking. Made by Purple Directive.
 
 ## Why
 
@@ -21,14 +21,48 @@ blocklist is kept fresh by an automated pipeline so it doesn't rot when sites ch
 - **Google** — AI Overviews and AI Mode, on all 190 Google country domains. Two modes:
   - *Hide* — surgically removes the AI blocks, keeps the rest of Google.
   - *Clean Web* — forces Google's classic web results (`udm=14`); selector-proof,
-    never breaks.
-- **Bing** — hides the Copilot sidebar and entry points.
+    so it does not depend on Google's markup staying the same.
+  Per-surface switches: the AI Overview, AI Mode entry points, Gemini promos and
+  People-also-ask answers are each independently controllable.
+- **People-also-ask** — Google builds these answers with the same AI as the
+  Overview, and renders them as the same object, so a single switch hides both.
+  Quell tells them apart: an overview you did not ask for is hidden, an answer
+  you clicked open is kept. Both are yours to change.
+- **Bing** — hides the Copilot sidebar and entry points. The `/copilotsearch`
+  suggestion chips carry real search queries, so they have their own switch and
+  are kept by default.
+- **DuckDuckGo, Brave, Yahoo** *(opt-in)* — these three are **off until you
+  switch them on**, because reaching them needs site access Quell does not ship
+  with. Quell's required access is frozen at Google and Bing: Chrome disables an
+  extension for every existing user when an update widens its required hosts, so
+  every engine added from here on is an optional permission you grant with one
+  click, and updates stay silent.
+  Once enabled, each engine offers *Hide it* (the default) or *Off at the
+  source*. Off-at-the-source uses the engine's own no-AI parameter — DuckDuckGo
+  `assist=false`, Brave `summary=0` — which is selector-proof and so does not
+  depend on their markup staying the same, but it redirects the page, so it is a
+  choice rather than a default. Quell only ever **adds** that parameter: if you have set it
+  yourself, or toggled the engine's own AI switch, Quell leaves your value
+  alone. Yahoo publishes no such parameter, so the option is absent rather than
+  inert. Ecosia is unverified (bot-walled) and deliberately ships no selectors.
 - **Cookie banners** *(beta, opt-in)* — blocks consent platforms at the network
-  layer (317 rules) and hides banners with the **full EasyList Cookie List**:
+  layer (337 rules) and hides banners with the **full EasyList Cookie List**:
   ~15,000 generic selectors plus domain-specific rules for ~16,000 sites. Rules
   derive from the open EasyList Cookie list (CC BY-SA 3.0 — see [NOTICE](NOTICE)).
   If a site misbehaves, the popup's **Pause on this site** switch turns the
   cookie layer off for that site only — network and cosmetic layers both.
+  Quell's own two cosmetic layers lift immediately on the open page; the
+  generic EasyList sheet is injected natively by Chrome and cannot be pulled
+  back out of a loaded page, so that one clears on the next reload.
+  **Reject instead of hide** *(opt-in, off by default)* clicks the consent
+  platform's own *Reject all* button, so the choice is actually recorded rather
+  than left unmade. Strictly scoped to recognised consent platforms — Quell
+  never clicks a site's own controls. The click waits until the page has
+  finished parsing (so the platform's own script is listening), counts only
+  once the platform hides its banner in response, and is retried at most
+  twice if it did not; a banner the site itself has already dismissed — by
+  inline style, attribute, or a recognised vendor state class — is left alone,
+  so a choice you already made is never overridden.
 
 ## Rule pipeline (Phase 2 — live)
 

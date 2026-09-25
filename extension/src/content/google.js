@@ -7,27 +7,83 @@
 //                text-resilient pass (find the "AI Overview" label, hide its
 //                block) so it survives most markup churn.
 //
+// Phase 1 (2026-09-10) splits 'hide' by SURFACE. Google renders a
+// People-Also-Ask answer as the same object as an AI Overview — same
+// "AI Overview" label, same block shape — so the old single switch hid both.
+// But those are opposite user intentions: the overview above the results is
+// unsolicited, while a PAA answer is AI the user explicitly clicked to see.
+// Hiding the second one reads as "Quell broke Google", which is the review
+// that caps every competitor in this niche. So the label pass now has to know
+// WHERE a match sits, not just that it matched.
+//
 // Every mode applies LIVE: a popup toggle re-runs applyState() on the open tab
 // instead of waiting for a reload.
 
 (async () => {
-  // Maintainable selector list (the part the Phase 2 pipeline keeps fresh).
-  // BLOCK_CSS entries are whole AI blocks — they're also counted for the badge.
-  const BLOCK_CSS = 'div[data-attrid="AIOverview" i], div[aria-label="AI Overview" i], .M8OgIe, .YzCcne';
+  // Whole AI-block selectors (the part the Phase 2 pipeline keeps fresh).
+  // Kept as an array because each one now has to be composed with the PAA
+  // guard below at runtime, depending on the user's per-surface settings.
+  const OVERVIEW_SEL = [
+    'div[data-attrid="AIOverview" i]',
+    'div[aria-label="AI Overview" i]',
+    '.M8OgIe',
+    '.YzCcne',
+    '[data-hveid] [aria-label*="AI Overview" i]',
+  ];
+
   // The Gemini selectors target upsell chips/promos in Google's own chrome —
   // NOT organic results. Unscoped they erased legitimate results linking to
   // gemini.google.com (searching "gemini" lost real links), so exempt anything
   // inside the organic containers.
-  const css = `
-    ${BLOCK_CSS},
-    [data-hveid] [aria-label*="AI Overview" i],
-    a[href*="gemini.google.com"]:not(#rso *):not(#search *),
-    [aria-label*="Gemini" i]:not(#rso *):not(#search *) { display: none !important; }
-  `;
+  const GEMINI_SEL = [
+    'a[href*="gemini.google.com"]:not(#rso *):not(#search *)',
+    '[aria-label*="Gemini" i]:not(#rso *):not(#search *)',
+  ];
+
+  // People-Also-Ask markers. An answer painting inside one of these was
+  // REQUESTED — the user clicked the question open. Everything else that
+  // carries an AI label appeared without being asked for.
+  const PAA_SEL = [
+    '[jsname="Cpkphb"]',
+    '.related-question-pair',
+    '[data-initq]',
+    '[jsname="yEVEwb"]',
+  ];
+  // CSS form of "not inside a PAA item", appended to the overview selectors
+  // when the user is keeping clicked answers. Without this the stylesheet
+  // layer would hide the PAA answer before the label pass ever sees it.
+  const PAA_GUARD = PAA_SEL.map((s) => `:not(${s} *)`).join('');
 
   // Text-resilient pass — anchors on the human-readable label, not class names.
   const LABELS = ['ai overview', 'ai mode', 'generative ai', 'search with ai'];
   const BLOCK_SEL = '#rso > div, #center_col > div, [data-hveid], .MjjYud, .ULSxyf, .hlcw0c';
+
+  // Live per-surface state, refreshed by applyState(). Read by sweep() and by
+  // the CSS builder — both need to agree on which surfaces are in play.
+  let surfaces = { overview: true, aiMode: true, paa: false, gemini: true };
+
+  // Which selectors are live right now. Overview selectors carry the PAA guard
+  // whenever PAA answers are being kept, so the two layers can never disagree.
+  // All four combinations, because the two layers must never disagree. The
+  // paa-only case is the one that was missing: with the overview surface off
+  // and PAA on, a clicked-open answer carrying data-attrid but no visible
+  // label was hidden by neither layer, so one answer vanished and the next
+  // painted.
+  function blockSelectors() {
+    const out = [];
+    if (surfaces.overview && surfaces.paa) {
+      out.push(...OVERVIEW_SEL);                                  // everywhere
+    } else if (surfaces.overview) {
+      for (const s of OVERVIEW_SEL) out.push(s + PAA_GUARD);      // outside PAA only
+    } else if (surfaces.paa) {
+      for (const m of PAA_SEL) for (const s of OVERVIEW_SEL) out.push(`${m} ${s}`); // inside PAA only
+    }
+    return out;
+  }
+  function buildCSS() {
+    const parts = blockSelectors().concat(surfaces.gemini ? GEMINI_SEL : []);
+    return parts.length ? `${parts.join(',\n    ')} { display: none !important; }` : '';
+  }
 
   // Marks a Clean Web redirect THIS tab performed, so switching back out of
   // Clean Web can undo it — while never fighting a user who reached udm=14 on
@@ -36,8 +92,8 @@
   const flagGet = () => { try { return sessionStorage.getItem(CLEANWEB_FLAG) === '1'; } catch (_) { return false; } };
   const flagSet = (v) => { try { v ? sessionStorage.setItem(CLEANWEB_FLAG, '1') : sessionStorage.removeItem(CLEANWEB_FLAG); } catch (_) { /* storage blocked */ } };
 
-  // One counted-flag shared by BOTH passes — a block matching BLOCK_CSS whose
-  // label also matches must increment the badge once, not twice (self,
+  // One counted-flag shared by BOTH passes — a block matching a block selector
+  // whose label also matches must increment the badge once, not twice (self,
   // ancestor, or descendant already counted all mean "same block").
   // Counted flags deliberately SURVIVE teardown: toggling a feature off and on
   // again on the same page must not re-inflate the lifetime counter.
@@ -45,14 +101,34 @@
     el.closest('[data-quell-counted="1"]') !== null ||
     el.querySelector('[data-quell-counted="1"]') !== null;
 
+  // The PAA item containing `el`, or null. MARKER-ONLY, and that is the whole
+  // safety property: a false positive here lets an unsolicited AI Overview
+  // PAINT, while a false negative merely hides something the user clicked —
+  // v0.4.2's behaviour, and only annoying.
+  //
+  // An earlier version also walked up looking for an ancestor owning a
+  // [role=button][aria-expanded], on the theory that PAA items are expandable.
+  // Review killed it with executed evidence: Google's own AI Overview carries a
+  // "Show more" disclosure control, so that walk classified the unsolicited
+  // overview as PAA and skipped it — a regression against v0.4.2 that fired
+  // exactly when the class selectors were stale, which is the one case the
+  // label pass exists for. Markup churn is not worth a heuristic that fails
+  // open.
+  function paaContainer(el) {
+    return el.closest(PAA_SEL.join(','));
+  }
+
   function sweep() {
     let hidden = 0;
 
     // Count what the CSS layer already hid (once per block).
-    for (const el of document.querySelectorAll(BLOCK_CSS)) {
-      if (!alreadyCounted(el)) {
-        el.dataset.quellCounted = '1';
-        hidden++;
+    const sel = blockSelectors().join(',');
+    if (sel) {
+      for (const el of document.querySelectorAll(sel)) {
+        if (!alreadyCounted(el)) {
+          el.dataset.quellCounted = '1';
+          hidden++;
+        }
       }
     }
 
@@ -67,10 +143,23 @@
       const txt = (el.getAttribute('aria-label') || el.textContent || '').trim().toLowerCase();
       if (!txt || txt.length > 40) continue;
       if (!LABELS.some((l) => txt === l || txt.startsWith(l))) continue;
-      const block = el.closest(BLOCK_SEL) || el.parentElement;
+
+      // Classify BEFORE hiding. Sitting inside a PAA item wins over the label
+      // text: Google labels the clicked answer "AI Overview" too, and that
+      // label is exactly why the old single switch could not tell them apart.
+      const paa = paaContainer(el);
+      const surface = paa ? 'paa' : (txt.startsWith('ai mode') ? 'aiMode' : 'overview');
+      if (!surfaces[surface]) continue;
+
+      let block = el.closest(BLOCK_SEL) || el.parentElement;
+      // Inside a PAA item, BLOCK_SEL can resolve to an ancestor of the whole
+      // PAA section — hiding that would take every other question with it.
+      if (paa && block && (block === paa || block.contains(paa))) block = el.parentElement;
+
       if (block && block.dataset.quellHidden !== '1') {
         block.style.setProperty('display', 'none', 'important');
         block.dataset.quellHidden = '1';
+        block.dataset.quellSurface = surface;
         if (!alreadyCounted(block)) {
           block.dataset.quellCounted = '1';
           hidden++;
@@ -91,14 +180,32 @@
     window.Quell.nextTick(() => { scheduled = false; if (observer) sweep(); });
   };
 
+  // Release blocks whose surface the user just turned OFF, leaving the rest
+  // hidden. Without this, un-ticking one surface did nothing until reload.
+  function releaseDisabled() {
+    for (const el of document.querySelectorAll('[data-quell-hidden="1"]')) {
+      const s = el.dataset.quellSurface;
+      if (s && !surfaces[s]) {
+        el.style.removeProperty('display');
+        delete el.dataset.quellHidden;
+        delete el.dataset.quellSurface;
+      }
+    }
+  }
+
   // CSS goes in immediately (document_start, before <body> exists) so the AI
   // block never paints. The sweep + observer need a body, so they attach on
   // DOMContentLoaded when we're early.
   let hideActive = false;
   function applyHide() {
-    if (hideActive) return;
+    // The stylesheet is a function of the per-surface settings, so a live
+    // toggle has to REPLACE it — an early return on hideActive would leave the
+    // previous surfaces' CSS in place.
+    window.Quell.removeCSS('quell-google');
+    const css = buildCSS();
+    if (css) window.Quell.injectCSS('quell-google', css);
+    if (hideActive) { releaseDisabled(); if (observer) sweep(); return; }
     hideActive = true;
-    window.Quell.injectCSS('quell-google', css);
     const attach = () => {
       if (!hideActive || observer) return;
       sweep();
@@ -119,6 +226,7 @@
     for (const el of document.querySelectorAll('[data-quell-hidden="1"]')) {
       el.style.removeProperty('display');
       delete el.dataset.quellHidden;
+      delete el.dataset.quellSurface;
     }
   }
 
@@ -151,6 +259,12 @@
   // drove us here. Only a live change may navigate the tab — doing it on load
   // would yank users mid-browse.
   function applyState(s, live) {
+    surfaces = {
+      overview: s.hideOverview !== false,
+      aiMode: s.hideAiMode !== false,
+      paa: s.hidePaa === true,
+      gemini: s.hideGemini !== false,
+    };
     if (!s.enabled || s.googleMode === 'off') {
       teardownHide();
       if (live) undoCleanWeb();
@@ -169,7 +283,7 @@
   // would otherwise be missed entirely (the read returns the new value, the
   // listener isn't attached yet) and the page would sit stale until reload.
   window.Quell.onSettingsChange(
-    ['enabled', 'googleMode'],
+    ['enabled', 'googleMode', 'hideOverview', 'hideAiMode', 'hidePaa', 'hideGemini'],
     (next) => applyState(next, true)
   );
   // Run at document_start — applyHide/applyCleanWeb both handle a missing

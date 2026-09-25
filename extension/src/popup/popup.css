@@ -186,3 +186,27 @@ footer {
 
 /* the author display:flex on .row would defeat the hidden attribute */
 [hidden] { display: none !important; }
+
+/* Per-surface AI switches (Phase 1). Indented under the Google radio group and
+   visually subordinate to it — they only apply inside "Hide AI Overviews". */
+.nested {
+  margin: 2px 0 4px 10px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(127, 127, 127, 0.22);
+}
+.nested[hidden] { display: none; }
+.row.sub-row { padding: 4px 0; }
+.row.sub-row .row-l { font-size: 12px; opacity: 0.88; }
+
+/* Per-engine mode selects. Compact so three engines fit without turning the
+   popup into a form. */
+select.mode {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 4px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  max-width: 140px;
+}

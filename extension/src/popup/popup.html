@@ -48,6 +48,39 @@
         </div>
       </div>
 
+      <!-- Per-surface switches. Only meaningful inside "Hide AI Overviews",
+           so the whole group is hidden for Clean Web / Off. -->
+      <div class="nested" id="surfaces">
+        <div class="row sub-row">
+          <span class="row-l">AI Overview above results<span class="info" tabindex="0" role="img" aria-label="The generated answer Google puts above your results without being asked." data-tip="The generated answer Google puts above your results without being asked."></span></span>
+          <label class="switch sm" title="Hide the AI Overview above results">
+            <input type="checkbox" id="sOverview" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="row sub-row">
+          <span class="row-l">AI Mode tab &amp; entry points<span class="info" tabindex="0" role="img" aria-label="Google's AI Mode tab and the links that push you into it." data-tip="Google's AI Mode tab and the links that push you into it."></span></span>
+          <label class="switch sm" title="Hide AI Mode entry points">
+            <input type="checkbox" id="sAiMode" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="row sub-row">
+          <span class="row-l">Answers you click open<span class="info up" tabindex="0" role="img" aria-label="Google builds People-also-ask answers with the same AI. Off means an answer still appears when you click a question open — you asked for that one. On hides those too." data-tip="Google builds “People also ask” answers with the same AI. Off means the answer still appears when you click a question open — you asked for that one. On hides those too."></span></span>
+          <label class="switch sm" title="Also hide answers you click open">
+            <input type="checkbox" id="sPaa" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="row sub-row">
+          <span class="row-l">Gemini promos<span class="info up" tabindex="0" role="img" aria-label="Gemini upsell chips in Google's own chrome. Never touches organic results." data-tip="Gemini upsell chips in Google's own chrome. Never touches organic results."></span></span>
+          <label class="switch sm" title="Hide Gemini upsell chips">
+            <input type="checkbox" id="sGemini" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
       <div class="row">
         <span class="row-l">Bing — hide Copilot<span class="info" tabindex="0" role="img" aria-label="Removes the Copilot chat panel and button from Bing search." data-tip="Removes the Copilot chat panel and button from Bing search."></span></span>
         <label class="switch sm">
@@ -55,20 +88,89 @@
           <span class="slider"></span>
         </label>
       </div>
+
+      <!-- Per-surface Bing switch. Only meaningful while Bing is on, so the
+           group is hidden when the Bing switch above is off. -->
+      <div class="nested" id="bingSurfaces">
+        <div class="row sub-row">
+          <span class="row-l">Copilot suggestion chips<span class="info up" tabindex="0" role="img" aria-label="These related-search chips carry a real query and route through Copilot instead of a plain web search. Off means they stay visible — you asked for those suggestions. On hides them too." data-tip="These related-search chips carry a real query and route through Copilot instead of a plain web search. Off means they stay visible — you asked for those suggestions. On hides them too."></span></span>
+          <label class="switch sm" title="Also hide Copilot suggestion chips">
+            <input type="checkbox" id="bChips" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Other engines. These three need host access Quell is not installed
+           with, so the group is gated behind a one-click grant; the required
+           host set stays frozen at Google + Bing so updates never disable the
+           extension for existing users. 'Off at the source' uses the engine's
+           OWN no-AI parameter, so it does not depend on their markup — it is
+           listed first for that reason, but 'Hide it' is the DEFAULT, because
+           off-at-the-source works by redirecting the page and that is a choice
+           rather than something to impose. Yahoo publishes no such parameter,
+           so the option is absent there rather than faked. -->
+      <div class="sub">
+        <span class="sub-l">Other search engines<span class="info" tabindex="0" role="img" aria-label="DuckDuckGo, Brave and Yahoo each hide their AI differently. Turning it off at the source uses the engine's own setting, so it does not depend on their page markup." data-tip="DuckDuckGo, Brave and Yahoo each hide their AI differently. Turning it off at the source uses the engine's own setting, so it does not depend on their page markup."></span></span>
+
+        <div class="row sub-row">
+          <span class="row-l">DuckDuckGo, Brave &amp; Yahoo<span class="info up" tabindex="0" role="img" aria-label="Quell ships with access to Google and Bing only. Turning this on asks Chrome for access to DuckDuckGo, Brave and Yahoo — nothing else — and you can revoke it any time." data-tip="Quell ships with access to Google and Bing only. Turning this on asks Chrome for access to DuckDuckGo, Brave and Yahoo — nothing else — and you can revoke it any time."></span></span>
+          <label class="switch sm" title="Give Quell access to DuckDuckGo, Brave and Yahoo">
+            <input type="checkbox" id="engines" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- The per-engine modes only exist once Chrome has granted access to
+           those hosts, so the whole group is hidden until then — offering a
+           dropdown that cannot do anything is the badge-lying bug again. -->
+      <div class="nested" id="engineModes">
+        <div class="row sub-row">
+          <span class="row-l">DuckDuckGo</span>
+          <select class="mode" id="ddgMode" aria-label="DuckDuckGo AI handling">
+            <option value="clean">Off at the source</option>
+            <option value="hide">Hide it</option>
+            <option value="off">Leave it</option>
+          </select>
+        </div>
+        <div class="row sub-row">
+          <span class="row-l">Brave</span>
+          <select class="mode" id="braveMode" aria-label="Brave AI handling">
+            <option value="clean">Off at the source</option>
+            <option value="hide">Hide it</option>
+            <option value="off">Leave it</option>
+          </select>
+        </div>
+        <div class="row sub-row">
+          <span class="row-l">Yahoo<span class="info up" tabindex="0" role="img" aria-label="Yahoo publishes no setting to turn its AI Summary off, so Quell can only hide it." data-tip="Yahoo publishes no setting to turn its AI Summary off, so Quell can only hide it."></span></span>
+          <select class="mode" id="yahooMode" aria-label="Yahoo AI handling">
+            <option value="hide">Hide it</option>
+            <option value="off">Leave it</option>
+          </select>
+        </div>
+      </div>
     </section>
 
     <!-- Cookie banners -->
     <section class="grp">
       <div class="row">
         <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="9.5" r="1.1"/><circle cx="14.5" cy="9" r="1.1"/><circle cx="15" cy="14.5" r="1.1"/><circle cx="9.5" cy="15" r="1.1"/></svg>
-        <span class="row-l">Cookie banners <span class="badge beta">Beta</span><span class="info up" tabindex="0" role="img" aria-label="Blocks the we-use-cookies consent popups. Turning it on asks Chrome for all-sites access — needed to hide banners site-wide." data-tip="Blocks the “we use cookies” consent popups. Turning it on asks Chrome for all-sites access — needed to hide banners site-wide."></span></span>
+        <span class="row-l">Cookie banners <span class="badge beta">Beta</span><span class="info up" tabindex="0" role="img" aria-label="Blocks the we-use-cookies consent popups. Turning it on asks Chrome for all-sites access — needed to hide banners site-wide. Turning it off lifts most of it immediately; the shared blocklist clears when you reload the page." data-tip="Blocks the “we use cookies” consent popups. Turning it on asks Chrome for all-sites access — needed to hide banners site-wide. Turning it off lifts most of it immediately; the shared blocklist clears when you reload the page."></span></span>
         <label class="switch sm" title="Block cookie-consent popups">
           <input type="checkbox" id="cookies" />
           <span class="slider"></span>
         </label>
       </div>
+      <div class="row sub-row" id="rejectRow" hidden>
+        <span class="row-l">Reject instead of hide<span class="info up" tabindex="0" role="img" aria-label="Hiding a banner leaves the choice unmade. This clicks the site's own Reject-all button where Quell recognises it, so the choice is actually recorded. Off by default — it acts on your behalf." data-tip="Hiding a banner leaves the choice unmade. This clicks the site's own “Reject all” button where Quell recognises it, so the choice is actually recorded. Off by default — it acts on your behalf."></span></span>
+        <label class="switch sm" title="Click Reject all where Quell recognises the banner">
+          <input type="checkbox" id="cookieReject" />
+          <span class="slider"></span>
+        </label>
+      </div>
       <div class="row site-row" id="siteRow" hidden>
-        <span class="row-l">Pause on <span class="host" id="siteHost"></span><span class="info up" tabindex="0" role="img" aria-label="If this site looks broken with cookie blocking on, pause Quell's cookie layer here only. Takes effect right away." data-tip="If this site looks broken with cookie blocking on, pause Quell's cookie layer here only. Takes effect right away."></span></span>
+        <span class="row-l">Pause on <span class="host" id="siteHost"></span><span class="info up" tabindex="0" role="img" aria-label="If this site looks broken with cookie blocking on, pause Quell's cookie layer here only. Most of it lifts immediately; the shared blocklist clears when you reload the page." data-tip="If this site looks broken with cookie blocking on, pause Quell's cookie layer here only. Most of it lifts immediately; the shared blocklist clears when you reload the page."></span></span>
         <label class="switch sm" title="Pause cookie blocking on this site">
           <input type="checkbox" id="siteAllow" />
           <span class="slider"></span>

@@ -5,6 +5,15 @@ const DEFAULTS = {
   enabled: true,
   googleMode: 'hide',
   bingEnabled: true,
+  // The user's INTENT to run on the optional engines, kept separately from the
+  // permission. permissions.contains() is semantic containment, so an
+  // <all_urls> grant — which the Cookie-banners feature asks for — satisfies a
+  // query for the engine origins. Keying the feature off the grant alone
+  // therefore switched DuckDuckGo, Brave and Yahoo on for anyone who had
+  // enabled cookie blocking, without ever asking them, and left the popup's own
+  // off switch unable to turn it back off. Both must be true: they asked, AND
+  // Chrome granted.
+  enginesEnabled: false,
   cookieEnabled: false,
   cookieAllowlist: [], // hostnames where the cookie layer is paused
   totalBlocked: 0,
@@ -14,6 +23,39 @@ const DEFAULTS = {
 // EasyList Cookie set (pipeline/build_rules.py). Enabled/disabled together.
 const COOKIE_RULESETS = ['cookie_cmp', 'cookie_cmp_easylist'];
 const COOKIE_SCRIPT_ID = 'quell-cookies';
+const ENGINE_SCRIPT_ID = 'quell-engines';
+
+// DuckDuckGo / Brave / Yahoo are OPTIONAL hosts, requested from the popup and
+// registered here once granted. They are deliberately not in the manifest's
+// content_scripts: host patterns declared there are REQUIRED permissions, and
+// Chrome compares the required host set of an update against what the user
+// already granted — as raw URL patterns, not as warning strings. Any host that
+// is not covered by an existing grant is a privilege increase, and Chrome's
+// response to a privilege increase is to DISABLE the extension for every
+// existing user until each one re-approves it. Shipping these three engines as
+// required hosts would therefore have switched Quell off for the entire
+// installed base, and silently for anyone who never noticed the prompt.
+//
+// So: the required host set is frozen at Google + Bing, permanently. Every
+// engine added from here on goes in optional_host_permissions, where adding
+// entries costs nothing on update. The list is APPEND-ONLY — removing a host
+// and re-adding it later interacts badly with the stored grant set.
+const ENGINE_ORIGINS = [
+  '*://duckduckgo.com/*',
+  '*://*.duckduckgo.com/*',
+  '*://search.brave.com/*',
+  '*://search.yahoo.com/*',
+  '*://*.search.yahoo.com/*',
+];
+// Narrower than the granted origins: the grant is what Chrome asked the user
+// about, this is where we actually run.
+const ENGINE_MATCHES = [
+  '*://duckduckgo.com/*',
+  '*://*.duckduckgo.com/*',
+  '*://search.brave.com/search*',
+  '*://search.yahoo.com/search*',
+  '*://*.search.yahoo.com/search*',
+];
 // Dynamic dNR allow-rule ids for allowlisted sites live above the static range.
 const ALLOW_RULE_BASE = 100000;
 
@@ -47,6 +89,69 @@ async function applyCookieBlocking(on) {
     await chrome.scripting.unregisterContentScripts({ ids: [COOKIE_SCRIPT_ID] }).catch(() => {});
   }
 }
+
+// Keep the engine content script registered exactly while the user has asked
+// for it AND Chrome has granted the hosts. Revoking access in
+// chrome://extensions still turns it off for real, because the grant is
+// re-checked here rather than remembered.
+async function applyEngineScripts() {
+  const { enginesEnabled } = await chrome.storage.local
+    .get({ enginesEnabled: false }).catch(() => ({ enginesEnabled: false }));
+  const hasHosts = await chrome.permissions
+    .contains({ origins: ENGINE_ORIGINS }).catch(() => false);
+  const granted = enginesEnabled && hasHosts;
+  const existing = await chrome.scripting
+    .getRegisteredContentScripts({ ids: [ENGINE_SCRIPT_ID] }).catch(() => []);
+
+  if (granted && existing.length === 0) {
+    await chrome.scripting.registerContentScripts([{
+      id: ENGINE_SCRIPT_ID,
+      matches: ENGINE_MATCHES,
+      js: ['src/content/common.js', 'src/content/engines.js'],
+      runAt: 'document_start',
+      allFrames: false,
+    }]).catch(() => {});
+  } else if (!granted && existing.length > 0) {
+    await chrome.scripting
+      .unregisterContentScripts({ ids: [ENGINE_SCRIPT_ID] }).catch(() => {});
+  }
+}
+
+// A registered content script only injects on NAVIGATION, so a tab already
+// sitting on a search page saw nothing until it was reloaded — the same
+// "I turned it on and nothing happened" the cookie layer had.
+async function syncEngineLayerInOpenTabs() {
+  const { enginesEnabled } = await chrome.storage.local
+    .get({ enginesEnabled: false }).catch(() => ({ enginesEnabled: false }));
+  const hasHosts = await chrome.permissions
+    .contains({ origins: ENGINE_ORIGINS }).catch(() => false);
+  if (!enginesEnabled || !hasHosts) return;
+  const tabs = await chrome.tabs.query({ url: ENGINE_MATCHES }).catch(() => []);
+  for (const tab of tabs) {
+    if (!tab.id) continue;
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      files: ['src/content/common.js', 'src/content/engines.js'],
+    }).catch(() => {});
+  }
+}
+
+// Grants and revocations can happen from chrome://extensions as well as from
+// the popup, so react to the permission event itself, not just to our own UI.
+chrome.permissions.onAdded.addListener(async () => {
+  await applyEngineScripts();
+  await syncEngineLayerInOpenTabs();
+});
+chrome.permissions.onRemoved.addListener(async () => {
+  // Revoking access in chrome://extensions is the user switching the feature
+  // off. Clear the stored intent too — otherwise it lingers, and the next
+  // <all_urls> grant (turning Cookie banners on) would satisfy the containment
+  // check and silently re-register engines they had revoked.
+  const has = await chrome.permissions
+    .contains({ origins: ENGINE_ORIGINS }).catch(() => false);
+  if (!has) await chrome.storage.local.set({ enginesEnabled: false }).catch(() => {});
+  await applyEngineScripts();
+});
 
 // Chrome only injects registered content scripts on NAVIGATION, so switching
 // the cookie feature on did nothing to tabs the user already had open — it
@@ -99,6 +204,7 @@ async function init() {
   const current = await chrome.storage.local.get(DEFAULTS);
   chrome.action.setBadgeBackgroundColor({ color: '#5B21B6' });
   await applyCookieBlocking(current.enabled && current.cookieEnabled);
+  await applyEngineScripts();
   await syncAllowRules(current.cookieAllowlist);
 }
 chrome.runtime.onInstalled.addListener(init);
@@ -108,6 +214,10 @@ chrome.runtime.onStartup.addListener(init);
 // switch and the feature toggle BOTH gate the network + cosmetic layers.
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area !== 'local') return;
+  if (changes.enginesEnabled) {
+    await applyEngineScripts();
+    await syncEngineLayerInOpenTabs();
+  }
   if (changes.enabled || changes.cookieEnabled || changes.cookieAllowlist) {
     const s = await chrome.storage.local.get(DEFAULTS);
     const on = s.enabled && s.cookieEnabled;
