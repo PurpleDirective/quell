@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Build the store upload zips from the ONE source tree in extension/.
-#   dist/quell-<v>-chrome.zip   Chrome Web Store — and Microsoft Edge Add-ons
-#                               (Edge takes the Chrome package unchanged)
+#   dist/quell-<v>-chrome.zip   Chrome Web Store
 #   dist/quell-<v>-firefox.zip  addons.mozilla.org (desktop + Android)
 # Only manifest.json differs; pipeline/make_manifest.py derives it.
 # Excludes Chrome's _metadata artifacts and OS junk.
@@ -22,4 +21,3 @@ for target in chrome firefox; do
   (cd "$dir" && zip -qrX "../../../$out" . -x '.DS_Store' -x '*/.DS_Store')
   echo "built $out ($(du -h "$out" | cut -f1))"
 done
-echo "Edge: upload dist/quell-${VERSION}-chrome.zip to Partner Center (no Edge-specific changes needed)."

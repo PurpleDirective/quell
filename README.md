@@ -207,8 +207,9 @@ playwright install (`npm i -g playwright` + `playwright install chromium`).
 
 No analytics, no telemetry, no account. Your choices are kept in the browser's
 extension **sync** storage, so the browser syncs them to **your own** browser
-account (Google / Microsoft / Mozilla) when you are signed in with sync on —
-Purple Directive never receives them. Three grant-bound switches (other engines,
+account (Google / Mozilla) when you are signed in with sync on —
+Purple Directive never receives them. Firefox for Android does not sync extension
+settings, so there they stay on the device. Three grant-bound switches (other engines,
 cookie banners, pop-ups) and the hidden-items counter stay on each device.
 Settings from 0.5.x move from `storage.local` to `storage.sync` on update without
 loss. The only thing sent to Purple Directive is a breakage report you choose
@@ -237,6 +238,20 @@ limited to the hostname the user chooses to report; Firefox —
 shared, or used for unrelated purposes or creditworthiness. Full answers in
 `store/LISTING.md`. The breakage report needs no extra permission (it is a
 plain CORS request).
+
+## Versions and releases
+
+Quell uses [semantic versioning](https://semver.org). `pipeline/bump.sh patch|minor|major` is the only way the version
+changes:
+
+- **patch** (0.6.0 → 0.6.1): fixes, and updated blocking rules (including the weekly EasyList refresh).
+- **minor** (0.6.x → 0.7.0): something you'll notice as new, such as a feature, a switch, a search engine, a browser, an
+  optional permission or a new kind of data sent.
+- **major** (0.x → 1.0.0): a change that breaks existing installs, such as a new required permission, a removed feature
+  or reset settings.
+
+Every version sent to a store is published here as a tagged
+[release](https://github.com/PurpleDirective/quell/releases), with notes and the exact packages that were submitted.
 
 ## License
 

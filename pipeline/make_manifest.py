@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Quell — per-browser manifest from the one source manifest.
 
-extension/manifest.json IS the Chrome/Edge manifest (what tests load). This
+extension/manifest.json IS the Chrome manifest (what tests load). This
 script derives the Firefox one; everything else in the tree is shared.
 
   python3 pipeline/make_manifest.py firefox > build/firefox/manifest.json
@@ -65,9 +65,9 @@ def chrome(m):
 def main():
     target = sys.argv[1] if len(sys.argv) > 1 else "chrome"
     src = json.loads((ROOT / "extension" / "manifest.json").read_text())
-    out = {"chrome": chrome, "edge": chrome, "firefox": firefox}.get(target)
+    out = {"chrome": chrome, "firefox": firefox}.get(target)
     if out is None:
-        sys.exit(f"unknown target {target!r} (chrome | edge | firefox)")
+        sys.exit(f"unknown target {target!r} (chrome | firefox)")
     json.dump(out(src), sys.stdout, indent=2, ensure_ascii=False)
     sys.stdout.write("\n")
 

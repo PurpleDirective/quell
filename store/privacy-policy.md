@@ -48,7 +48,8 @@ determine creditworthiness or for lending.
   those settings to your own account so your other computers get them. That
   sync is run by your browser's maker under their privacy terms; Purple
   Directive never receives it and cannot read it. If you are not signed in, or
-  sync is off, the settings stay on this device.
+  sync is off, the settings stay on this device. Firefox for Android does not sync extension settings, so there
+  they always stay on the device.
 - **Three switches stay on each device** and are never synced: other search
   engines, cookie banners and pop-ups. They need site access that your
   browser grants on each device separately.

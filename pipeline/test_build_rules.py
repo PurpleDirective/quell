@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Quell — pop-ups rule filter tests (stdlib only, no network).
 
-  python3 products/Quell/pipeline/test_build_rules.py
+  python3 pipeline/test_build_rules.py
 
 Exercises popup_selector_ok() directly, then re-checks the SHIPPED
 extension/rules/popups.json with the same predicate, so a rules refresh that

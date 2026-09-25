@@ -28,8 +28,7 @@
 
   // Which extension origins may post reports (src/index.js allowedOrigin).
   // Firefox (moz-extension://<random uuid>) is always accepted. EDGE_EXTENSION_ID
-  // is empty until the Edge Add-ons listing exists (empty = not accepted;
-  // Edge users installing from the Chrome Web Store send the Chrome id).
+  // is unused (no Edge listing) and stays empty, which means not accepted.
   "vars": {
     "CHROME_EXTENSION_ID": "hipifmmjmbnkhfajkbmcjkajlfjiehho",
     "EDGE_EXTENSION_ID": ""

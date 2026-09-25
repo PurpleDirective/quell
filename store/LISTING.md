@@ -181,8 +181,7 @@ highlight ring placed from the rendered row's own box):
 - Icon: `extension/icons/icon128.png` (uploaded from the zip automatically)
 
 No before/after Google screenshot: every Google load in the 2026-09-25 live
-run hit the `/sorry/` bot wall (see
-`verification-2026-09-25/LIVE-VERIFICATION-2026-09-25.md`). make-assets.mjs
+run hit Google's `/sorry/` bot wall. make-assets.mjs
 builds a fourth screenshot from any real before/after pair via
 `QUELL_BEFORE` / `QUELL_AFTER` once a clean one exists.
 
@@ -216,8 +215,10 @@ Quiet the web. Hide AI answers on Google, Bing, DuckDuckGo, Brave and Yahoo —
 never a real result — and block cookie banners and pop-ups. Free, open source,
 no tracking.
 
-**Description:** use the Chrome description above, with two edits:
-- "your browser asks once" wording is already browser-neutral; keep it.
+**Description:** use the Chrome description above, with these edits:
+- DuckDuckGo, Brave & Yahoo: "your browser asks once" → "Firefox asks once, on a Quell
+  settings tab" (a Firefox popup cannot hold a permission prompt, so Quell opens a tab).
+- Private: after "never to us." add "(Firefox for Android keeps them on the device.)"
 - Add after THIS SITE: "★ WORKS ON FIREFOX FOR ANDROID — the same switches,
   where AI Overviews are hardest to escape."
 

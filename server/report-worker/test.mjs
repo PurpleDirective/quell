@@ -1,7 +1,7 @@
 // Quell report Worker — executed tests, no dependencies, no network.
 // Runs the real src/index.js against a real SQLite database (node:sqlite,
 // Node 22.5+) behind a D1-shaped adapter, so the SQL itself is exercised.
-//   node products/Quell/server/report-worker/test.mjs
+//   node server/report-worker/test.mjs
 
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';

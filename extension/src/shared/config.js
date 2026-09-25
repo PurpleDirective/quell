@@ -2,7 +2,7 @@
 //
 // REPORT_ENDPOINT receives the "This site looks broken" report: a POST whose
 // body is exactly {"host": "<hostname>", "version": "<Quell version>"} and
-// nothing more. The server side lives in products/Quell/server/report-worker
+// nothing more. The server side lives in server/report-worker
 // (deploy notes in its README). The request is a CORS "simple request"
 // (text/plain body), so no host permission is needed to make it.
 globalThis.QUELL_CONFIG = Object.freeze({

@@ -33,10 +33,9 @@ const PRIVATE_SUFFIXES = ['.local', '.localhost', '.internal', '.lan', '.home.ar
 
 // WHO may post (0.6.0 review #7, owner default: restrict). A report comes
 // from Quell's own popup, so the browser sets Origin to the extension:
-//   chrome-extension://<CHROME_EXTENSION_ID>  Chrome Web Store build (also
-//                                             what Edge users get from the CWS)
-//   chrome-extension://<EDGE_EXTENSION_ID>    Edge Add-ons build, once known
-//                                             (empty = unknown = not accepted)
+//   chrome-extension://<CHROME_EXTENSION_ID>  Chrome Web Store build
+//   chrome-extension://<EDGE_EXTENSION_ID>    unused: there is no Edge listing
+//                                             (empty = not accepted)
 //   moz-extension://<uuid>                    any Firefox install — Firefox
 //                                             gives each install a random UUID
 // Both ids are Worker vars (wrangler.jsonc), not code. Anything else — a web

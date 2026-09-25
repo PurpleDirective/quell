@@ -14,7 +14,7 @@ only to key the edge rate limiter, as a salted SHA-256; the limiter's counter
 for that key covers a 60-second period (`ratelimits` in `wrangler.jsonc`).
 
 Only Quell may post: the `Origin` must be `chrome-extension://<CHROME_EXTENSION_ID>`,
-`chrome-extension://<EDGE_EXTENSION_ID>` (empty until the Edge listing exists =
+`chrome-extension://<EDGE_EXTENSION_ID>` (unused: there is no Edge listing, so it stays empty =
 not accepted) or any `moz-extension://<uuid>` (Firefox gives each install a
 random UUID). Both ids are `vars` in `wrangler.jsonc`. Anything else gets 403
 before the body is read or the limiter is touched, and replies echo the one
@@ -36,24 +36,22 @@ rows older than 180 days are purged daily by the cron trigger.
 ## Test
 
 ```sh
-node products/Quell/server/report-worker/test.mjs   # Node 22.13+ (node:sqlite)
+node server/report-worker/test.mjs   # Node 22.13+ (node:sqlite)
 ```
 
 Runs the real `src/index.js` against a real SQLite database behind a
-D1-shaped adapter. Also run by `products/Quell/tests/run.sh`.
+D1-shaped adapter. Also run by `tests/run.sh`.
 
 ## Deploy (operator — not done by the PR that added this)
 
-From `products/Quell/server/report-worker/`:
+From `server/report-worker/`:
 
 1. `npx wrangler d1 create quell-reports` and paste the returned
    `database_id` into `wrangler.jsonc` (replacing `REPLACE_WITH_D1_DATABASE_ID`).
 2. `npx wrangler d1 execute quell-reports --remote --file schema.sql`
 3. `openssl rand -hex 32 | npx wrangler secret put READ_TOKEN`
 4. `openssl rand -hex 32 | npx wrangler secret put RATE_SALT`
-5. Once the Edge Add-ons listing exists, set `EDGE_EXTENSION_ID` in
-   `wrangler.jsonc` (32 letters a–p) and redeploy.
-6. Check the two `ratelimits` `namespace_id` values (4201, 4202) are not
+5. Check the two `ratelimits` `namespace_id` values (4201, 4202) are not
    already used by another Worker on the account; change them if they are.
 7. `npx wrangler deploy`
 8. Smoke it:
@@ -81,7 +79,7 @@ ship an extension update.
 `pipeline/fetch_reports.py` prints the last N days as a Markdown table:
 
 ```sh
-QUELL_REPORTS_TOKEN=<READ_TOKEN> python3 products/Quell/pipeline/fetch_reports.py 7
+QUELL_REPORTS_TOKEN=<READ_TOKEN> python3 pipeline/fetch_reports.py 7
 ```
 
 The weekly `quell-rules-refresh` workflow runs it and writes the table to the

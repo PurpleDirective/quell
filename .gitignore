@@ -7,3 +7,4 @@ dist/
 # (leading-underscore dirs are also rejected by the Web Store packer)
 _metadata/
 tests/.profile/
+__pycache__/
