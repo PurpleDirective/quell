@@ -13,9 +13,12 @@
 // Live-apply: this script owns layers 2 and 3, so toggling the feature (or the
 // per-site pause) takes effect on the open page. Layer 1 is injected natively
 // by Chrome from the registered content script; Chrome gives no way to pull
-// that back out of an already-loaded page, so turning the feature OFF leaves
-// the generic list active until the next load. The popup says so, and only
-// when it's actually true.
+// that back out of an already-loaded page, so turning the feature OFF — or
+// pausing the site — leaves the generic list active until the next load.
+// The pause tooltip and the README both say so, in those words. They did not
+// used to: the tooltip promised the pause "takes effect right away", which is
+// true of two layers out of three, so a site broken by a generic selector
+// stayed broken after pausing and the switch read as dead.
 
 (async () => {
   // Consent-UI containers only. NEVER put a CMP *state* class here (e.g.
@@ -35,14 +38,334 @@
     '.cookie-consent-banner', '#cookieConsentContainer'
   ];
 
-  const DEFAULTS = { enabled: true, cookieEnabled: true, cookieAllowlist: [] };
+  // Read through src/shared/settings.js (registered alongside this file):
+  // cookieEnabled is a per-device switch in storage.local, the rest are the
+  // user's synced choices. cookieEnabled defaults TRUE here because this script
+  // only runs once the feature has been switched on and granted.
+  const DEFAULTS = { enabled: true, cookieEnabled: true, cookieAllowlist: [], cookieReject: false };
+  const readSettings = () => globalThis.QuellSettings.get(DEFAULTS);
 
+  // Reject-all. OPT-IN, off by default, because it is categorically different
+  // from everything else Quell does: hiding a banner leaves the choice unmade,
+  // while rejecting MAKES a choice on the user's behalf. That is the user's
+  // call to delegate, not ours to assume — so it is a switch, not a default.
+  //
+  // Every selector below is CMP-scoped by id or vendor class prefix. Quell must
+  // never click a "Reject" it merely found on the page: sites use that word for
+  // their own destructive actions, and a stray click is unrecoverable. There is
+  // deliberately NO text-matching pass here — the opposite of the label-based
+  // approach used for AI surfaces, because the cost of a false positive is a
+  // click rather than a hidden element.
+  //
+  // Grouped by vendor so each control can be checked against THAT vendor's own
+  // consent-state cookie (see choiceMade below).
+  const VENDORS = [
+    { name: 'onetrust', sel: ['#onetrust-reject-all-handler', '.ot-pc-refuse-all-handler'],
+      // Set when the user closes the banner by making a choice. OptanonConsent
+      // alone is written before any choice, so it is NOT a signal.
+      choice: (c) => c.has('OptanonAlertBoxClosed') },
+    { name: 'cookiebot', sel: ['#CybotCookiebotDialogBodyButtonDecline',
+                               '#CybotCookiebotDialogBodyLevelButtonLevelOptOutDeclineAll'],
+      // Written on accept/decline (and as "-1" where no consent is required).
+      choice: (c) => c.has('CookieConsent') },
+    { name: 'didomi', sel: ['#didomi-notice-disagree-button', '.didomi-continue-without-agreeing'],
+      choice: (c) => c.has('didomi_token') },
+    { name: 'cookieyes', sel: ['.cky-btn-reject'],
+      // The cookie exists before a choice; "action:yes" is the choice.
+      choice: (c) => /(^|,)action:yes(,|$)/.test(c.get('cookieyes-consent') || '') },
+    { name: 'cookie-law-info', sel: ['#cookie_action_close_header_reject'],
+      choice: (c) => c.has('viewed_cookie_policy') },
+    { name: 'osano', sel: ['.osano-cm-denyAll'], choice: null },
+    { name: 'complianz', sel: ['.cmplz-deny'],
+      // cmplz_banner-status=dismissed once any choice is made;
+      // cmplz_consent_status carries allow/deny.
+      choice: (c) => c.get('cmplz_banner-status') === 'dismissed' || c.has('cmplz_consent_status') },
+    { name: 'borlabs', sel: ['#BorlabsCookieBoxOptOut'], choice: (c) => c.has('borlabs-cookie') },
+    { name: 'termly', sel: ['.termly-deny-all', '.t-declineAllButton'], choice: null },
+  ];
+  // choice: null = no state cookie we can name with confidence (Osano and
+  // Termly keep theirs in localStorage under shapes we have not verified).
+  // For those two a banner that was hidden and is then SHOWN is never
+  // clicked: without a state signal, "the site revealed it" cannot be told
+  // apart from "the user opened it to review a choice they already made", so
+  // it is hidden instead. See seenHidden in findCandidate.
+  const REJECT_BTNS = VENDORS.flatMap((v) => v.sel);
+
+  // "A choice you already made is never overridden" — the README's promise.
+  // The visibility gate below covers banners the site has HIDDEN, but a site
+  // also re-SHOWS its banner when the user asks to review consent (Complianz
+  // "Manage consent", OneTrust's floating button): same control, now visible,
+  // user already accepted. Clicking reject there flips their accept to deny
+  // (and Complianz force-reloads the page). The vendor's own consent-state
+  // cookie is the one signal that says a choice exists, whatever the banner's
+  // visibility, so it is checked before EVERY click, not just after a reveal.
+  const readCookies = () => {
+    const m = new Map();
+    let raw = '';
+    try { raw = document.cookie || ''; } catch (_) { /* sandboxed document */ }
+    for (const part of raw.split(';')) {
+      const i = part.indexOf('=');
+      const k = (i < 0 ? part : part.slice(0, i)).trim();
+      if (!k) continue;
+      let v = i < 0 ? '' : part.slice(i + 1).trim();
+      try { v = decodeURIComponent(v); } catch (_) { /* leave raw */ }
+      m.set(k, v);
+    }
+    return m;
+  };
+  const vendorOf = (el) => VENDORS.find((v) => v.sel.some((s) => { try { return el.matches(s); } catch (_) { return false; } }));
+  const choiceMade = (el, cookies) => {
+    const v = vendorOf(el);
+    return !!(v && v.choice && v.choice(cookies));
+  };
+
+  // Known gaps, recorded rather than guessed at: Usercentrics renders inside a
+  // closed shadow root and Sourcepoint inside a cross-origin iframe, so neither
+  // is reachable from a content script.
+  //
+  // Quantcast is a third: its summary view renders BOTH "MORE OPTIONS" and the
+  // reject button as button[mode="secondary"], and which one comes first varies
+  // per site — Mozilla's rules list carries per-domain nth-child overrides for
+  // exactly this. There is no locale-independent way to tell them apart from a
+  // content script, and clicking "MORE OPTIONS" opens the preference pane,
+  // records no choice, and then the banner is hidden over the open pane. Text
+  // matching is not a fix: the labels are localized. So Quantcast is not
+  // clicked at all rather than clicked wrongly.
+  //
+  // All three still fall back to hiding.
+
+  // Belt-and-braces: if a vendor-scoped selector ever resolves to a button that
+  // offers to CONFIGURE consent rather than refuse it, skip it. Matching text to
+  // REFUSE a candidate is the safe direction — unlike matching text to FIND a
+  // button, the worst case here is that Quell clicks nothing and falls back to
+  // hiding. Deliberately narrow: "purposes" and "partners" were removed because
+  // "Reject all purposes" and "Disagree to all partners" are real reject labels.
+  // English-only, and that is fine for a fail-safe guard; it is NOT load-bearing
+  // for correctness anywhere (the Quantcast selector it was written for has been
+  // removed instead).
+  const CONFIGURE_RE = /more options|customi[sz]e|manage (?:my )?(?:choices|settings|preferences)/i;
+
+  // Never click something the SITE has already hidden. A pre-consented CMP
+  // commonly leaves its whole banner in the DOM with the reject button still
+  // inside it; clicking that on every page load re-fires the vendor's consent
+  // callback for a choice the user already made.
+  //
+  // This deliberately does NOT consult computed style. Quell hides through
+  // THREE separate layers — this file's own <style id="quell-cookies">, the
+  // per-domain <style id="quell-cookies-site">, and rules/cookie-generic.css,
+  // which Chrome injects natively for the registered script and which is not
+  // reachable from the page at all. Any computed-style test therefore measures
+  // Quell's own hiding rather than the site's, and turns reject into a silent
+  // no-op wherever a domain rule or a generic selector matches — 354 hosts in
+  // the shipped domain map, plus every CookieYes / cookie-law-info site the
+  // generic sheet covers. Disabling one <style> fixed only the third of the
+  // problem that was visible in a fixture.
+  //
+  // Inline styles and the hidden / aria-hidden attributes are things only the
+  // SITE sets on a banner; Quell hides exclusively through stylesheets and
+  // never writes them here. So they answer the question we actually mean,
+  // immune to all three layers — and without forcing a style recalc per
+  // candidate per sweep, which the stylesheet-toggling version did.
+  //
+  // Class-based dismissal is the third thing only the site sets — but only for
+  // vendors whose class we KNOW, listed below with the same CMP-scoped
+  // discipline REJECT_BTNS uses. Measured live 2026-09-10: Complianz
+  // server-renders every banner variant with `cmplz-hidden` and its deferred
+  // script removes the class from the one it decides to show; CookieYes hides
+  // its container with `cky-hide` after a choice; OneTrust keeps the
+  // preference centre (which holds `.ot-pc-refuse-all-handler`) behind
+  // `ot-hide` until the user opens it. Without these, a banner the user had
+  // already ACCEPTED was clicked to deny on every page load, and Complianz
+  // force-reloads the page on allow→deny — bounded, but the opposite of
+  // leaving the user's choice alone.
+  //
+  // An unknown CMP that hides itself by an unknown class alone is still
+  // clicked. That remains the safe direction to be wrong in: a redundant
+  // reject click is recoverable, a feature that silently never clicks is not.
+  const DISMISSED_CLASSES = ['cmplz-hidden', 'cmplz-dismissed', 'cky-hide', 'ot-hide'];
+  const siteHidden = (el) => {
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      if (n.hasAttribute('hidden')) return true;
+      if (n.getAttribute('aria-hidden') === 'true') return true;
+      const st = n.style;
+      if (st && (st.display === 'none' || st.visibility === 'hidden')) return true;
+      for (const c of DISMISSED_CLASSES) if (n.classList.contains(c)) return true;
+    }
+    return false;
+  };
+
+  // The window in which a banner may still show up. This used to be a cap on
+  // SWEEPS, which counted mutation bursts rather than clicks: on an ad-heavy or
+  // SPA page the 20 allowed sweeps were spent on unrelated DOM churn before the
+  // CMP had even injected, so reject silently never fired and the feature
+  // appeared to work only on quiet pages. Clicking is already bounded to once
+  // per page by `rejected`; what needed bounding was how long we keep looking.
+  const REJECT_WINDOW_MS = 20000;
+  let rejectDeadline = Date.now() + REJECT_WINDOW_MS;
+  // Restarted when the switch is turned on live, so flipping it while looking
+  // at a banner in a tab that has been open for a while still acts.
+  const restartRejectWindow = () => { rejectDeadline = Date.now() + REJECT_WINDOW_MS; };
+  let rejected = false;
+
+  // A click is not a choice until the vendor was listening. This script runs
+  // at document_start and the first sweep fires the moment the banner markup
+  // is parsed — ~13 ms in, measured — while the WordPress-shaped CMPs
+  // (Complianz, CookieYes, cookie-law-info, Borlabs: four of the twelve
+  // selectors above) server-render the banner and bind its handler from a
+  // `defer`/async script that has not run yet. The click went into the void,
+  // `rejected` latched on it, and the banner was then hidden: no choice
+  // recorded, exactly the silent no-op the listing says cannot happen.
+  //
+  // Two changes. (1) Nothing is clicked while the document is still parsing:
+  // `defer` scripts run before DOMContentLoaded, so the first attempt waits
+  // for it. (2) A click only COUNTS once the control it hit is gone or the
+  // site hid it — that is what a CMP does after recording a choice. Until
+  // then the same control is clicked again on a short, bounded schedule
+  // (async-bound handlers), after which we give up rather than keep poking.
+  // A CMP that re-renders after the click replaces the node; that is NOT read
+  // as confirmation (0.6.0) — see the pending branch in tryReject.
+  const MAX_CLICKS = 3;
+  const RETRY_DELAYS_MS = [400, 1600]; // after click 1, after click 2
+  let pending = null; // { el, clicks, at }
+  let dclArmed = false;
+
+  // Attached only once a reject control has been seen and skipped as
+  // site-hidden, so pages without CMP markup pay nothing. Coalesced through
+  // schedule() like every other mutation, and self-detaching once the choice
+  // is made or the window has closed.
+  const REVEAL_ATTRS = ['class', 'style', 'hidden', 'aria-hidden'];
+  let revealObserver = null;
+  const watchReveal = () => {
+    if (revealObserver || !document.documentElement) return;
+    revealObserver = new MutationObserver(() => {
+      if (rejected || !active || Date.now() > rejectDeadline) { unwatchReveal(); return; }
+      schedule();
+    });
+    revealObserver.observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: REVEAL_ATTRS });
+  };
+  const unwatchReveal = () => { if (revealObserver) { revealObserver.disconnect(); revealObserver = null; } };
+
+  const isControl = (el) => {
+    // Only ever activate something that is actually a control. <input> is
+    // restricted to real buttons: a checkbox matching a CMP class would be
+    // TOGGLED by .click(), silently flipping a consent switch on.
+    const tag = el.tagName.toLowerCase();
+    const type = (el.getAttribute('type') || '').toLowerCase();
+    return tag === 'button' || tag === 'a' ||
+           (tag === 'input' && (type === 'button' || type === 'submit')) ||
+           el.getAttribute('role') === 'button';
+  };
+
+  // The first reject control that may be clicked right now, or null. One scan,
+  // shared by the first attempt and by the post-disconnect rescan, so the two
+  // can never disagree about what counts as a live candidate.
+  // Controls that were site-hidden when first seen. If one later becomes
+  // visible and its vendor has no state cookie we can read, it is left alone.
+  const seenHidden = new WeakSet();
+  const findCandidate = () => {
+    const cookies = readCookies();
+    for (const sel of REJECT_BTNS) {
+      let els = [];
+      try { els = document.querySelectorAll(sel); } catch (_) { continue; }
+      for (const el of els) {
+        if (!isControl(el)) continue;
+        // Hidden by the site: not ours to click — yet. Complianz reveals its
+        // banner by REMOVING a class, which the childList observer never sees,
+        // so watch attributes until it shows (or the window closes).
+        if (siteHidden(el)) { seenHidden.add(el); watchReveal(); continue; }
+        if (seenHidden.has(el) && !(vendorOf(el) || {}).choice) continue;
+        // The user has already chosen (vendor state cookie): leave it alone,
+        // however visible the banner is.
+        if (choiceMade(el, cookies)) continue;
+        const label = ((el.textContent || '') + ' ' +
+                       (el.getAttribute('aria-label') || '')).trim();
+        if (CONFIGURE_RE.test(label)) continue;
+        return el;
+      }
+    }
+    return null;
+  };
+
+  // One retry timer at a time: sweeps call tryReject on every mutation burst,
+  // and each "too early" must not stack another timer.
+  let retryTimer = null;
+  const armRetry = (ms) => {
+    if (retryTimer) return;
+    retryTimer = setTimeout(() => { retryTimer = null; if (active) tryReject(); }, Math.max(0, ms));
+  };
+
+  const clickControl = (el) => {
+    try { el.click(); } catch (_) { /* CMP threw; hiding still applies */ }
+    const clicks = pending ? pending.clicks + 1 : 1;
+    pending = { el, clicks, at: Date.now() };
+    const delay = RETRY_DELAYS_MS[clicks - 1];
+    if (delay !== undefined) { if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; } armRetry(delay); }
+  };
+
+  const tryReject = () => {
+    if (rejected || Date.now() > rejectDeadline) return;
+    if (document.readyState === 'loading') {
+      if (!dclArmed) {
+        dclArmed = true;
+        // The window is measured from when we could first act, not from injection —
+        // a page that takes 20 s to reach DOMContentLoaded would otherwise never be rejected.
+        document.addEventListener('DOMContentLoaded', () => {
+          if (active && rejectOn) { restartRejectWindow(); tryReject(); }
+        }, { once: true });
+      }
+      return;
+    }
+    if (pending) {
+      const connected = pending.el.isConnected;
+      // A banner the site has now hidden, or a choice the vendor has now
+      // recorded, is the confirmation we were waiting for.
+      if (connected && (siteHidden(pending.el) || choiceMade(pending.el, readCookies()))) {
+        rejected = true; pending = null; return;
+      }
+      // Nothing is judged before the ladder's next slot. In particular a
+      // DISCONNECTED control is not a confirmation: a CMP that re-renders
+      // (CookieYes, OneTrust's SPA shell) replaces the node — sometimes after
+      // recording the choice, sometimes before it had bound any handler, in
+      // which case our click went into the void — and the replacement may not
+      // even be in the DOM yet at the moment of the swap.
+      const wait = RETRY_DELAYS_MS[pending.clicks - 1] - (Date.now() - pending.at);
+      if (pending.clicks < MAX_CLICKS && wait > 0) { armRetry(wait); return; }
+      if (!connected) {
+        // Look again, once, at the slot. A visible replacement means the
+        // banner is still asking: the ladder continues on it, same budget.
+        // Only when no visible candidate remains is the choice taken as made.
+        const next = findCandidate();
+        if (!next) { rejected = true; pending = null; return; }
+        pending.el = next;
+      }
+      if (pending.clicks >= MAX_CLICKS) { rejected = true; pending = null; return; }
+      clickControl(pending.el);
+      return;
+    }
+    const el = findCandidate();
+    if (el) clickControl(el);
+  };
+
+  let styleRetries = 0;
   const addStyle = (id, css) => {
     if (document.getElementById(id)) return;
+    const root = document.head || document.documentElement;
+    // Nothing to attach to yet. Chrome's document_start guarantees a
+    // documentElement, but executeScript into an open tab and other injection
+    // points make no such promise — and an exception here aborts apply()
+    // silently, taking hiding AND reject down with it. Retry rather than throw.
+    if (!root) {
+      // Bounded: a document that never regains a root would otherwise spin
+      // forever, and a retry scheduled before teardown() would re-add the
+      // style after the feature was switched off.
+      if (++styleRetries > 50 || !active) return;
+      setTimeout(() => addStyle(id, css), 0);
+      return;
+    }
     const style = document.createElement('style');
     style.id = id;
     style.textContent = css;
-    (document.head || document.documentElement).appendChild(style);
+    root.appendChild(style);
   };
   const dropStyle = (id) => document.getElementById(id)?.remove();
 
@@ -53,6 +376,7 @@
   let observer = null;
   let scheduled = false;
   let cmpSeen = false;
+  let rejectOn = false;
 
   // JS scroll-unlock for CMPs that set overflow directly. Gated on having
   // actually hidden a consent element on THIS page, so a clean site's own
@@ -89,6 +413,8 @@
       }
     }
     if (n > 0) cmpSeen = true;
+    // CMPs inject late and re-render; keep offering the reject until one lands.
+    if (rejectOn) tryReject();
     unlock();
     if (n > 0) {
       try { chrome.runtime.sendMessage({ type: 'blocked', count: n }); } catch (_) { /* sw asleep */ }
@@ -111,6 +437,12 @@
   async function apply() {
     if (active) return;
     active = true;
+
+    // Reject BEFORE hiding. A programmatic .click() does still reach a
+    // display:none element, but several CMPs gate their own handlers on
+    // visibility or pointer state, so hiding first makes the outcome depend on
+    // the vendor. Rejecting first makes it depend on nothing.
+    if (rejectOn) tryReject();
 
     // Hide the consent UI. Scroll-unlock via CSS is scoped to CMP-added state
     // classes ONLY — a blanket html/body{overflow:auto} would break sites that
@@ -136,14 +468,28 @@
     } catch (_) { /* background asleep or non-extension context — seed still active */ }
 
     if (!active) return; // toggled off while awaiting the background
-    if (document.body) sweep();
-    observer = new MutationObserver(schedule);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
+    // Wait for a documentElement before observing. Chrome's document_start
+    // guarantees one, but executeScript into an open tab does not, and
+    // observe(null) throws — which would leave the page with hiding applied and
+    // no observer, so every CMP arriving later went unhidden and unrejected.
+    // Same shape of attach() that bing.js and engines.js already use.
+    let attachRetries = 0;
+    const attach = () => {
+      if (!active || observer) return;
+      // Bounded, like addStyle: a document that never regains a root must not
+      // spin a timer for the life of the tab.
+      if (!document.documentElement) { if (++attachRetries <= 50) setTimeout(attach, 0); return; }
+      if (document.body) sweep();
+      observer = new MutationObserver(schedule);
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+    };
+    attach();
   }
 
   function teardown() {
     active = false;
     if (observer) { observer.disconnect(); observer = null; }
+    unwatchReveal();
     dropStyle('quell-cookies');
     dropStyle('quell-cookies-site');
     relock();
@@ -152,6 +498,11 @@
 
   const applyState = (s) => {
     const paused = (s.cookieAllowlist || []).includes(location.hostname);
+    const wasOn = rejectOn;
+    rejectOn = s.cookieReject === true;
+    // Switched on live: give it a fresh window and try immediately, rather than
+    // leaving the user staring at a banner until they reload.
+    if (rejectOn && !wasOn) { restartRejectWindow(); if (active) tryReject(); }
     if (s.enabled && s.cookieEnabled && !paused) apply();
     else teardown();
   };
@@ -165,14 +516,12 @@
   // Subscribe before the first async read — a toggle landing during that read
   // would otherwise be missed and the page would sit stale until reload.
   try {
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== 'local') return;
-      if (!('enabled' in changes || 'cookieEnabled' in changes || 'cookieAllowlist' in changes)) return;
-      chrome.storage.local.get(DEFAULTS).then(applyState).catch(() => {});
-    });
+    globalThis.QuellSettings.onChange(
+      ['enabled', 'cookieEnabled', 'cookieAllowlist', 'cookieReject'],
+      () => readSettings().then(applyState).catch(() => {}));
   } catch (_) { /* no chrome.storage in test context */ }
 
   let s = DEFAULTS;
-  try { s = await chrome.storage.local.get(DEFAULTS); } catch (_) { /* non-extension context (tests) */ }
+  try { s = await readSettings(); } catch (_) { /* non-extension context (tests) */ }
   applyState(s);
 })();

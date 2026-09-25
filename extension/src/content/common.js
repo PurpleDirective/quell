@@ -3,20 +3,39 @@
 // visible to google.js / bing.js. Guard against double-injection.
 
 window.Quell = window.Quell || {
-  DEFAULTS: { enabled: true, googleMode: 'hide', bingEnabled: true, totalBlocked: 0 },
+  // Settings live in src/shared/settings.js (loaded first). DEFAULTS is kept
+  // here as an alias because every surface script reads it through Quell.
+  DEFAULTS: globalThis.QuellSettings.DEFAULTS,
 
-  async getSettings() {
-    return chrome.storage.local.get(this.DEFAULTS);
+  getSettings() {
+    return globalThis.QuellSettings.get();
+  },
+
+  // Keep-AI-on-this-site: the per-site pause for every AI surface.
+  aiPaused(s) {
+    return (s.aiAllowlist || []).includes(location.hostname);
   },
 
   // Inject a <style> as early as possible — works even at document_start,
   // before <head> exists, by falling back to <html>.
   injectCSS(id, css) {
     if (document.getElementById(id)) return;
+    const root = document.head || document.documentElement;
+    // Retry rather than throw when there is nothing to attach to yet. Chrome's
+    // document_start guarantees a documentElement, but scripts injected via
+    // executeScript into an open tab make no such promise, and an exception
+    // here aborts the caller mid-apply.
+    if (!root) {
+      // Bounded — a document that never regains a root must not spin forever.
+      this._cssRetries = (this._cssRetries || 0) + 1;
+      if (this._cssRetries > 50) return;
+      setTimeout(() => this.injectCSS(id, css), 0);
+      return;
+    }
     const style = document.createElement('style');
     style.id = id;
     style.textContent = css;
-    (document.head || document.documentElement).appendChild(style);
+    root.appendChild(style);
   },
 
   // Counterpart to injectCSS — lets a surface undo its own hiding when the
@@ -25,18 +44,14 @@ window.Quell = window.Quell || {
     document.getElementById(id)?.remove();
   },
 
-  // Re-run `cb(settings)` whenever any of `keys` changes in storage.local.
-  // This is what makes a popup toggle affect the page the user is ALREADY
-  // looking at. Without it every toggle silently needed a reload, which reads
-  // as "the extension doesn't work" — the top cause of 1-star reviews in this
-  // niche (see store/COMPETITIVE-LANDSCAPE §backlog 2).
+  // Re-run `cb(settings)` whenever any of `keys` changes (storage.sync for
+  // choices, storage.local for grant-bound switches). This is what makes a
+  // popup toggle affect the page the user is ALREADY looking at. Without it
+  // every toggle silently needed a reload, which reads as "the extension
+  // doesn't work" — the top cause of 1-star reviews in this niche (see
+  // store/COMPETITIVE-LANDSCAPE §backlog 2).
   onSettingsChange(keys, cb) {
-    if (!chrome?.storage?.onChanged) return;
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== 'local') return;
-      if (!keys.some((k) => k in changes)) return;
-      this.getSettings().then(cb).catch(() => {});
-    });
+    globalThis.QuellSettings.onChange(keys, cb);
   },
 
   // Coalesce mutation bursts into one sweep per frame. requestAnimationFrame

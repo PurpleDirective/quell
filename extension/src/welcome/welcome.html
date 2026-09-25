@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Welcome to Quell</title>
+  <link rel="stylesheet" href="welcome.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="hero">
+      <img src="../../icons/icon128.png" alt="" width="64" height="64" />
+      <div>
+        <h1>Quell is on.</h1>
+        <p class="lead">It hides the AI answers, cookie banners and pop-ups you didn’t ask for — and leaves everything else alone.</p>
+      </div>
+    </header>
+
+    <div class="notice" id="accessNotice" hidden>
+      <p>Your browser hasn’t let Quell work on Google and Bing yet.</p>
+      <button type="button" class="btn" id="grantBase">Allow on Google and Bing</button>
+    </div>
+
+    <section aria-labelledby="h-groups">
+      <h2 id="h-groups">Three switches, your call</h2>
+      <ul class="groups">
+        <li>
+          <strong>Search</strong> <span class="on">On</span>
+          <p>Hides the AI Overview above Google results, AI Mode, Gemini and Bing Copilot. An answer you open yourself in “People also ask” stays — you asked for it. DuckDuckGo, Brave and Yahoo are one switch away.</p>
+        </li>
+        <li>
+          <strong>Cookie banners</strong> <span class="off">Off until you turn it on</span>
+          <p>Hides “we use cookies” pop-ups, and can say “reject all” for you where the site uses a consent tool Quell knows.</p>
+        </li>
+        <li>
+          <strong>Pop-ups</strong> <span class="off">Off until you turn it on</span>
+          <p>Newsletter sign-up boxes, chat bubbles and “open in app” banners.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="h-never">
+      <h2 id="h-never">What Quell will never do</h2>
+      <ul class="never">
+        <li>Hide a real search result. Every release is tested against that.</li>
+        <li>Collect your browsing. Quell works on your device and keeps nothing about the pages you visit.</li>
+        <li>Sell or share data, or use it for anything but fixing Quell.</li>
+        <li>Hold on to access it isn’t using. Turn Cookie banners and Pop-ups both off and Quell gives its all-sites access back.</li>
+      </ul>
+      <p class="fine">Your settings sync through your own browser account, like bookmarks do. The one thing Quell ever sends to us is a “this site looks broken” report you choose to send — just the site’s domain and Quell’s version, shown to you before it goes.</p>
+    </section>
+
+    <section aria-labelledby="h-where">
+      <h2 id="h-where">Changing things</h2>
+      <p>Click Quell’s crescent icon in your toolbar. If you don’t see it, open your browser’s extensions menu (the puzzle piece) and pin Quell. Every switch works straight away — no reload needed — and if a site ever looks wrong, pause Quell for just that site from the same place.</p>
+    </section>
+
+    <footer>
+      <a id="privacy" href="https://purpledirective.com/quell/privacy/" target="_blank" rel="noopener">Privacy policy</a>
+      <span>Free and open source · Purple Directive</span>
+    </footer>
+  </main>
+  <script src="../shared/config.js"></script>
+  <script src="welcome.js"></script>
+</body>
+</html>

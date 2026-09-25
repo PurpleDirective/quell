@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Quell — EasyList Cookie → extension rules pipeline (Phase 2).
+"""Quell — EasyList → extension rules pipeline.
+
+Two outputs, built independently (either can fail loudly without the other
+shipping half-written):
+
+COOKIES (Phase 2)
 
 Fetches the EasyList Cookie List (CC BY-SA 3.0, see /NOTICE) and emits:
 
@@ -13,6 +18,17 @@ Fetches the EasyList Cookie List (CC BY-SA 3.0, see /NOTICE) and emits:
       {"example.com": [...]}; the background serves each page ONLY its own
       host's slice (no web_accessible_resources — keeps the extension
       un-fingerprintable, and messages stay tiny).
+
+POP-UPS (0.6.0) — extension/rules/popups.json, from three EasyList
+annoyance sub-lists (same CC BY-SA 3.0 option — see /NOTICE):
+  newsletter  EasyList – Newsletter Notices   (whole list)
+  chat        EasyList – Chat Widgets          (whole list)
+  app         EasyList – Notifications         (ONLY "open in app" banner rules,
+                                                picked by selector keyword)
+  Cosmetic rules only — no network blocking — and every selector passes a
+  structural filter so that nothing that looks like page content (html, body,
+  main, article, #content, …) can be emitted. The content script adds a
+  second, runtime guard on top (see src/content/popups.js).
 
 Deliberately CONSERVATIVE: only filter syntax we can translate with full
 confidence is converted; everything else is dropped AND COUNTED. Run with
@@ -205,5 +221,201 @@ def main():
         print(f"  wrote extension/rules/{f} ({kb} KB)")
 
 
+# --------------------------------------------------------------------------
+# Pop-ups layer
+# --------------------------------------------------------------------------
+POPUP_SOURCES = {
+    "newsletter": [
+        "https://ublockorigin.github.io/uAssetsCDN/thirdparties/easylist-newsletters.txt",
+        "https://ublockorigin.github.io/uAssets/thirdparties/easylist-newsletters.txt",
+    ],
+    "chat": [
+        "https://ublockorigin.github.io/uAssetsCDN/thirdparties/easylist-chat.txt",
+        "https://ublockorigin.github.io/uAssets/thirdparties/easylist-chat.txt",
+    ],
+    "app": [
+        "https://ublockorigin.github.io/uAssetsCDN/thirdparties/easylist-notifications.txt",
+        "https://ublockorigin.github.io/uAssets/thirdparties/easylist-notifications.txt",
+    ],
+}
+# The Notifications list covers many kinds of nag; only app-install banners are
+# in scope for the "Open in app" switch.
+APP_BANNER_RE = re.compile(
+    r"smart-?banner|app-?banner|open-?in-?(the-?)?app|openinapp|get-?the-?app|"
+    r"download-?(the-?)?app|app-?download|app-?promo|install-?app|app-?install|"
+    r"mobile-?app|appstore-?banner|branch-banner|adjust-?banner",
+    re.I,
+)
+# Things that are, or usually wrap, the page itself. A selector whose final
+# compound is one of these is dropped outright — hiding it would hide content.
+STRUCTURAL_TAGS = {"html", "body", "main", "article", "header", "footer", "nav",
+                   "section", "aside", "div", "span", "form", "iframe", "p",
+                   "ul", "li", "a", "img", "button", "dialog"}
+STRUCTURAL_NAMES = re.compile(
+    r"^[#.](main|content|contents|page|app|root|wrapper|container|site|"
+    r"layout|body|article|post|entry|story|primary|__next|__nuxt)$", re.I)
+POPUP_FLOORS = {"newsletter": 300, "chat": 5, "app": 5}
+
+
+def split_selector_list(sel):
+    """Split a selector list on TOP-LEVEL commas only."""
+    out, depth, cur = [], 0, []
+    for ch in sel:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        if ch == "," and depth == 0:
+            out.append("".join(cur).strip())
+            cur = []
+        else:
+            cur.append(ch)
+    out.append("".join(cur).strip())
+    return [x for x in out if x]
+
+
+def subject_compound(sel):
+    """The compound selector a rule actually hides — the last one after any
+    combinator — found with brackets, parentheses and quotes respected, so
+    `div[aria-label="Sign up"]` is one compound, not two."""
+    depth, quote, start = 0, None, 0
+    for i, ch in enumerate(sel):
+        if quote:
+            if ch == quote:
+                quote = None
+            continue
+        if ch in "\"'":
+            quote = ch
+        elif ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        elif depth == 0 and ch in " >+~":
+            start = i + 1
+    return sel[start:].strip()
+
+
+# A subject compound that names html or body in ANY form — `body`,
+# `body.newsletter-open`, `html.no-scroll`, `body[data-modal]`, `:root` —
+# hides the whole page. (0.6.0 review: the first version only caught the
+# bare tag.)
+PAGE_ROOT_RE = re.compile(r"^(html|body)(?![\w-])|^:root(?![\w-])", re.I)
+
+# Words that say "some overlay" and nothing about WHAT it is. A rule whose
+# subject compound is built only from these (`.modal`, `.modal-backdrop`,
+# `#popup`, `.ui-widget-overlay`, `div[class^="background-"]`) hides whatever
+# the site shows in that shell — its login, cart and checkout dialogs too.
+# 0.6.0 review: 264 such site rules had shipped; dropped here, and the
+# runtime also refuses to hide a site-rule match that does not look like a
+# sign-up, chat or app surface (src/content/popups.js).
+GENERIC_OVERLAY_WORDS = {
+    "modal", "modals", "overlay", "overlays", "popup", "popups", "pop", "up",
+    "dialog", "dialogs", "lightbox", "backdrop", "popover", "layer", "lyr",
+    "ui", "widget", "container", "node", "wrapper", "wrap", "content",
+    "inner", "outer", "box", "window", "bg", "background", "mask", "shade",
+    "open", "opened", "active", "show", "shown", "visible", "fade", "in",
+    "is", "has", "fixed", "sticky", "bottom", "top", "fullscreen", "full",
+    "screen", "main", "global", "site", "page", "body", "root", "div",
+    "span", "section", "aside", "elementor", "yui", "jquery", "jq", "mfp",
+    "fancybox", "featherlight", "reveal", "pum", "cbox", "colorbox",
+    "remodal", "swal2", "sweet", "alert", "bootstrap", "bs", "tingle",
+    "needsclick", "cls", "inserted", "fd", "focus", "applied", "slick", "on",
+    "preloaded", "class", "id", "style", "role", "aria", "label", "data",
+    "hidden", "dismissible", "component", "block", "module", "js",
+}
+
+
+def _words(compound):
+    # Identifiers only: tag, #id, .class, and attribute NAMES/VALUES.
+    raw = re.findall(r"[A-Za-z][A-Za-z0-9]*", compound)
+    out = []
+    for w in raw:
+        # split camelCase: subscribeDialog -> subscribe, dialog
+        out += [x.lower() for x in re.findall(r"[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])", w)]
+    return out
+
+
+def is_generic_overlay(compound):
+    words = _words(compound)
+    return bool(words) and all(w in GENERIC_OVERLAY_WORDS for w in words)
+
+
+def popup_selector_ok(sel):
+    """Structural filter: True only for selectors safe to hide page-wide."""
+    if len(sel) > 150 or "::" in sel:
+        return False
+    last = subject_compound(sel)
+    if not last or PAGE_ROOT_RE.match(last):
+        return False
+    if last.lower() in STRUCTURAL_TAGS:
+        return False
+    if STRUCTURAL_NAMES.match(last):
+        return False
+    if is_generic_overlay(last):
+        return False
+    # Must name something specific: an id, class or attribute somewhere.
+    if not any(c in sel for c in "#.["):
+        return False
+    return True
+
+
+def fetch_first(urls):
+    for url in urls:
+        print(f"fetching {url}")
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Quell-rules-pipeline/1.0"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return r.read().decode("utf-8", "replace")
+        except Exception as e:  # noqa: BLE001 — log and try the next mirror
+            print(f"  failed: {e}")
+    return None
+
+
+def build_popup_category(cat, text):
+    _net, generic, domains, stats = parse(text.splitlines())
+    keep = (lambda s: bool(APP_BANNER_RE.search(s))) if cat == "app" else (lambda s: True)
+    dropped = 0
+
+    def clean(sels):
+        nonlocal dropped
+        out = []
+        for s in sels:
+            for part in split_selector_list(s):
+                if keep(part) and popup_selector_ok(part):
+                    out.append(part)
+                elif keep(part):
+                    dropped += 1
+        return sorted(set(out))
+
+    g = clean(generic)
+    d = {}
+    for host, sels in domains.items():
+        c = clean(sels)
+        if c:
+            d[host] = c
+    print(f"  [{cat}] generic {len(g)}  domains {len(d)}  "
+          f"structural-drops {dropped}  upstream-dropped-extended {stats.get('dropped-extended', 0)}")
+    return {"generic": g, "domains": d}
+
+
+def build_popups():
+    out = {}
+    for cat, urls in POPUP_SOURCES.items():
+        text = fetch_first(urls)
+        if text is None:
+            sys.exit(f"FATAL: no source reachable for pop-ups/{cat}")
+        out[cat] = build_popup_category(cat, text)
+        if len(out[cat]["generic"]) < POPUP_FLOORS[cat]:
+            sys.exit(f"FATAL: pop-ups/{cat} suspiciously small "
+                     f"({len(out[cat]['generic'])} < {POPUP_FLOORS[cat]}) — not writing.")
+    (RULES_DIR / "popups.json").write_text(json.dumps(out, separators=(",", ":"), sort_keys=True) + "\n")
+    kb = (RULES_DIR / "popups.json").stat().st_size // 1024
+    print(f"  wrote extension/rules/popups.json ({kb} KB)")
+
+
 if __name__ == "__main__":
-    main()
+    only = sys.argv[1] if len(sys.argv) > 1 else "all"
+    if only in ("all", "cookies"):
+        main()
+    if only in ("all", "popups"):
+        build_popups()

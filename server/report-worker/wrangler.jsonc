@@ -1,0 +1,44 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "quell-report",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "account_id": "<your Cloudflare account id>",
+
+  // Only the Quell report paths on the apex; the rest of purpledirective.com
+  // is untouched (same pattern as pd-buy-redirect's /buy/*).
+  "routes": [
+    { "pattern": "purpledirective.com/api/quell/*", "zone_name": "purpledirective.com" }
+  ],
+
+  // Aggregate counts. Create with:
+  //   npx wrangler d1 create quell-reports
+  // and paste the returned database_id below (see README).
+  "d1_databases": [
+    { "binding": "DB", "database_name": "quell-reports", "database_id": "<from npx wrangler d1 create quell-reports>" }
+  ],
+
+  // Edge rate limits. CLIENT_LIMITER is keyed by a salted hash of the client
+  // IP (never the raw IP); GLOBAL_LIMITER bounds all clients together.
+  // namespace_id values must be unique per account.
+  "ratelimits": [
+    { "name": "CLIENT_LIMITER", "namespace_id": "4201", "simple": { "limit": 5, "period": 60 } },
+    { "name": "GLOBAL_LIMITER", "namespace_id": "4202", "simple": { "limit": 300, "period": 60 } }
+  ],
+
+  // Which extension origins may post reports (src/index.js allowedOrigin).
+  // Firefox (moz-extension://<random uuid>) is always accepted. EDGE_EXTENSION_ID
+  // is empty until the Edge Add-ons listing exists (empty = not accepted;
+  // Edge users installing from the Chrome Web Store send the Chrome id).
+  "vars": {
+    "CHROME_EXTENSION_ID": "hipifmmjmbnkhfajkbmcjkajlfjiehho",
+    "EDGE_EXTENSION_ID": ""
+  },
+
+  // Daily retention purge (rows older than 180 days).
+  "triggers": { "crons": ["17 4 * * *"] },
+
+  // Workers Logs OFF: the platform would otherwise retain per-request metadata
+  // for this Worker, and the privacy policy says the endpoint keeps none.
+  "observability": { "enabled": false }
+}

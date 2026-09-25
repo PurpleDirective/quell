@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Rival Blocker (test double)",
+  "version": "1.0.0",
+  "description": "Stand-in for a co-installed blocker: injects CSS, observes, and mutates.",
+  "content_scripts": [{
+    "matches": ["https://www.google.com/*", "https://example.com/*"],
+    "js": ["rival.js"],
+    "run_at": "document_start",
+    "all_frames": false
+  }]
+}
