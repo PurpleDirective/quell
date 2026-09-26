@@ -2,6 +2,7 @@
 # Build the store upload zips from the ONE source tree in extension/.
 #   dist/quell-<v>-chrome.zip   Chrome Web Store
 #   dist/quell-<v>-firefox.zip  addons.mozilla.org (desktop + Android)
+#   dist/quell-<v>-opera.zip    addons.opera.com (Chrome package, short name)
 # Only manifest.json differs; pipeline/make_manifest.py derives it.
 # Excludes Chrome's _metadata artifacts and OS junk.
 set -euo pipefail
@@ -11,7 +12,7 @@ mkdir -p dist
 BUILD="dist/build"
 rm -rf "$BUILD"
 
-for target in chrome firefox; do
+for target in chrome firefox opera; do
   dir="$BUILD/$target"
   mkdir -p "$dir"
   (cd extension && tar --exclude='_metadata' --exclude='.DS_Store' -cf - .) | (cd "$dir" && tar -xf -)
