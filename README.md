@@ -256,3 +256,8 @@ Every version sent to a store is published here as a tagged
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Support
+
+Quell stays free. If it's useful, you can support the work that keeps its rules current at
+[github.com/sponsors/PurpleDirective](https://github.com/sponsors/PurpleDirective).

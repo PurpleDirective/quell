@@ -245,6 +245,7 @@ function renderLinks() {
   const B = globalThis.QuellBrowser || {};
   const url = IS_FIREFOX ? CFG.RATE_URL_FIREFOX : B.opera ? CFG.RATE_URL_OPERA : CFG.RATE_URL_CHROME;
   if (url) rate.href = url; else rate.hidden = true;
+  $('sponsor').href = CFG.SPONSOR_URL || 'https://github.com/sponsors/PurpleDirective';
   $('feedback').href = CFG.FEEDBACK_MAILTO || 'mailto:support@purpledirective.com';
   $('privacy').href = CFG.PRIVACY_URL || 'https://purpledirective.com/quell/privacy/';
 }

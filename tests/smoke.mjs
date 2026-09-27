@@ -877,6 +877,8 @@ console.log('Popup:');
   ok(await page.evaluate(() => document.getElementById('rate').href
     .includes('chromewebstore.google.com/detail/hipifmmjmbnkhfajkbmcjkajlfjiehho')),
     'Rate Quell links the real store listing');
+  ok(await page.evaluate(() => document.getElementById('sponsor').href) === 'https://github.com/sponsors/PurpleDirective',
+    'Support Quell links the GitHub Sponsors profile');
   ok(await page.evaluate(() => document.getElementById('privacy').href) === 'https://purpledirective.com/quell/privacy/',
     'Privacy link points at the published policy');
   ok(await page.evaluate(() => !document.getElementById('bChips')),
@@ -2585,6 +2587,8 @@ console.log('Welcome page:');
   ok(/never/i.test(text) && /real search result/i.test(text), 'says what Quell will never do');
   ok(await pg.evaluate(() => document.getElementById('privacy').href) === 'https://purpledirective.com/quell/privacy/',
     'links the privacy policy');
+  ok(await pg.evaluate(() => document.getElementById('sponsor').href) === 'https://github.com/sponsors/PurpleDirective',
+    'links the GitHub Sponsors profile');
   ok(await pg.evaluate(() => document.getElementById('accessNotice').hidden) === true,
     'no access prompt on Chromium, where Google/Bing access is granted at install');
   ok(!/\bcompliant\b/i.test(text), 'no "compliant" claim');

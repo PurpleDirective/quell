@@ -7,6 +7,7 @@
 (async () => {
   const CFG = globalThis.QUELL_CONFIG || {};
   if (CFG.PRIVACY_URL) document.getElementById('privacy').href = CFG.PRIVACY_URL;
+  if (CFG.SPONSOR_URL) document.getElementById('sponsor').href = CFG.SPONSOR_URL;
   // Opera keeps extension settings on this device only; its sync skips them.
   if (globalThis.QuellBrowser && globalThis.QuellBrowser.opera) {
     document.getElementById('syncNote').textContent = 'Your settings are saved in this browser.';
