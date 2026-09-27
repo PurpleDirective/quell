@@ -1,99 +1,118 @@
 # Quell Privacy Policy
 
-**Effective date:** 2026-09-25
+Version 2.0.0 · Effective September 26, 2026
 
-Quell is a browser extension by Purple Directive that hides content you did
-not ask for — AI answers on search engines, cookie-consent banners and, if you
-switch it on, newsletter pop-ups, chat widgets and "open in app" banners. It
-does this in your browser. This policy covers Quell for Chrome and the browsers that install from the Chrome Web Store, and for Firefox (desktop and Android).
+This policy explains how Purple Directive ("we", "us") collects, uses and shares information when you use
+Quell and its related websites and services (the "Services").
 
-## What Quell sends to Purple Directive
+## About Quell
 
-**Nothing, unless you press "This site looks broken" and then "Send report".**
+Quell is a browser extension that hides content you did not ask for on the pages you visit, such as AI answers
+in search results, cookie banners and pop-ups. It asks for access to the sites where it works so it can hide
+the page elements you choose. Some features act on a page for you, such as declining a cookie banner; the site
+and its tools handle that choice under their own policies. Quell does not collect analytics, and you do not
+need an account to use it.
 
-That report contains exactly two things, and Quell shows them to you before
-anything is sent:
+Your Quell settings are stored in your browser, and your browser may sync them across your devices under its
+own terms. If you choose to report a site that looks broken, we receive the information needed to look into
+it, such as the site's address and the version of Quell you are using. Sending a report is optional. If a
+feature sends information to us, we handle it as this policy describes. Our website, purpledirective.com, has
+its own privacy policy (https://purpledirective.com/privacy/).
 
-- the **domain** of the site you are on (for example `shop.example.com`) —
-  not the page address, not the path or search terms, not any page content;
-- the **Quell version** (for example `0.6.0`).
+## Information we collect
 
-No identifier, account, cookie or browsing history is attached. Like any web
-request, the report reaches our server from your IP address; the server does
-not log or store IP addresses. To limit how often reports can be sent, it
-turns the address into a one-way, salted hash and uses that hash as the key of
-a rate-limit counter that covers 60 seconds (five reports per minute); it keeps
-nothing else about the request. What it stores is a count per domain, per Quell
-version, per day. Those counts are deleted after 180 days. We use them only to
-find and fix sites Quell breaks.
+**Information you give us.** Such as your name, email address, messages you send us, reports you choose to
+send, and content you upload, create or share through the Services. If you buy something, you give payment and
+billing information, which our payment providers process.
 
-On Firefox, the browser itself also asks your permission the first time you
-send a report.
+**Information we collect automatically.** When you use the Services, we and our service providers may collect
+information such as device, browser and connection information (including IP address), pages and features you
+use, the date and time of your visits, and the page that referred you. We may use cookies and similar
+technologies to do this.
 
-Quell has no analytics, no telemetry and no accounts, and it never sends your
-browsing anywhere else.
+**Information from other sources.** Such as payment providers, services you choose to connect to the Services,
+and publicly available sources.
 
-**How the stores list this.** Because a reported domain is a piece of your
-browsing, Quell's store listings declare it: on the Chrome Web Store as *web history* (limited to the domain you choose to
-report), on Firefox Add-ons as optional *browsing activity* plus *technical
-data* (the version number). It is used only to fix site breakage. It is never
-sold, never shared, and never used for anything unrelated to Quell or to
-determine creditworthiness or for lending.
+## How we use information
 
-## Where your settings are kept
+We may use information to:
 
-- **Your choices** (which features are on or off, sites where you have paused
-  Quell) are saved in your browser's extension **sync** storage. If you are
-  signed in to your browser (for example a Google account in Chrome or a Mozilla account in Firefox) and sync is on, **your browser** copies
-  those settings to your own account so your other computers get them. That
-  sync is run by your browser's maker under their privacy terms; Purple
-  Directive never receives it and cannot read it. If you are not signed in, or
-  sync is off, the settings stay on this device. Firefox for Android does not sync extension settings, so there
-  they always stay on the device.
-- **Three switches stay on each device** and are never synced: other search
-  engines, cookie banners and pop-ups. They need site access that your
-  browser grants on each device separately.
-- A running **count of hidden items** stays on this device.
+- provide, operate and maintain the Services;
+- process transactions and send related notices, such as receipts;
+- respond to your requests and provide support;
+- understand how the Services are used, and improve them and develop new features;
+- communicate with you about the Services and, where permitted, about products we think may interest you;
+- keep the Services secure and prevent fraud and abuse;
+- comply with law and enforce our terms; and
+- for other purposes we describe when we collect the information, or with your consent.
 
-All of it is removed when you uninstall Quell (synced copies are removed by
-your browser's sync).
+We may also create aggregated or de-identified information and use it for any lawful purpose.
 
-## What Quell can access
+## How we share information
 
-- **Google and Bing search result pages**, to hide AI features there. This is
-  the only site access Quell is installed with. (Firefox may ask you to allow
-  it.)
-- **DuckDuckGo, Brave Search and Yahoo Search** — only if you switch them on,
-  which asks your browser for access to those three sites and nothing else. On
-  DuckDuckGo and Brave you may instead choose "off at the source", which adds
-  that engine's own "no AI answer" setting to the search address you are
-  already loading; that request goes to the search engine, as your search
-  already did. Quell only adds that setting when it is absent — a value you set
-  yourself is never overwritten.
-- **All sites** — only if you switch on Cookie banners or Pop-ups. Quell then
-  runs on the pages you visit to hide those elements. When you switch both of
-  them off, Quell gives this access back to your browser; switching either one
-  on again asks for it again. It looks at a page only
-  to decide what to hide — for example, never hiding the page's own article, a
-  sign-in or checkout form, or your cart — does that on your device, keeps
-  nothing and sends nothing from those pages.
-- If you additionally switch on **"Say reject all for me"** (off by default),
-  Quell clicks the *Reject all* button of consent banners it recognises. It
-  checks that consent tool's own saved-choice cookie first, on your device, so
-  a choice you have already made is left alone. For the consent tool to record
-  your refusal it has to load, so with this switch on Quell no longer blocks
-  the consent tools it can answer for you (OneTrust, Cookiebot, Didomi, Osano);
-  they load from their providers as the site intended. Quell sends them
-  nothing itself. It only ever presses controls
-  belonging to a recognised consent tool, never a site's own buttons.
+We do not sell your personal information.
 
-## Network activity
+We may share information:
 
-Apart from a breakage report you choose to send, Quell makes no network
-requests of its own. Its blocklists ship inside the extension and are updated
-through normal extension updates.
+- **With service providers** that help us operate the Services, such as hosting, security, payment processing,
+  communications, customer support and analytics. They may use it only to provide services to us.
+- **At your direction or with your consent**, such as when you share content with others or connect another
+  service.
+- **For legal reasons**, when we believe it is needed to comply with law or legal process, enforce our terms,
+  or protect the rights, property or safety of our users, the public or us.
+- **In a business transfer**, such as a merger, acquisition, financing or sale of assets, subject to this
+  policy.
+- **In aggregated or de-identified form**, which does not identify you.
 
-## Changes & contact
+## Cookies and similar technologies
 
-Material changes to this policy will be reflected in the extension's changelog
-and this page. Questions: support@purpledirective.com
+We and our service providers use cookies and similar technologies to keep the Services working, remember your
+preferences, understand how the Services are used, and keep them secure. You can control cookies through your
+browser settings; some features may not work without them. Browsers' "Do Not Track" signals have no common
+standard. Some of our tools may collect less when a browser sends one, but we do not promise a particular
+response.
+
+## How long we keep information
+
+We keep information for as long as we need it for the purposes described in this policy, such as providing the
+Services, meeting legal, tax and accounting obligations, resolving disputes and enforcing our agreements. How
+long depends on the type of information and why we have it. When we no longer need it, we delete it or
+de-identify it.
+
+## How we protect information
+
+We use reasonable administrative, technical and physical measures designed to protect information. No method
+of transmission or storage is completely secure, so we cannot guarantee the security of information.
+
+## Your choices and rights
+
+You can review and update information you have given us by contacting us. You can opt out of marketing emails
+using the link in them; we may still send you messages about your requests.
+
+Depending on where you live, you may have the right to know about, access, correct, delete or get a copy of
+your personal information, and to opt out of certain uses, such as targeted advertising. To make a request,
+email support@purpledirective.com. We may need to verify your identity before acting on it. Where the law
+allows, an authorized agent may make a request for you. If we decline your request, you may appeal by replying
+to our decision. We will not discriminate against you for exercising these rights.
+
+## Children
+
+The Services are not directed to children under 13, and we do not knowingly collect personal information from
+them. If you believe a child has given us personal information, contact us and we will take steps to delete
+it.
+
+## Where information is processed
+
+We are based in the United States. Information may be processed in the United States and other countries where
+we or our service providers operate, which may have different data protection laws from where you live.
+
+## Changes to this policy
+
+We may update this policy from time to time. When we do, we will post the new version here and update the
+version and effective date above. If a change is material, we will also give notice through the Services or by
+other appropriate means.
+
+## Contact us
+
+Questions or requests about this policy: support@purpledirective.com. Purple Directive.
+

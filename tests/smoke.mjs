@@ -8,6 +8,7 @@ import { chromium } from 'playwright';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+const OPERA_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 OPR/110.0.0.0";
 
 // QUELL_EXT lets the mutation battery load a mutated copy of the extension.
 const EXT = process.env.QUELL_EXT || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'extension');
@@ -1632,6 +1633,7 @@ console.log('Popup — engines switch (intent path / off path):');
       if (u.pathname.endsWith('/shared/settings.js')) return r.fulfill({ contentType: 'text/javascript', body: SETTINGS_SRC });
       if (u.pathname.endsWith('/shared/report-host.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/report-host.js'), 'utf8') });
       if (u.pathname.endsWith('/shared/config.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/config.js'), 'utf8') });
+      if (u.pathname.endsWith('/shared/browser.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/browser.js'), 'utf8') });
       if (u.pathname.endsWith('popup.css')) return r.fulfill({ contentType: 'text/css', body: css });
       return r.fulfill({ contentType: 'text/html', body: html });
     });
@@ -1762,6 +1764,7 @@ console.log('Popup — all-sites access is given back when Cookie banners and Po
       if (u.pathname.endsWith('/shared/settings.js')) return r.fulfill({ contentType: 'text/javascript', body: SETTINGS_SRC });
       if (u.pathname.endsWith('/shared/report-host.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/report-host.js'), 'utf8') });
       if (u.pathname.endsWith('/shared/config.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/config.js'), 'utf8') });
+      if (u.pathname.endsWith('/shared/browser.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/browser.js'), 'utf8') });
       if (u.pathname.endsWith('popup.css')) return r.fulfill({ contentType: 'text/css', body: css });
       return r.fulfill({ contentType: 'text/html', body: html });
     });
@@ -2585,6 +2588,20 @@ console.log('Welcome page:');
   ok(await pg.evaluate(() => document.getElementById('accessNotice').hidden) === true,
     'no access prompt on Chromium, where Google/Bing access is granted at install');
   ok(!/\bcompliant\b/i.test(text), 'no "compliant" claim');
+  ok(/sync through your own browser account/.test(text), 'on Chrome, says settings sync through the browser account');
+  await pg.close();
+}
+// Opera installs the Chrome package but does not sync extension data: the
+// welcome page must not promise it there.
+{
+  const pg = await ctx.newPage();
+  await pg.addInitScript({ content: `Object.defineProperty(navigator, 'userAgent', { get: () => ${JSON.stringify(OPERA_UA)} });` });
+  await pg.goto(`chrome-extension://${extId}/src/welcome/welcome.html`);
+  await pg.waitForTimeout(200);
+  const text = await pg.evaluate(() => document.body.innerText);
+  ok(await pg.evaluate(() => navigator.userAgent.includes('OPR/')), 'precondition: the page sees an Opera user agent');
+  ok(!/\bsync/i.test(text), `on Opera, the welcome page makes no sync claim`);
+  ok(/saved in this browser/.test(text), 'on Opera, says settings are saved in this browser');
   await pg.close();
 }
 
@@ -2614,8 +2631,9 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
     };`;
   const reports = [];
   let endpointStatus = 204;
-  const openPopup = async (local, tabUrl = 'https://www.google.com/search?q=widgets') => {
+  const openPopup = async (local, tabUrl = 'https://www.google.com/search?q=widgets', { ua } = {}) => {
     const pg = await ctx.newPage();
+    if (ua) await pg.addInitScript({ content: `Object.defineProperty(navigator, 'userAgent', { get: () => ${JSON.stringify(ua)} });` });
     await pg.route('http://popup.test/**', (r) => {
       const u = new URL(r.request().url());
       if (u.pathname.endsWith('popup.js')) return r.fulfill({ contentType: 'text/javascript', body: js });
@@ -2623,6 +2641,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
       if (u.pathname.endsWith('/shared/settings.js')) return r.fulfill({ contentType: 'text/javascript', body: SETTINGS_SRC });
       if (u.pathname.endsWith('/shared/report-host.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/report-host.js'), 'utf8') });
       if (u.pathname.endsWith('/shared/config.js')) return r.fulfill({ contentType: 'text/javascript', body: cfg });
+      if (u.pathname.endsWith('/shared/browser.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/browser.js'), 'utf8') });
       return r.fulfill({ contentType: 'text/html', body: html });
     });
     await pg.route(ENDPOINT, async (r) => {
@@ -2638,6 +2657,18 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
   const stored = (pg) => pg.evaluate(() => window.__state.local);
   const dlgOpen = (pg, id) => pg.evaluate((x) => document.getElementById(x).open, id);
 
+  // Rate Quell points at the store the browser installs from. Opera's listing
+  // is not public yet, so the link is hidden there, never the Chrome store.
+  {
+    const pg = await openPopup({});
+    ok(await pg.evaluate(() => document.getElementById('rate').href.includes('chromewebstore.google.com/detail/')),
+      'Rate Quell links the Chrome Web Store on Chrome');
+    await pg.close();
+    const op = await openPopup({}, undefined, { ua: OPERA_UA });
+    ok(await op.evaluate(() => globalThis.QuellBrowser && globalThis.QuellBrowser.opera === true), 'precondition: the popup detects Opera');
+    ok(await op.evaluate(() => document.getElementById('rate').hidden), 'Rate Quell is hidden on Opera (no Chrome Web Store link)');
+    await op.close();
+  }
   // Status line: the per-tab count, in words.
   {
     const pg = await openPopup({});

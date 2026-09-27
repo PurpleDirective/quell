@@ -8,11 +8,12 @@
 globalThis.QUELL_CONFIG = Object.freeze({
   REPORT_ENDPOINT: 'https://purpledirective.com/api/quell/report',
   PRIVACY_URL: 'https://purpledirective.com/quell/privacy/',
-  // Where "Rate Quell" points, per store. Firefox's AMO listing does not exist
-  // yet (submission is the operator's step): null hides the link on Firefox
-  // rather than pointing at a page that is not there. Fill it in after AMO
-  // publishes the listing.
+  // Where "Rate Quell" points, per store. The AMO and Opera listings are not
+  // public yet (both are in review): null hides the link on that browser
+  // rather than pointing at a page that is not there, or at another browser's
+  // store. Fill each in once its listing publishes.
   RATE_URL_CHROME: 'https://chromewebstore.google.com/detail/hipifmmjmbnkhfajkbmcjkajlfjiehho',
   RATE_URL_FIREFOX: null,
+  RATE_URL_OPERA: null,
   FEEDBACK_MAILTO: 'mailto:support@purpledirective.com?subject=Quell%20feedback',
 });

@@ -1,11 +1,16 @@
 // Quell — first-run page. Opened once by the background on a fresh install.
-// Its only behaviour: point the privacy link at the configured URL, and offer
+// Its only behaviour: point the privacy link at the configured URL, say where
+// settings live (Opera does not sync them), and offer
 // the Google/Bing grant when a browser (Firefox, notably Android) installed
 // Quell without it. A tab is a place where Firefox's permission prompt works.
 
 (async () => {
   const CFG = globalThis.QUELL_CONFIG || {};
   if (CFG.PRIVACY_URL) document.getElementById('privacy').href = CFG.PRIVACY_URL;
+  // Opera keeps extension settings on this device only; its sync skips them.
+  if (globalThis.QuellBrowser && globalThis.QuellBrowser.opera) {
+    document.getElementById('syncNote').textContent = 'Your settings are saved in this browser.';
+  }
   if (typeof chrome === 'undefined' || !chrome.permissions || !chrome.runtime?.getManifest) return;
   // Firefox only: on Chromium those hosts are required at install, and
   // permissions.contains() does not report content-script hosts at all.

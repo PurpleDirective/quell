@@ -80,7 +80,7 @@ async function save(patch) {
   } catch (e) {
     showError(e && e.name === 'ListFullError'
       ? 'That list of sites is full. Remove a site you no longer need first.'
-      : 'Couldn’t save that change — your browser’s settings sync said no. Try again in a minute.');
+      : 'Couldn’t save that change. Try again in a minute.');
     return false;
   }
 }
@@ -242,7 +242,8 @@ function reportable(h) {
 
 function renderLinks() {
   const rate = $('rate');
-  const url = IS_FIREFOX ? CFG.RATE_URL_FIREFOX : CFG.RATE_URL_CHROME;
+  const B = globalThis.QuellBrowser || {};
+  const url = IS_FIREFOX ? CFG.RATE_URL_FIREFOX : B.opera ? CFG.RATE_URL_OPERA : CFG.RATE_URL_CHROME;
   if (url) rate.href = url; else rate.hidden = true;
   $('feedback').href = CFG.FEEDBACK_MAILTO || 'mailto:support@purpledirective.com';
   $('privacy').href = CFG.PRIVACY_URL || 'https://purpledirective.com/quell/privacy/';

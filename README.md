@@ -208,8 +208,8 @@ playwright install (`npm i -g playwright` + `playwright install chromium`).
 No analytics, no telemetry, no account. Your choices are kept in the browser's
 extension **sync** storage, so the browser syncs them to **your own** browser
 account (Google / Mozilla) when you are signed in with sync on —
-Purple Directive never receives them. Firefox for Android does not sync extension
-settings, so there they stay on the device. Three grant-bound switches (other engines,
+Purple Directive never receives them. Firefox for Android and Opera do not sync
+extension settings, so there they stay on the device. Three grant-bound switches (other engines,
 cookie banners, pop-ups) and the hidden-items counter stay on each device.
 Settings from 0.5.x move from `storage.local` to `storage.sync` on update without
 loss. The only thing sent to Purple Directive is a breakage report you choose
