@@ -3,6 +3,7 @@
 #   dist/quell-<v>-chrome.zip   Chrome Web Store
 #   dist/quell-<v>-firefox.zip  addons.mozilla.org (desktop + Android)
 #   dist/quell-<v>-opera.zip    addons.opera.com (Chrome package, short name)
+#   dist/quell-<v>-edge.zip     Microsoft Edge Add-ons (the Chrome package as it is)
 # Only manifest.json differs; pipeline/make_manifest.py derives it.
 # Excludes Chrome's _metadata artifacts and OS junk.
 set -euo pipefail
@@ -12,7 +13,7 @@ mkdir -p dist
 BUILD="dist/build"
 rm -rf "$BUILD"
 
-for target in chrome firefox opera; do
+for target in chrome firefox opera edge; do
   dir="$BUILD/$target"
   mkdir -p "$dir"
   (cd extension && tar --exclude='_metadata' --exclude='.DS_Store' -cf - .) | (cd "$dir" && tar -xf -)

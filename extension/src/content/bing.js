@@ -113,5 +113,7 @@
 
   // Subscribe before the first async read — see the note in google.js.
   window.Quell.onSettingsChange(['enabled', 'aiEnabled', 'aiAllowlist', 'bingEnabled'], applyState);
+  // Cut off from the extension: stop hiding (see onGone in settings.js).
+  window.Quell.onGone(teardown);
   applyState(await window.Quell.getSettings());
 })();

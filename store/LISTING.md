@@ -6,6 +6,7 @@ Build with `pipeline/package.sh`:
 |---|---|
 | Chrome Web Store | `dist/quell-<version>-chrome.zip` |
 | Firefox Add-ons (AMO) | `dist/quell-<version>-firefox.zip` |
+| Microsoft Edge Add-ons | `dist/quell-<version>-edge.zip` — draft in `store/edge/LISTING.md` |
 
 ---
 
@@ -259,7 +260,8 @@ Firefox at install and on the AMO listing):**
 
 **Screenshots:** reuse the Chrome set (re-shot for 0.6.0), 1280×800.
 
-After AMO publishes the listing, set `RATE_URL_FIREFOX` in
-`extension/src/shared/config.js` (it is `null` until then, which hides the
-"Rate Quell" link on Firefox rather than pointing at a page that does not
-exist).
+`RATE_URL_FIREFOX` in `extension/src/shared/config.js` points at the AMO
+listing (public since 0.7.0; set in 0.7.1). If the listing's address ever
+changes, change it there. A `null` hides the "Rate Quell" link on Firefox
+rather than pointing at a page that does not exist — the Opera entry is still
+`null` for that reason.

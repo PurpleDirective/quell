@@ -8,6 +8,7 @@ import { chromium } from 'playwright';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+const EDGE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0";
 const OPERA_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 OPR/110.0.0.0";
 
 // QUELL_EXT lets the mutation battery load a mutated copy of the extension.
@@ -199,6 +200,21 @@ const LATECMP_FIXTURE = `<!doctype html><html><body><div id="content">site</div>
   document.body.appendChild(d);
 },300);<\/script></body></html>`;
 
+// Sourcepoint, as spiegel.de and faz.net ship it: a class on <html> that the
+// site's stylesheet turns into a fixed, unscrollable body.
+const SP_LOCK_FIXTURE = `<!doctype html><html class="site sp-message-open"><head><style>
+  .sp-message-open { height: 100vh !important; width: 100vw !important; }
+  .sp-message-open body { overflow: hidden !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; }
+  body { position: relative; margin: 0; }
+</style></head><body>
+<div id="sp_message_container_1517383" style="position:fixed;inset:0;z-index:99">We value your privacy</div>
+<div id="content" style="height:6000px">Long page</div>
+</body></html>`;
+// The same class on a page with no consent message: someone else's lock, left alone.
+const SP_CLASS_NO_CMP_FIXTURE = `<!doctype html><html class="sp-message-open"><head><style>
+  .sp-message-open body { overflow: hidden !important; position: fixed !important; }
+</style></head><body><div id="content" style="height:6000px">App</div></body></html>`;
+
 const CLEAN_FIXTURE = `<!doctype html><html><body style="overflow:hidden">
 <div id="app">A legit scroll-locked web app — no CMP here.</div>
 </body></html>`;
@@ -319,6 +335,61 @@ console.log('Google (hide mode):');
   ok(await page.evaluate(() => getComputedStyle(document.getElementById('organic-normal')).display) !== 'none',
     'normal organic result NOT hidden');
   await page.close();
+}
+
+// --- "Which site is this tab on?" — the real path the popup uses on Google/Bing ---
+console.log('Popup → page: which site is this tab on:');
+{
+  const page = await ctx.newPage();
+  await page.route('https://www.google.com/search**', (r) =>
+    r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  await page.goto('https://www.google.com/search?q=test');
+  await page.waitForFunction(() =>
+    getComputedStyle(document.getElementById('ai-block')).display === 'none').catch(() => {});
+  const ext = await ctx.newPage();
+  await ext.goto(`chrome-extension://${extId}/src/popup/popup.html?view=page`);
+  const seen = await ext.evaluate(async () => {
+    const tabs = await chrome.tabs.query({});
+    const answers = await Promise.all(tabs.map((t) => chrome.tabs.sendMessage(t.id, { type: 'where' }).then((r) => r, () => null)));
+    return { urls: tabs.map((t) => t.url ?? null), answers };
+  });
+  ok(seen.urls.every((u) => u === null), 'precondition: the browser shows Quell no tab addresses (this is why the popup has to ask)');
+  ok(JSON.stringify(seen.answers.filter(Boolean)) === '[{"host":"www.google.com"}]',
+    `Quell's script on the Google tab answers with its hostname and nothing else; no other tab answers (${JSON.stringify(seen.answers)})`);
+  // A web page cannot ask: the question is only answered when it comes from Quell itself.
+  ok(await page.evaluate(() => typeof chrome === 'undefined' || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function'),
+    'a web page has no way to send the question');
+  await ext.close();
+  await page.close();
+
+  // The listener itself: it answers Quell's own popup and nobody else. Run
+  // against a recording chrome so the guard is exercised directly (the
+  // browser would not let a stranger's message arrive in the first place).
+  const lone = await ctx.newPage();
+  await lone.route('http://where.test/**', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>x</title>' }));
+  await lone.goto('http://where.test/');
+  const answers = await lone.evaluate(({ settings, common }) => {
+    const listeners = [];
+    window.chrome = { runtime: { id: 'quell-id', onMessage: { addListener: (f) => listeners.push(f) } },
+      storage: { local: { get: async (d) => d }, sync: { get: async (d) => d }, onChanged: { addListener() {} } } };
+    new Function(settings + '\n' + common)();
+    new Function(settings + '\n' + common)(); // injected twice, as the background can do
+    const ask = (msg, sender) => { let got = 'no answer'; for (const f of listeners) f(msg, sender, (r) => { got = r; }); return got; };
+    return {
+      listeners: listeners.length,
+      own: ask({ type: 'where' }, { id: 'quell-id' }),
+      stranger: ask({ type: 'where' }, { id: 'another-extension' }),
+      fromTab: ask({ type: 'where' }, { id: 'quell-id', tab: { id: 3 } }),
+      other: ask({ type: 'blocked', count: 2 }, { id: 'quell-id' }),
+      empty: ask(null, { id: 'quell-id' }),
+    };
+  }, { settings: SETTINGS_SRC, common: readFileSync(path.join(EXT, 'src/content/common.js'), 'utf8') });
+  ok(answers.listeners === 1, `a second injection does not add a second listener (${answers.listeners})`);
+  ok(JSON.stringify(answers.own) === '{"host":"where.test"}', `Quell's popup gets the hostname and nothing else (${JSON.stringify(answers.own)})`);
+  ok(answers.stranger === 'no answer', 'a message carrying another extension\'s id is not answered');
+  ok(answers.fromTab === 'no answer', 'a message from a tab (a content script, not the popup) is not answered');
+  ok(answers.other === 'no answer' && answers.empty === 'no answer', 'any other message is left alone');
+  await lone.close();
 }
 
 // --- Google clean-web mode: redirects to udm=14 ---
@@ -710,6 +781,45 @@ console.log('Live-apply (cookie layer):');
   await page.waitForTimeout(400);
   ok(await page.evaluate(() => getComputedStyle(document.getElementById('onetrust-banner-sdk')).display) === 'none',
     'cookie feature back on re-hides the banner in place');
+  ok(await page.evaluate(() => getComputedStyle(document.body).overflow) === 'auto',
+    '...and the page scrolls again the second time the same banner is hidden');
+
+  // Sourcepoint's lock is a fixed body, not an overflow: found on spiegel.de and
+  // faz.net, where the banner was hidden and the page would not scroll.
+  const sp = await ctx.newPage();
+  await sp.setViewportSize({ width: 900, height: 600 });
+  await sp.route('http://sp-lock.test/**', (r) => r.fulfill({ contentType: 'text/html', body: SP_LOCK_FIXTURE }));
+  await sp.goto('http://sp-lock.test/');
+  ok(await sp.evaluate(() => getComputedStyle(document.body).position) === 'fixed', 'precondition: the consent tool has the page locked (fixed body)');
+  await sp.addScriptTag({ content: stub + '\n' + src });
+  await sp.waitForTimeout(400);
+  const wheel = async () => { await sp.mouse.move(450, 300); await sp.mouse.wheel(0, 900); await sp.waitForTimeout(300); const y = await sp.evaluate(() => Math.round(scrollY)); await sp.evaluate(() => scrollTo(0, 0)); return y; };
+  ok(await sp.evaluate(() => getComputedStyle(document.querySelector('[id^="sp_message_container"]')).display) === 'none', 'Sourcepoint message hidden');
+  ok(await sp.evaluate(() => getComputedStyle(document.body).position) === 'relative', "the body is back to the site's own position (not fixed, and not forced to something else)");
+  ok(await sp.evaluate(() => document.documentElement.className) === 'site', "only the consent tool's class was taken off <html>");
+  ok(await wheel() > 500, 'the page scrolls');
+  // The class arriving late (after the message) is lifted too.
+  await sp.evaluate(() => document.documentElement.classList.add('sp-message-open'));
+  await sp.waitForTimeout(300);
+  ok(await sp.evaluate(() => !document.documentElement.classList.contains('sp-message-open')) && await wheel() > 500, 'a lock class added later is lifted as well');
+  // Feature off: the banner and the site's own lock both come back, as they were.
+  await sp.evaluate(() => window.__quellSet({ cookieEnabled: false }));
+  await sp.waitForTimeout(400);
+  ok(await sp.evaluate(() => document.documentElement.classList.contains('sp-message-open') && getComputedStyle(document.body).position === 'fixed'
+    && getComputedStyle(document.querySelector('[id^="sp_message_container"]')).display !== 'none'), 'feature off puts the banner and its lock back in place');
+  await sp.evaluate(() => window.__quellSet({ cookieEnabled: true }));
+  await sp.waitForTimeout(400);
+  ok(await sp.evaluate(() => getComputedStyle(document.body).position) === 'relative' && await wheel() > 500, 'feature back on: hidden and scrolling again');
+  await sp.close();
+  // The same class with no consent message on the page is not Quell's to touch.
+  const app = await ctx.newPage();
+  await app.route('http://sp-class-only.test/**', (r) => r.fulfill({ contentType: 'text/html', body: SP_CLASS_NO_CMP_FIXTURE }));
+  await app.goto('http://sp-class-only.test/');
+  await app.addScriptTag({ content: stub + '\n' + src });
+  await app.waitForTimeout(400);
+  ok(await app.evaluate(() => document.documentElement.classList.contains('sp-message-open') && getComputedStyle(document.body).position === 'fixed'),
+    'a page with that class and no consent message keeps its own lock');
+  await app.close();
 
   // Per-site pause is live too — the tooltip no longer tells users to reload.
   await page.evaluate(() => window.__quellSet({ cookieAllowlist: ['cmp-fixture.test'] }));
@@ -2620,22 +2730,31 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
   const css = readFileSync(path.join(popupDir, 'popup.css'), 'utf8');
   const cfg = readFileSync(path.join(EXT, 'src/shared/config.js'), 'utf8');
   const ENDPOINT = cfg.match(/REPORT_ENDPOINT: '([^']+)'/)[1];
-  const fake = (local, tabUrl) => `
+  // `where` is what Quell's content script in that tab answers when the popup
+  // asks which site it is on (null: no Quell script in the tab).
+  const fake = (local, tabUrl, where = null, firefox = false) => `
     window.__calls = [];
     window.__state = { local: ${JSON.stringify(local)}, session: { 'tab:7': 4 } };
     window.chrome = {
-      runtime: { id: 'fake', getManifest: () => ({ version: '0.6.0', content_scripts: [] }) },
+      runtime: { id: 'fake', getManifest: () => ({ version: '0.6.0', content_scripts: [] }),
+        getURL: (p) => ${JSON.stringify(firefox ? 'moz-extension://fake/' : 'chrome-extension://fake/')} + p },
       storage: {
         local: { get: async (d) => ({ ...d, ...window.__state.local }),
                  set: async (o) => { Object.assign(window.__state.local, o); window.__calls.push(['storage.set', o]); } },
         session: { get: async (d) => ({ ...d, ...window.__state.session }) },
       },
       permissions: { contains: async () => false, request: async () => false, remove: async () => true },
-      tabs: { query: async () => [{ id: 7, url: ${JSON.stringify(tabUrl)} }], create: async () => ({}) },
+      tabs: { query: async () => [{ id: 7, url: ${JSON.stringify(tabUrl)} }], create: async () => ({}),
+              sendMessage: async (id, msg) => {
+                window.__calls.push(['tabs.sendMessage', id, msg]);
+                const where = ${JSON.stringify(where)};
+                if (where !== null && id === 7 && msg && msg.type === 'where') return { host: where };
+                throw new Error('Could not establish connection. Receiving end does not exist.');
+              } },
     };`;
   const reports = [];
   let endpointStatus = 204;
-  const openPopup = async (local, tabUrl = 'https://www.google.com/search?q=widgets', { ua } = {}) => {
+  const openPopup = async (local, tabUrl = 'https://www.google.com/search?q=widgets', { ua, where = null, width, firefox = false, cfgSrc } = {}) => {
     const pg = await ctx.newPage();
     if (ua) await pg.addInitScript({ content: `Object.defineProperty(navigator, 'userAgent', { get: () => ${JSON.stringify(ua)} });` });
     await pg.route('http://popup.test/**', (r) => {
@@ -2644,7 +2763,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
       if (u.pathname.endsWith('popup.css')) return r.fulfill({ contentType: 'text/css', body: css });
       if (u.pathname.endsWith('/shared/settings.js')) return r.fulfill({ contentType: 'text/javascript', body: SETTINGS_SRC });
       if (u.pathname.endsWith('/shared/report-host.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/report-host.js'), 'utf8') });
-      if (u.pathname.endsWith('/shared/config.js')) return r.fulfill({ contentType: 'text/javascript', body: cfg });
+      if (u.pathname.endsWith('/shared/config.js')) return r.fulfill({ contentType: 'text/javascript', body: cfgSrc || cfg });
       if (u.pathname.endsWith('/shared/browser.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/browser.js'), 'utf8') });
       return r.fulfill({ contentType: 'text/html', body: html });
     });
@@ -2653,7 +2772,8 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
       reports.push({ method: req.method(), body: req.postData(), headers: await req.allHeaders() });
       return r.fulfill({ status: endpointStatus, headers: { 'access-control-allow-origin': '*' } });
     });
-    await pg.addInitScript({ content: fake(local, tabUrl) });
+    if (width) await pg.setViewportSize({ width, height: 700 });
+    await pg.addInitScript({ content: fake(local, tabUrl, where, firefox) });
     await pg.goto('http://popup.test/popup.html');
     await pg.waitForTimeout(300);
     return pg;
@@ -2672,6 +2792,107 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
     ok(await op.evaluate(() => globalThis.QuellBrowser && globalThis.QuellBrowser.opera === true), 'precondition: the popup detects Opera');
     ok(await op.evaluate(() => document.getElementById('rate').hidden), 'Rate Quell is hidden on Opera (no Chrome Web Store link)');
     await op.close();
+  }
+  // On Firefox the listing is public: the link goes to it. (IS_FIREFOX is read
+  // from the extension's own address, which a test page cannot fake — so this
+  // pins the configured address instead.)
+  ok(/RATE_URL_FIREFOX: 'https:\/\/addons\.mozilla\.org\/firefox\/addon\/quell-quiet-the-web\/'/.test(cfg),
+    'Rate Quell has the Firefox listing to point at');
+  // ...and the popup really follows it: on Firefox the link is the AMO listing,
+  // never the Chrome store; on Opera it follows RATE_URL_OPERA once that is set.
+  {
+    const ff = await openPopup({}, undefined, { firefox: true });
+    ok(await ff.evaluate(() => { const a = document.getElementById('rate'); return !a.hidden && a.href === 'https://addons.mozilla.org/firefox/addon/quell-quiet-the-web/'; }),
+      'Rate Quell links the Firefox listing on Firefox (not the Chrome Web Store)');
+    await ff.close();
+    const operaLive = cfg.replace('RATE_URL_OPERA: null', "RATE_URL_OPERA: 'https://addons.opera.com/extensions/details/quell-example/'");
+    ok(operaLive !== cfg, 'precondition: the Opera address can be set in config.js');
+    const op2 = await openPopup({}, undefined, { ua: OPERA_UA, cfgSrc: operaLive });
+    ok(await op2.evaluate(() => { const a = document.getElementById('rate'); return !a.hidden && a.href.startsWith('https://addons.opera.com/'); }),
+      'Rate Quell links the Opera listing on Opera once RATE_URL_OPERA is set');
+    await op2.close();
+  }
+  // Edge installs the Chrome package from its own add-ons site, so it is not
+  // sent to the Chrome Web Store either: hidden until RATE_URL_EDGE is set.
+  {
+    const ed = await openPopup({}, undefined, { ua: EDGE_UA });
+    ok(await ed.evaluate(() => { const b = globalThis.QuellBrowser; return b && b.edge === true && !b.opera && !b.firefox; }), 'the popup detects Edge (and not Opera or Firefox)');
+    ok(await ed.evaluate(() => document.getElementById('rate').hidden), 'Rate Quell is hidden on Edge until its listing exists (no Chrome Web Store link)');
+    await ed.close();
+    const edgeLive = cfg.replace('RATE_URL_EDGE: null', "RATE_URL_EDGE: 'https://microsoftedge.microsoft.com/addons/detail/quell-example/'");
+    ok(edgeLive !== cfg, 'precondition: the Edge address can be set in config.js');
+    const ed2 = await openPopup({}, undefined, { ua: EDGE_UA, cfgSrc: edgeLive });
+    ok(await ed2.evaluate(() => { const a = document.getElementById('rate'); return !a.hidden && a.href.startsWith('https://microsoftedge.microsoft.com/'); }), 'Rate Quell links the Edge listing on Edge once RATE_URL_EDGE is set');
+    await ed2.close();
+    const ch = await openPopup({});
+    ok(await ch.evaluate(() => globalThis.QuellBrowser.edge === false), 'Chrome is not mistaken for Edge');
+    await ch.close();
+    const op3 = await openPopup({}, undefined, { ua: OPERA_UA });
+    ok(await op3.evaluate(() => globalThis.QuellBrowser.edge === false), 'Opera is not mistaken for Edge');
+    await op3.close();
+  }
+  // The total reads right in the singular: "1 thing", not "1 things".
+  for (const [n, word] of [[0, 'things'], [1, 'thing'], [2, 'things'], [1234, 'things']]) {
+    const t = await openPopup({ totalBlocked: n });
+    const line = await t.evaluate(() => document.querySelector('.counter').textContent.replace(/\s+/g, ' ').trim());
+    ok(line === `${n.toLocaleString()} ${word} quelled so far`, `the counter says "${n.toLocaleString()} ${word} quelled so far" (read: ${line})`);
+    await t.close();
+  }
+  // Chrome does not show the popup the address of a Google or Bing tab (Quell
+  // reaches those as content-script hosts only). The popup then asks Quell's
+  // own script in the tab which site it is on. Found by using the real popup
+  // over a live Bing results page: it said "Quell doesn't run on this page"
+  // while the page's count was 3, and the This-site card never appeared.
+  {
+    const pg = await openPopup({}, null, { where: 'www.bing.com' });
+    ok(/hid 4 things/i.test(await pg.evaluate(() => document.getElementById('pageStatus').textContent)),
+      'no tab address, but Quell\'s script answers: the status still says what Quell hid on this page');
+    ok(await pg.evaluate(() => !document.getElementById('siteCard').hidden && document.getElementById('siteHost').textContent) === 'www.bing.com',
+      '...and the This-site card names the site');
+    ok(await pg.evaluate(() => !document.getElementById('siteAiRow').hidden), '...with "Keep AI on this site"');
+    ok(await pg.evaluate(() => !document.getElementById('reportBtn').hidden), '...and "This site looks broken"');
+    const asked = (await pg.evaluate(() => window.__calls)).filter((c) => c[0] === 'tabs.sendMessage');
+    ok(asked.length === 1 && asked[0][1] === 7 && JSON.stringify(asked[0][2]) === '{"type":"where"}',
+      'the popup asked that tab, once, and sent nothing but the question');
+    await pg.close();
+    // A tab address the browser does show is used as it is; the page is not asked.
+    const shown = await openPopup({}, 'https://www.google.com/search?q=widgets', { where: 'elsewhere.example' });
+    ok(await shown.evaluate(() => document.getElementById('siteHost').textContent) === 'www.google.com', 'a tab address the browser shows wins');
+    ok(!(await shown.evaluate(() => window.__calls)).some((c) => c[0] === 'tabs.sendMessage'), '...and the page is not asked');
+    await shown.close();
+    // No address and nothing of Quell's in the tab: Quell really is not running there.
+    const none = await openPopup({}, null);
+    ok(/doesn’t run on this page/.test(await none.evaluate(() => document.getElementById('pageStatus').textContent)),
+      'no tab address and no answer: "Quell doesn’t run on this page."');
+    ok(await none.evaluate(() => document.getElementById('siteCard').hidden), '...and no This-site card');
+    await none.close();
+    // An answer that is not a hostname is not believed.
+    for (const junk of ['', 'not a host', 42, 'user@evil.example', 'a.example/path?x=1', 'a.example:99']) {
+      const j = await openPopup({}, null, { where: junk });
+      ok(await j.evaluate(() => document.getElementById('siteCard').hidden), `an answer of ${JSON.stringify(junk)} is not taken for a site`);
+      await j.close();
+    }
+  }
+  // The footer fits the popup: four links on Chrome, three where Rate is hidden.
+  // (Before 0.7.1 it was one line 415px wide in a 340px popup.)
+  for (const [name, ua] of [['Chrome', undefined], ['Opera', OPERA_UA], ['Edge', EDGE_UA]]) {
+    const pg = await openPopup({}, undefined, { ua, width: 340 });
+    const m = await pg.evaluate(() => ({ doc: document.documentElement.scrollWidth,
+      right: Math.max(...[...document.querySelectorAll('footer a')].filter((a) => a.offsetParent).map((a) => a.getBoundingClientRect().right)) }));
+    ok(m.doc <= 340 && m.right <= 340 - 16 + 0.5, `the footer fits a 340px popup on ${name} (page ${m.doc}px, last link ends at ${Math.round(m.right)}px)`);
+    await pg.close();
+  }
+  // Two of the four Google surfaces are more than one thing: the question says "them".
+  {
+    const pg = await openPopup({});
+    for (const [id, word] of [['sGemini', 'them'], ['sOverview', 'it'], ['sAiMode', 'it']]) {
+      await pg.click(`label.switch:has(#${id})`);
+      await pg.waitForTimeout(120);
+      const body = await pg.evaluate(() => document.getElementById('confirmB').textContent);
+      ok(new RegExp(`will show ${word} as usual\\. You can hide ${word} again`).test(body), `the question for ${id} says "${word}" ("${body}")`);
+      await pg.click('#confirmNo');
+    }
+    await pg.close();
   }
   // Status line: the per-tab count, in words.
   {
@@ -2802,6 +3023,335 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
     await pg.close();
   }
   endpointStatus = 204;
+}
+
+// --- Quell off means off (owner report 2026-10-01) ----------------------------
+// "Even when I turned the entire Quell app off, some of the AI pop-ups were
+// still being blocked." Walked on the real extension with the master switch
+// off, four things were still in effect. Each block below is one of them and
+// fails on the code as it was.
+
+// (1) The toolbar badge kept its number on every open tab, over a popup that
+// said "Nothing is hidden anywhere".
+console.log('Quell off — the toolbar badge:');
+{
+  await sw.evaluate(() => QuellSettings.set({ enabled: true, aiEnabled: true, googleMode: 'hide', bingEnabled: true, aiAllowlist: [] }));
+  const badges = () => sw.evaluate(async () => {
+    const out = [];
+    for (const t of await chrome.tabs.query({})) out.push(await chrome.action.getBadgeText({ tabId: t.id }));
+    return out.filter(Boolean);
+  });
+  const until = async (want) => {
+    for (let i = 0; i < 120; i++) { if (JSON.stringify(await badges()) === want) return; await new Promise((r) => setTimeout(r, 100)); }
+  };
+  const page = await ctx.newPage();
+  await page.route('https://www.google.com/search**', (r) => r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  await page.goto('https://www.google.com/search?q=badge');
+  await until('["2"]');
+  ok(JSON.stringify(await badges()) === '["2"]', `precondition: the tab's badge counts what was hidden (${JSON.stringify(await badges())})`);
+  await sw.evaluate(() => QuellSettings.set({ enabled: false }));
+  await until('[]');
+  ok((await badges()).length === 0, `Quell off clears the badge on the open tab (${JSON.stringify(await badges())})`);
+  await sw.evaluate(() => QuellSettings.set({ enabled: true }));
+  await until('["2"]');
+  ok(JSON.stringify(await badges()) === '["2"]', `Quell back on shows the same count again, not an empty badge (${JSON.stringify(await badges())})`);
+  await page.close();
+}
+
+// (2) Classic results rewrites the address, and the rewrite replaces the tab's
+// history entry. Back, a restored session or a tab the browser put to sleep
+// reload that address — with Quell off it stayed on Google's AI-free list, and
+// so did every search made from it (Google's form carries udm=14 forward).
+console.log('Quell off — a Classic results address is not left behind:');
+{
+  await sw.evaluate(() => QuellSettings.set({ enabled: true, googleMode: 'cleanweb' }));
+  const page = await ctx.newPage();
+  await page.route('https://www.google.com/search**', (r) => r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  await page.route('http://result.test/**', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><p>a result</p>' }));
+  const onGoogle = (pred) => page.waitForURL((u) => u.hostname === 'www.google.com' && pred(u), { timeout: 60000 }).catch(() => {});
+  await page.goto('https://www.google.com/search?q=test');
+  await onGoogle((u) => u.searchParams.get('udm') === '14');
+  ok(page.url() === 'https://www.google.com/search?q=test&udm=14', `precondition: Classic results redirected this tab (${page.url()})`);
+  await page.goto('http://result.test/'); // the user opens a result
+  await sw.evaluate(() => QuellSettings.set({ enabled: false }));
+  await page.goBack().catch(() => {});
+  await onGoogle((u) => !u.searchParams.has('udm'));
+  ok(page.url() === 'https://www.google.com/search?q=test',
+    `Back to the address Quell rewrote, with Quell off, returns to Google as Google serves it (${page.url()})`);
+  await page.waitForTimeout(400);
+  ok(await page.evaluate(() => document.getElementById('ai-block').getClientRects().length > 0), '...and nothing is hidden there');
+
+  // The user's OWN udm=14 is still theirs — Quell off must not strip it.
+  await page.goto('https://www.google.com/search?q=mine&udm=14');
+  await page.waitForTimeout(600);
+  ok(page.url().includes('udm=14'), `a udm=14 the user chose is left alone with Quell off (${page.url().slice(-16)})`);
+  await page.close();
+
+  // ...including in a tab Quell redirected earlier. The mark for that redirect
+  // stops applying once the tab has been on a results page without udm=14.
+  await sw.evaluate(() => QuellSettings.set({ enabled: true, googleMode: 'cleanweb' }));
+  const p2 = await ctx.newPage();
+  await p2.route('https://www.google.com/search**', (r) => r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  await p2.route('http://result.test/**', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><p>a result</p>' }));
+  await p2.goto('https://www.google.com/search?q=a');
+  await p2.waitForURL((u) => u.searchParams.get('udm') === '14', { timeout: 60000 }).catch(() => {});
+  await p2.goto('http://result.test/');
+  await sw.evaluate(() => QuellSettings.set({ googleMode: 'hide' }));
+  await p2.goto('https://www.google.com/search?q=b');
+  await p2.waitForFunction(() => document.getElementById('ai-block')?.getClientRects().length === 0, null, { timeout: 60000 }).catch(() => {});
+  ok(!p2.url().includes('udm') && await p2.evaluate(() => sessionStorage.getItem('__quellCleanWeb')) === null,
+    'the redirect mark is dropped once the tab is on a results page without udm=14');
+  await sw.evaluate(() => QuellSettings.set({ enabled: false }));
+  await p2.goto('https://www.google.com/search?q=c&udm=14');
+  await p2.waitForTimeout(600);
+  ok(p2.url().includes('udm=14'), `so a later udm=14 the user chose in that tab is left alone too (${p2.url().slice(-16)})`);
+  await p2.close();
+  await sw.evaluate(() => QuellSettings.set({ enabled: true, googleMode: 'hide' }));
+}
+
+// The same for DuckDuckGo's "Off at the source" (engines.js, injected with a
+// stubbed chrome like the other engine tests; the stub's state lives in
+// sessionStorage so it survives the reload).
+console.log('Quell off — an "Off at the source" address is not left behind:');
+{
+  const commonSrc = (SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/common.js'), 'utf8'));
+  const engineSrc = readFileSync(path.join(EXT, 'src/content/engines.js'), 'utf8');
+  const stub = `window.__state=JSON.parse(sessionStorage.getItem('__st')||'{"enabled":true,"ddgMode":"clean"}');
+    window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener(){}}},runtime:{sendMessage(){}}};`;
+  const pg = await ctx.newPage();
+  await pg.route('https://duckduckgo.com/**', (r) => r.fulfill({ contentType: 'text/html', body: DDG_FIXTURE }));
+  await pg.addInitScript({ content: stub });
+  const inject = async () => { await pg.addScriptTag({ content: commonSrc }).catch(() => {}); await pg.addScriptTag({ content: engineSrc }).catch(() => {}); };
+  await pg.goto('https://duckduckgo.com/?q=abc');
+  await inject();
+  await pg.waitForURL((u) => u.searchParams.get('assist') === 'false', { timeout: 5000 }).catch(() => {});
+  ok(pg.url() === 'https://duckduckgo.com/?q=abc&assist=false', `precondition: clean mode redirected (${pg.url()})`);
+  // Quell is switched off while this tab is asleep; the tab then reloads.
+  await pg.evaluate(() => sessionStorage.setItem('__st', '{"enabled":false,"ddgMode":"clean"}'));
+  await pg.reload();
+  await inject();
+  await pg.waitForURL((u) => !u.searchParams.has('assist'), { timeout: 5000 }).catch(() => {});
+  ok(pg.url() === 'https://duckduckgo.com/?q=abc', `reloaded with Quell off, the tab drops the parameter Quell added (${pg.url()})`);
+  await pg.goto('https://duckduckgo.com/?q=mine&assist=false');
+  await inject();
+  await pg.waitForTimeout(500);
+  ok(pg.url() === 'https://duckduckgo.com/?q=mine&assist=false', `an assist=false the user set is left alone with Quell off (${pg.url()})`);
+  await pg.close();
+}
+
+// (3) The generic cookie list. Chrome injects rules/cookie-generic.css itself
+// and cannot take it out of a loaded page, so with Quell off — or the feature
+// off, or the site paused — it went on hiding on the open page. Every rule in
+// the sheet is now gated on a mark cookies.js sets on <html>.
+console.log('Quell off — the generic cookie list lifts on the open page:');
+{
+  const CSS = readFileSync(path.join(EXT, 'rules/cookie-generic.css'), 'utf8');
+  const cookieSrc = readFileSync(path.join(EXT, 'src/content/cookies.js'), 'utf8');
+  const pipeline = readFileSync(path.join(EXT, '..', 'pipeline', 'build_rules.py'), 'utf8');
+  const gate = (pipeline.match(/^GENERIC_GATE = '([^']+)'/m) || [])[1];
+  const attr = (cookieSrc.match(/const GENERIC_OFF = '([^']+)'/) || [])[1];
+  ok(!!gate && !!attr && gate === `:root:not([${attr}="off"])`,
+    `the pipeline's gate and the content script's mark are the same thing (${gate} / ${attr})`);
+  const chunks = CSS.split('\n').filter((l) => l.includes('display:none'));
+  ok(!!gate && chunks.length > 10 && chunks.every((l) => l.startsWith(gate + '{') && l.endsWith('{display:none!important;}}')),
+    `every rule of the shipped sheet sits inside the gate (${chunks.length} chunks)`);
+  const GEN = (CSS.match(/#[A-Za-z][\w-]*(?=,)/) || [])[0];
+  ok(!!GEN, `precondition: the sheet has a simple id selector to build a fixture from (${GEN})`);
+
+  const stub = (state) => `window.__quellState=${JSON.stringify(state)};
+    window.__quellCbs=[];
+    window.chrome={
+      storage:{local:{get:async(d)=>({...d,...window.__quellState})},
+      onChanged:{addListener:(f)=>window.__quellCbs.push(f)}},
+      runtime:{sendMessage:async()=>({selectors:[]})}
+    };
+    window.__quellSet=(patch)=>{Object.assign(window.__quellState,patch);
+      const ch={};for(const k of Object.keys(patch))ch[k]={newValue:patch[k]};
+      window.__quellCbs.forEach(f=>f(ch,'local'));};`;
+  const open = async (state) => {
+    const pg = await ctx.newPage();
+    await pg.route('http://cmp-fixture.test/**', (r) => r.fulfill({ contentType: 'text/html',
+      body: CMP_FIXTURE.replace('<div id="content">', `<div id="${GEN.slice(1)}">a banner only the generic list knows</div><div id="content">`) }));
+    await pg.goto('http://cmp-fixture.test/');
+    await pg.addStyleTag({ content: CSS }); // what Chrome injects with the registered script
+    await pg.addScriptTag({ content: stub(state) + '\n' + SETTINGS_SRC + '\n' + cookieSrc });
+    await pg.waitForTimeout(400);
+    return pg;
+  };
+  const shown = (pg, sel) => pg.evaluate((s) => document.querySelector(s).getClientRects().length > 0, sel);
+
+  const page = await open({ enabled: true, cookieEnabled: true, cookieAllowlist: [] });
+  ok(!(await shown(page, GEN)) && !(await shown(page, '#onetrust-banner-sdk')), 'baseline: the generic list and the curated list both hide');
+  await page.evaluate(() => window.__quellSet({ enabled: false }));
+  await page.waitForTimeout(400);
+  ok(await shown(page, GEN), 'Quell off shows a banner the generic list was hiding, on the open page (no reload)');
+  ok(await shown(page, '#onetrust-banner-sdk'), '...and the curated one');
+  await page.evaluate(() => window.__quellSet({ enabled: true }));
+  await page.waitForTimeout(400);
+  ok(!(await shown(page, GEN)), 'Quell back on hides it again');
+  await page.evaluate(() => window.__quellSet({ cookieAllowlist: ['cmp-fixture.test'] }));
+  await page.waitForTimeout(400);
+  ok(await shown(page, GEN), 'pausing the site lifts the generic list on the open page too');
+  await page.close();
+
+  const paused = await open({ enabled: true, cookieEnabled: true, cookieAllowlist: ['cmp-fixture.test'] });
+  ok(await shown(paused, GEN), 'a paused site is not hidden by the generic list on a fresh load either');
+  await paused.close();
+}
+
+// (4) A content script outlives its extension. After an update — or Quell
+// disabled or removed in the browser — the copy in an open tab has no storage
+// and no messages, so no switch reaches it: it went on hiding, and hiding new
+// blocks, until the tab was reloaded.
+console.log('Quell off — a copy cut off from the extension stands down:');
+{
+  // cookies.js against a stub whose extension can be taken away. Each copy
+  // gets its own `chrome`, and a second copy starts from a clean slate, the
+  // way a newly injected one gets a fresh isolated world (measured).
+  const cookieSrc = readFileSync(path.join(EXT, 'src/content/cookies.js'), 'utf8');
+  const copy = (name) => `window.${name}={storage:{local:{get:async(d)=>({...d,...(window.${name}State||{})})},
+      onChanged:{addListener:(f)=>{window.${name}Cb=f;}}},runtime:{id:'quell-test',sendMessage:async(m)=>{(window.${name}Msgs=window.${name}Msgs||[]).push(m);return {selectors:[]};}}};
+    delete globalThis.QuellSettings; delete window.__quellCookies;
+    (function(chrome){\n${SETTINGS_SRC}\n${cookieSrc}\n})(window.${name});`;
+  const open = async () => {
+    const pg = await ctx.newPage();
+    await pg.route('http://cmp-fixture.test/**', (r) => r.fulfill({ contentType: 'text/html', body: CMP_FIXTURE }));
+    await pg.goto('http://cmp-fixture.test/');
+    await pg.addScriptTag({ content: copy('__extA') });
+    await pg.waitForTimeout(400);
+    return pg;
+  };
+  const banner = (pg) => pg.evaluate(() => document.getElementById('onetrust-banner-sdk').getClientRects().length > 0);
+  const until = (pg, want) => pg.waitForFunction((w) => (document.getElementById('onetrust-banner-sdk').getClientRects().length > 0) === w,
+    want, { timeout: 8000 }).catch(() => {});
+
+  const page = await open();
+  ok(!(await banner(page)), 'baseline: banner hidden');
+  await page.evaluate(() => { delete window.__extA.runtime.id; }); // the extension is gone
+  await until(page, true);
+  ok(await banner(page), 'with its extension gone the script puts the banner back by itself');
+  ok(await page.evaluate(() => !document.getElementById('quell-cookies') && getComputedStyle(document.body).overflow === 'hidden'),
+    "...its stylesheet is out and the site's own scroll lock is back");
+  await page.close();
+
+  // An update: the old copy is cut off and the new version's copy arrives in
+  // the same page straight away (the background injects it). The old one has
+  // to be out of the way BEFORE the new one starts, or it takes the new one's
+  // stylesheet down with it when its own timer fires.
+  const p2 = await open();
+  await p2.evaluate(() => { delete window.__extA.runtime.id; });
+  await p2.evaluate(() => { window.__extBState = { enabled: true, cookieEnabled: true }; });
+  await p2.addScriptTag({ content: copy('__extB') });
+  await p2.waitForTimeout(400);
+  ok(!(await banner(p2)) && await p2.evaluate(() => document.querySelectorAll('#quell-cookies').length === 1),
+    'a new copy arriving after an update takes over: banner still hidden, one stylesheet');
+  // The old copy's count went with its extension, so the new one has to count
+  // the banner it is hiding, or the badge sits empty over a page that hides.
+  const counted = (pg, name) => pg.evaluate((n) => (window[n + 'Msgs'] || []).filter((m) => m && m.type === 'blocked').reduce((a, m) => a + m.count, 0), name);
+  ok(await counted(p2, '__extA') > 0 && await counted(p2, '__extB') > 0,
+    `...and counts what it hides (old copy ${await counted(p2, '__extA')}, new copy ${await counted(p2, '__extB')})`);
+  await p2.waitForTimeout(2600); // past the old copy's own check
+  ok(!(await banner(p2)), '...and the old copy does not undo the new one afterwards');
+  await p2.evaluate(() => { window.__extBState.enabled = false; window.__extBCb({ enabled: { newValue: false } }, 'sync'); });
+  await until(p2, true);
+  ok(await banner(p2), '...which then obeys the switch: Quell off shows the banner');
+  await p2.close();
+
+  // A page cannot use the hand-over signal to switch a working Quell off.
+  const p3 = await open();
+  await p3.evaluate(() => document.dispatchEvent(new Event('quell-takeover')));
+  await p3.waitForTimeout(300);
+  ok(!(await banner(p3)), 'a page sending the hand-over signal to a working copy changes nothing');
+  await p3.close();
+
+  // The other two scripts Quell puts into pages on a grant stand down the same way.
+  const shownIn = (pg, x) => pg.evaluate((i) => document.getElementById(i).getClientRects().length > 0, x);
+  const untilIn = (pg, x, want) => pg.waitForFunction(([i, w]) => (document.getElementById(i).getClientRects().length > 0) === w,
+    [x, want], { timeout: 8000 }).catch(() => {});
+  const wrapped = (stubSrc, src) => `window.__ext=${stubSrc};(function(chrome){\n${SETTINGS_SRC}\n${src}\n})(window.__ext);`;
+
+  const ddg = await ctx.newPage();
+  await ddg.route('https://duckduckgo.com/**', (r) => r.fulfill({ contentType: 'text/html', body: DDG_FIXTURE }));
+  await ddg.goto('https://duckduckgo.com/?q=test');
+  await ddg.addScriptTag({ content: wrapped(
+    `{storage:{local:{get:async(d)=>({...d,enabled:true,ddgMode:'hide'})},onChanged:{addListener(){}}},runtime:{id:'quell-test',sendMessage(){}}}`,
+    readFileSync(path.join(EXT, 'src/content/common.js'), 'utf8') + '\n' + readFileSync(path.join(EXT, 'src/content/engines.js'), 'utf8')) });
+  await untilIn(ddg, 'ddg-ai', false);
+  ok(!(await shownIn(ddg, 'ddg-ai')) && !(await shownIn(ddg, 'ddg-ai-labelonly')), 'baseline: DuckDuckGo AI card hidden (stylesheet and label pass)');
+  await ddg.evaluate(() => { delete window.__ext.runtime.id; });
+  await untilIn(ddg, 'ddg-ai', true);
+  ok(await shownIn(ddg, 'ddg-ai') && await shownIn(ddg, 'ddg-ai-labelonly'), 'engines.js: with its extension gone, both come back');
+  await ddg.close();
+
+  const pop = await ctx.newPage();
+  await pop.route('http://popups.test/**', (r) => r.fulfill({ contentType: 'text/html',
+    body: '<!doctype html><html><body><main><h1>Page</h1></main><div id="intercom-container">chat</div></body></html>' }));
+  await pop.goto('http://popups.test/');
+  await pop.addScriptTag({ content: wrapped(
+    `{storage:{local:{get:async(d)=>({...d,enabled:true,popupsEnabled:true})},onChanged:{addListener(){}}},runtime:{id:'quell-test',sendMessage:async(m)=>(m.type==='popupRules'?{generic:[],site:[]}:undefined)}}`,
+    readFileSync(path.join(EXT, 'src/content/popups.js'), 'utf8')) });
+  await untilIn(pop, 'intercom-container', false);
+  ok(!(await shownIn(pop, 'intercom-container')), 'baseline: chat widget hidden');
+  await pop.evaluate(() => { delete window.__ext.runtime.id; });
+  await untilIn(pop, 'intercom-container', true);
+  ok(await shownIn(pop, 'intercom-container'), 'popups.js: with its extension gone, the chat widget comes back');
+  await pop.close();
+}
+
+// The same on the real extension, on Google and Bing: tabs left open across an
+// update. Its own browser, because the reload replaces the service worker the
+// rest of this suite holds.
+console.log('Quell off — Google and Bing tabs left open across an update:');
+{
+  const { ctx: c2, sw: w2 } = await getContext();
+  const id2 = new URL(w2.url()).host;
+  const g = await c2.newPage();
+  await g.route('https://www.google.com/search**', (r) => r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  await g.goto('https://www.google.com/search?q=test');
+  const b = await c2.newPage();
+  await b.route('https://www.bing.com/search**', (r) => r.fulfill({ contentType: 'text/html', body: BING_FIXTURE }));
+  await b.goto('https://www.bing.com/search?q=test');
+  const shown = (pg, x) => pg.evaluate((i) => document.getElementById(i).getClientRects().length > 0, x);
+  const until = (pg, x, want, ms = 60000) => pg.waitForFunction(([i, w]) => (document.getElementById(i).getClientRects().length > 0) === w,
+    [x, want], { timeout: ms }).catch(() => {});
+  await until(g, 'ai-block', false); await until(b, 'b_sydConvCont', false);
+  ok(!(await shown(g, 'ai-block')) && !(await shown(b, 'b_sydConvCont')), 'baseline: AI Overview and Copilot hidden');
+
+  // Reload the extension the way an update does. Developer mode keeps an
+  // unpacked extension enabled across it.
+  const mgr = await c2.newPage();
+  let reloaded = false;
+  try {
+    await mgr.goto('chrome://extensions/');
+    await mgr.evaluate(() => new Promise((res) => chrome.developerPrivate.updateProfileConfiguration({ inDeveloperMode: true }, res)));
+    await mgr.evaluate((x) => new Promise((res) => chrome.developerPrivate.reload(x, { failQuietly: true }, res)), id2);
+    for (let i = 0; i < 100 && !reloaded; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      reloaded = await mgr.evaluate((x) => new Promise((res) => chrome.developerPrivate.getExtensionInfo(x, (e) => res(e && e.state === 'ENABLED'))), id2).catch(() => false);
+    }
+  } catch (_) { /* reported below */ }
+  if (!reloaded) {
+    skip('tabs open across an update', 'this Chromium would not reload the extension from chrome://extensions');
+  } else {
+    await until(g, 'ai-block', true, 15000); await until(b, 'b_sydConvCont', true, 15000);
+    ok(await shown(g, 'ai-block') && await shown(g, 'ai-block-css'), 'Google: the old copy stops hiding (label pass and stylesheet both)');
+    ok(await g.evaluate(() => !document.getElementById('quell-google') && !document.querySelector('[data-quell-hidden]')),
+      'Google: its stylesheet and its marks are gone');
+    ok(await shown(b, 'b_sydConvCont') && await shown(b, 'chip-1'), 'Bing: the old copy stops hiding');
+    // ...and stays out: a block arriving later is not hidden by the old observer.
+    await g.evaluate(() => {
+      const d = document.createElement('div'); d.className = 'MjjYud'; d.id = 'late-ai';
+      d.innerHTML = '<div role="heading">AI Overview</div><p>late</p>';
+      document.getElementById('rso').appendChild(d);
+    });
+    await g.waitForTimeout(600);
+    ok(await shown(g, 'late-ai'), 'Google: an AI block arriving later is left alone (the old observer is stopped)');
+    // The next load runs the new version, which hides again — Quell is still on.
+    await g.reload();
+    await until(g, 'ai-block', false);
+    ok(!(await shown(g, 'ai-block')), 'the next load of that tab runs the current Quell, which hides again');
+  }
+  await c2.close();
 }
 
 await ctx.close();

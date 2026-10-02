@@ -60,5 +60,41 @@ for host in ["artnet.com", "ardene.com", "bathandbodyworks.com", "answear.ua"]:
     ok(not any(b.is_generic_overlay(b.subject_compound(s)) for s in sels),
        f"{host}: no bare modal/overlay rule ships ({sels or 'no rules'})")
 
+print("Cookie generic sheet — every rule sits inside the off switch:")
+css = b.generic_css([f"#c{i}" for i in range(450)] + ["html.cookie-open .bar", ":root > .consent", ".htmlish"])
+lines = css.splitlines()
+ok(lines[0].startswith("/* GENERATED") and len(lines) == 4, f"450+3 selectors make three chunks of 200 ({len(lines) - 1})")
+ok(all(l.startswith(b.GENERIC_GATE + "{") and l.endswith("{display:none!important;}}") for l in lines[1:]),
+   "each chunk is nested inside GENERIC_GATE")
+ok("&.cookie-open .bar" in lines[3] and "& > .consent" in lines[3] and ",.htmlish{" in lines[3],
+   "a selector starting at the page root takes the gate as its root (&); a name that merely starts with html does not")
+shipped = (b.RULES_DIR / "cookie-generic.css").read_text().splitlines()
+ok(len(shipped) > 10 and all(l.startswith(b.GENERIC_GATE + "{") for l in shipped[1:]),
+   f"the shipped sheet is gated the same way ({len(shipped) - 1} chunks)")
+
+print("Per-browser manifests (make_manifest.py):")
+import subprocess  # noqa: E402
+ROOT = Path(__file__).resolve().parent.parent
+src = json.loads((ROOT / "extension" / "manifest.json").read_text())
+
+
+def derived(target):
+    return json.loads(subprocess.check_output(
+        [sys.executable, str(Path(__file__).resolve().parent / "make_manifest.py"), target]))
+
+
+edge = derived("edge")
+ok({k: v for k, v in edge.items() if k != "description"} == {k: v for k, v in src.items() if k != "description"},
+   "Edge's manifest is the Chrome manifest except for the description")
+ok(len(edge["description"]) <= 132 and not any(w in edge["description"] for w in ("Brave", "Chrome", "Firefox", "Opera", "Safari")),
+   f"Edge's description is within 132 characters and names no other browser ({len(edge['description'])})")
+ok("browser_specific_settings" not in edge and "scripts" not in edge["background"],
+   "Edge keeps the service worker and carries no Firefox keys")
+ok(edge["version"] == src["version"] and edge["name"] == src["name"], "Edge keeps the Chrome version and name")
+ok(derived("opera")["name"] != src["name"] and derived("firefox")["background"] != src["background"],
+   "Opera and Firefox still differ from Chrome where they must")
+pkg = (ROOT / "pipeline" / "package.sh").read_text()
+ok("for target in chrome firefox opera edge; do" in pkg, "package.sh builds the Edge zip")
+
 print(f"\n{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

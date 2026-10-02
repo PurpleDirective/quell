@@ -368,6 +368,8 @@
     globalThis.QuellSettings.onChange(
       ['enabled', 'popupsEnabled', 'popupAllowlist', 'hideNewsletters', 'hideChat', 'hideAppBanners'],
       () => readSettings().then(applyState).catch(() => {}));
+    // Cut off from the extension: stop hiding (see onGone in settings.js).
+    globalThis.QuellSettings.onGone(teardown);
   } catch (_) { /* test context */ }
 
   let s = DEFAULTS;

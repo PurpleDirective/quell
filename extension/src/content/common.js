@@ -54,6 +54,12 @@ window.Quell = window.Quell || {
     globalThis.QuellSettings.onChange(keys, cb);
   },
 
+  // Run cb() once if this copy of Quell loses its extension (an update, or
+  // Quell switched off or removed in the browser) — see settings.js.
+  onGone(cb) {
+    globalThis.QuellSettings.onGone(cb);
+  },
+
   // Coalesce mutation bursts into one sweep per frame. requestAnimationFrame
   // is the right pacing while the tab is visible, but it does NOT fire at all
   // in a hidden tab — which would defer the text-resilient pass and the badge
@@ -71,3 +77,20 @@ window.Quell = window.Quell || {
     }
   },
 };
+
+// The popup asks which site this tab is on. Quell's access to Google and Bing
+// is content-script access only, and Chrome does not show the popup a tab's
+// address on that kind of access — so without this the popup said "Quell
+// doesn't run on this page" on the very pages it runs on, and the This-site
+// card never appeared there. The answer is the hostname and nothing else, and
+// it goes to Quell's own popup only (a page cannot send this message).
+if (!window.__quellWhere) {
+  window.__quellWhere = true;
+  try {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      if (msg?.type === 'where' && sender.id === chrome.runtime.id && !sender.tab) {
+        sendResponse({ host: location.hostname });
+      }
+    });
+  } catch (_) { /* not an extension context (tests inject this file into a plain page) */ }
+}

@@ -32,6 +32,13 @@ with one switch for the group and plain-language switches for each surface, plus
 - **On this page Quell hid N things** — so you can see it working.
 - **It asks before AI comes back.** Switching Quell off, or showing any AI
   surface again, asks for confirmation first; hiding more never asks.
+- **Off means off.** Switching Quell off puts every open page back as the site
+  serves it: what was hidden, the toolbar count, and any address Quell rewrote
+  (Classic results, Off at the source). In Chrome the same happens when Quell
+  is disabled, removed or updated — the copy left running in an open tab stops
+  by itself. In Firefox, reload the tab. After an update, a Google or Bing tab that was already open shows AI
+  until its next search or reload, because the browser only puts Quell into
+  those pages when they load.
 - A **first-run page** (once, on install — never on update) says what Quell
   does, what it will never do, and where the switches are.
 
@@ -76,9 +83,12 @@ with one switch for the group and plain-language switches for each surface, plus
   If a site misbehaves, **Allow cookie banners here** (in the popup's *This
   site* card) turns the cookie layer off for that site only — network and
   cosmetic layers both.
-  Quell's own two cosmetic layers lift immediately on the open page; the
-  generic EasyList sheet is injected natively by Chrome and cannot be pulled
-  back out of a loaded page, so that one clears on the next reload.
+  All three cosmetic layers lift immediately on the open page, and the same
+  goes for switching Cookie banners or Quell itself off. The generic EasyList
+  sheet is injected natively by Chrome and cannot be pulled back out of a
+  loaded page, so every rule in it is written to apply only while the page's
+  root element is not marked `data-quell-cookies="off"`; Quell sets that mark
+  whenever the layer is down.
   **Say "reject all" for me** *(opt-in, off by default)* clicks the consent
   platform's own *Reject all* button, so the choice is actually recorded rather
   than left unmade. Strictly scoped to recognised consent platforms — Quell

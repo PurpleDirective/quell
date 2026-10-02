@@ -12,13 +12,14 @@
 //
 // Live-apply: this script owns layers 2 and 3, so toggling the feature (or the
 // per-site pause) takes effect on the open page. Layer 1 is injected natively
-// by Chrome from the registered content script; Chrome gives no way to pull
-// that back out of an already-loaded page, so turning the feature OFF — or
-// pausing the site — leaves the generic list active until the next load.
-// The pause tooltip and the README both say so, in those words. They did not
-// used to: the tooltip promised the pause "takes effect right away", which is
-// true of two layers out of three, so a site broken by a generic selector
-// stayed broken after pausing and the switch read as dead.
+// by Chrome from the registered content script, and Chrome gives no way to
+// pull that back out of an already-loaded page — so until 0.7.1 switching
+// Quell off, switching the feature off or pausing the site left the generic
+// list hiding on the open page, and a paused site got it again on every load
+// (the registration covers every site). The sheet is now written so that each
+// rule applies only while <html> does NOT carry GENERIC_OFF below
+// (pipeline/build_rules.py); this script sets the mark whenever the layer is
+// down, which switches the whole sheet off in place.
 
 (async () => {
   // Consent-UI containers only. NEVER put a CMP *state* class here (e.g.
@@ -372,11 +373,34 @@
   // Remember the caller's own inline overflow so scroll-unlock is reversible.
   const priorOverflow = new Map();
 
+  // Sourcepoint marks an open message with a class on <html>, and its own
+  // stylesheet turns that into `body { position: fixed }`. No overflow rule
+  // undoes a fixed body: the banner is hidden and the page still will not
+  // scroll (spiegel.de, faz.net). Taking the class off puts the site's own
+  // layout back exactly as it is with no message open, which no rule of ours
+  // could guess. Remembered so relock() can put it back; capped so a consent
+  // tool that insists on its class cannot make this spin.
+  const LOCK_CLASSES = ['sp-message-open'];
+  const liftedLocks = [];
+  let lockLifts = 0;
+  let lockObserver = null;
+
   let active = false;
   let observer = null;
   let scheduled = false;
   let cmpSeen = false;
   let rejectOn = false;
+
+  // The switch for layer 1. Must stay identical to GENERIC_GATE in
+  // pipeline/build_rules.py, which writes it into rules/cookie-generic.css.
+  // (Checked by tests/smoke.mjs.)
+  const GENERIC_OFF = 'data-quell-cookies';
+  const genericSheet = (on) => {
+    const root = document.documentElement;
+    if (!root) return;
+    if (on) root.removeAttribute(GENERIC_OFF);
+    else root.setAttribute(GENERIC_OFF, 'off');
+  };
 
   // JS scroll-unlock for CMPs that set overflow directly. Gated on having
   // actually hidden a consent element on THIS page, so a clean site's own
@@ -384,19 +408,41 @@
   const unlock = () => {
     if (!cmpSeen) return;
     for (const el of [document.documentElement, document.body]) {
-      if (el && getComputedStyle(el).overflow === 'hidden') {
+      if (!el) continue;
+      for (const c of LOCK_CLASSES) {
+        if (el.classList.contains(c) && lockLifts < 20) {
+          lockLifts++;
+          el.classList.remove(c);
+          if (!liftedLocks.some((l) => l.el === el && l.c === c)) liftedLocks.push({ el, c });
+        }
+      }
+      if (getComputedStyle(el).overflow === 'hidden') {
         if (!priorOverflow.has(el)) priorOverflow.set(el, el.style.overflow || '');
         el.style.setProperty('overflow', 'auto', 'important');
+      }
+    }
+    // The class can arrive after the banner did; a class change on <html> or
+    // <body> is not a child-list mutation, so watch those two attributes.
+    if (!lockObserver && document.body) {
+      lockObserver = new MutationObserver(schedule);
+      for (const el of [document.documentElement, document.body]) {
+        lockObserver.observe(el, { attributes: true, attributeFilter: ['class'] });
       }
     }
   };
 
   const relock = () => {
+    if (lockObserver) { lockObserver.disconnect(); lockObserver = null; }
     for (const [el, prev] of priorOverflow) {
       el.style.removeProperty('overflow');
       if (prev) el.style.overflow = prev;
     }
     priorOverflow.clear();
+    // Put a lifted lock class back only while its message is still on the page.
+    const open = document.querySelector('[id^="sp_message_container"]');
+    for (const { el, c } of liftedLocks) if (open) el.classList.add(c);
+    liftedLocks.length = 0;
+    lockLifts = 0;
   };
 
   // Count banners we actually removed (once per element) for the popup counter.
@@ -404,15 +450,20 @@
   // generic list per mutation would be a page-wide perf tax.
   const sweep = () => {
     let n = 0;
+    let present = false;
     for (const sel of SEED) {
       for (const el of document.querySelectorAll(sel)) {
+        present = true;
         if (el.dataset.quellSeen !== '1') {
           el.dataset.quellSeen = '1';
           n++;
         }
       }
     }
-    if (n > 0) cmpSeen = true;
+    // A banner counted on an earlier pass still gates the unlock: switching
+    // the feature off and on again (or un-allowing a site) hides the same
+    // banner a second time, and the page must scroll that time too.
+    if (present) cmpSeen = true;
     // CMPs inject late and re-render; keep offering the reject until one lands.
     if (rejectOn) tryReject();
     unlock();
@@ -437,6 +488,7 @@
   async function apply() {
     if (active) return;
     active = true;
+    genericSheet(true);
 
     // Reject BEFORE hiding. A programmatic .click() does still reach a
     // display:none element, but several CMPs gate their own handlers on
@@ -492,6 +544,7 @@
     unwatchReveal();
     dropStyle('quell-cookies');
     dropStyle('quell-cookies-site');
+    genericSheet(false);
     relock();
     cmpSeen = false;
   }
@@ -519,6 +572,8 @@
     globalThis.QuellSettings.onChange(
       ['enabled', 'cookieEnabled', 'cookieAllowlist', 'cookieReject'],
       () => readSettings().then(applyState).catch(() => {}));
+    // Cut off from the extension: stop hiding (see onGone in settings.js).
+    globalThis.QuellSettings.onGone(teardown);
   } catch (_) { /* no chrome.storage in test context */ }
 
   let s = DEFAULTS;

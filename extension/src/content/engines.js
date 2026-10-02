@@ -243,10 +243,15 @@
     location.replace(url.toString());
   }
 
+  // Off undoes this tab's own clean-mode redirect on load as well as live: the
+  // redirect replaced the history entry, so Back or a restored tab reloads the
+  // address with the no-AI parameter in it, and with Quell off the engine
+  // went on serving that page without its AI. flagGet() only answers yes for
+  // the exact address the redirect produced.
   function applyState(s, live) {
     const mode = s[cfg.key] ?? 'hide';
     const paused = s.aiEnabled === false || window.Quell.aiPaused(s);
-    if (!s.enabled || paused || mode === 'off') { teardown(); if (live) undoClean(); return; }
+    if (!s.enabled || paused || mode === 'off') { teardown(); undoClean(); return; }
     if (mode === 'clean' && cfg.cleanParam) { teardown(); applyClean(); return; }
     if (live) undoClean();
     applyHide();
@@ -259,5 +264,7 @@
   window.__quellEngines = true;
 
   window.Quell.onSettingsChange(['enabled', 'aiEnabled', 'aiAllowlist', cfg.key], (next) => applyState(next, true));
+  // Cut off from the extension: stop hiding (see onGone in settings.js).
+  window.Quell.onGone(teardown);
   applyState(await window.Quell.getSettings(), false);
 })();

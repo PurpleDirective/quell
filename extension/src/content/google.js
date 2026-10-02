@@ -91,6 +91,11 @@
   const CLEANWEB_FLAG = '__quellCleanWeb';
   const flagGet = () => { try { return sessionStorage.getItem(CLEANWEB_FLAG) === '1'; } catch (_) { return false; } };
   const flagSet = (v) => { try { v ? sessionStorage.setItem(CLEANWEB_FLAG, '1') : sessionStorage.removeItem(CLEANWEB_FLAG); } catch (_) { /* storage blocked */ } };
+  // The mark describes the page the redirect produced and the searches made
+  // from it (Google's own form carries udm=14 forward). Once the tab is on a
+  // results page without udm=14 it no longer describes anything, and left set
+  // it would later undo a udm=14 the USER chose in this tab.
+  if (flagGet() && new URL(location.href).searchParams.get('udm') !== '14') flagSet(false);
 
   // One counted-flag shared by BOTH passes — a block matching a block selector
   // whose label also matches must increment the badge once, not twice (self,
@@ -256,8 +261,15 @@
   }
 
   // `live` is false on first run (page load) and true when a settings change
-  // drove us here. Only a live change may navigate the tab — doing it on load
-  // would yank users mid-browse.
+  // drove us here. Switching between hide and Clean Web navigates the tab only
+  // on a live change — doing it on load would yank users mid-browse.
+  //
+  // Off is different: it undoes Quell's own redirect on load as well. The
+  // redirect replaces the tab's history entry, so Back, a restored session or
+  // a tab the browser put to sleep all reload the udm=14 address — and with
+  // Quell off that page stayed on Google's AI-free list, as did every search
+  // made from it. Only an address this tab's own redirect produced (the mark
+  // above) is touched.
   function applyState(s, live) {
     surfaces = {
       overview: s.hideOverview !== false,
@@ -269,7 +281,7 @@
     // Google exactly as Google serves it — no hiding, no Clean Web redirect.
     if (!s.enabled || s.aiEnabled === false || window.Quell.aiPaused(s) || s.googleMode === 'off') {
       teardownHide();
-      if (live) undoCleanWeb();
+      undoCleanWeb();
       return;
     }
     if (s.googleMode === 'cleanweb') {
@@ -288,6 +300,10 @@
     ['enabled', 'aiEnabled', 'aiAllowlist', 'googleMode', 'hideOverview', 'hideAiMode', 'hidePaa', 'hideGemini'],
     (next) => applyState(next, true)
   );
+  // Cut off from the extension (see onGone in settings.js), no switch can reach
+  // this copy again, so it stops hiding. The address is left alone: the next
+  // load runs the current Quell, which decides afresh.
+  window.Quell.onGone(teardownHide);
   // Run at document_start — applyHide/applyCleanWeb both handle a missing
   // <body> themselves, and redirecting early avoids loading the AI page at all.
   applyState(await window.Quell.getSettings(), false);

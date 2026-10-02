@@ -2,14 +2,24 @@
 """Quell — per-browser manifest from the one source manifest.
 
 extension/manifest.json IS the Chrome manifest (what tests load). This
-script derives the Firefox and Opera ones; everything else in the tree is
+script derives the Firefox, Opera and Edge ones; everything else in the tree is
 shared.
 
   python3 pipeline/make_manifest.py firefox > build/firefox/manifest.json
   python3 pipeline/make_manifest.py opera   > build/opera/manifest.json
+  python3 pipeline/make_manifest.py edge    > build/edge/manifest.json
 
 Opera takes the Chrome package with one difference: its add-ons site rejects
 the 50-character Chrome name, so it gets the same short name as Firefox.
+
+Edge takes the Chrome package with one difference. Microsoft's Edge Add-ons
+site accepts the same Manifest V3 zip as the Chrome Web Store, and every key
+Quell uses (service worker, declarativeNetRequest, optional_host_permissions,
+minimum_chrome_version) is read the same way. The one difference is the
+description, which Edge shows as the listing's short description: Microsoft's
+developer policy (1.1.2) says an extension "must not reference other
+browsers", and the Chrome description names Brave. The Edge one does not name
+the engines.
 
 Firefox differences, and why:
   background            Firefox MV3 runs an event page, not a service worker:
@@ -68,6 +78,16 @@ def chrome(m):
     return copy.deepcopy(m)
 
 
+EDGE_DESCRIPTION = ("Quiet the web. Turn off AI answers in search results and block "
+                    "cookie pop-ups. Free, private, open source.")  # ≤ 132 chars
+
+
+def edge(m):
+    m = copy.deepcopy(m)
+    m["description"] = EDGE_DESCRIPTION
+    return m
+
+
 def opera(m):
     m = copy.deepcopy(m)
     m["name"] = SHORT_NAME
@@ -77,9 +97,9 @@ def opera(m):
 def main():
     target = sys.argv[1] if len(sys.argv) > 1 else "chrome"
     src = json.loads((ROOT / "extension" / "manifest.json").read_text())
-    out = {"chrome": chrome, "firefox": firefox, "opera": opera}.get(target)
+    out = {"chrome": chrome, "firefox": firefox, "opera": opera, "edge": edge}.get(target)
     if out is None:
-        sys.exit(f"unknown target {target!r} (chrome | firefox | opera)")
+        sys.exit(f"unknown target {target!r} (chrome | firefox | opera | edge)")
     json.dump(out(src), sys.stdout, indent=2, ensure_ascii=False)
     sys.stdout.write("\n")
 

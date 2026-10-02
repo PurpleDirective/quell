@@ -343,6 +343,23 @@ async function init() {
   await releaseAllSitesIfUnused();
 }
 
+// An update leaves the previous version's content scripts in every open tab,
+// cut off from the extension. They stand down by themselves (onGone in
+// src/shared/settings.js) — a copy no switch can reach must not go on hiding —
+// so this version's scripts go into the open tabs in their place, exactly as
+// when a feature is switched on. Only where Quell holds site access:
+// DuckDuckGo, Brave and Yahoo, and every site for Cookie banners and Pop-ups.
+// Google and Bing are reached by the manifest's content scripts alone, which
+// the browser injects on a page load and not before; a search page open across
+// an update shows as Google or Bing serve it until its next search or reload.
+async function healOpenTabsAfterUpdate() {
+  const s = await readSettings();
+  if (!s.enabled) return;
+  await syncEngineLayerInOpenTabs();
+  if (s.cookieEnabled) await syncCookieLayerInOpenTabs(true);
+  if (s.popupsEnabled) await syncPopupLayerInOpenTabs();
+}
+
 // The welcome page opens ONCE, on a fresh install — never on an update, which
 // would be an unasked-for tab for every existing user on every release.
 const WELCOME_PAGE = 'src/welcome/welcome.html';
@@ -351,6 +368,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   if (details && details.reason === 'install') {
     chrome.tabs.create({ url: chrome.runtime.getURL(WELCOME_PAGE) }).catch(() => {});
   }
+  if (details && details.reason === 'update') await healOpenTabsAfterUpdate();
 });
 chrome.runtime.onStartup.addListener(init);
 
@@ -386,6 +404,13 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
     await applyPopupLayer(on);
     if (on) await syncPopupLayerInOpenTabs();
   }
+  // Switched back on: the branches above put the cookie and pop-up scripts into
+  // the open tabs, and DuckDuckGo, Brave and Yahoo tabs need theirs as well
+  // when the copy they had has stood down (an update that landed while Quell
+  // was off puts nothing into any tab). A tab whose copy is still running
+  // ignores the second one: engines.js guards against double injection.
+  if (changed('enabled') && (await readSettings()).enabled) await syncEngineLayerInOpenTabs();
+  if (changed('enabled')) await syncBadges((await readSettings()).enabled);
 });
 
 // Domain-specific hide selectors (pipeline-generated). The content script asks
@@ -475,6 +500,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 });
+
+// The badge says "Quell hid this many things on this page". With Quell off
+// the pages put them all back, so the number comes down with the switch — it
+// used to stay on every open tab until that tab next loaded, over a popup
+// reading "Nothing is hidden anywhere". The counts themselves are kept: the
+// pages do not count the same things twice, so switching back on shows them
+// again rather than an empty badge over a page that is hiding.
+async function syncBadges(on) {
+  const tabs = await chrome.tabs.query({}).catch(() => []);
+  const counts = on ? await chrome.storage.session.get(null).catch(() => ({})) : {};
+  for (const tab of tabs) {
+    if (!tab.id) continue;
+    const n = Number(counts['tab:' + tab.id]) || 0;
+    try { await chrome.action.setBadgeText({ tabId: tab.id, text: n > 0 ? String(n) : '' }); } catch (_) { /* tab closed */ }
+  }
+}
 
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.status === 'loading') {

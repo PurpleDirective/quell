@@ -44,6 +44,8 @@ const SURFACE_NAMES = {
   hideOverview: 'the AI Overview', hideAiMode: 'AI Mode',
   hidePaa: 'answers you open in “People also ask”', hideGemini: 'Gemini buttons and promos',
 };
+// The two that are more than one thing take "them" in the question's second line.
+const SURFACE_PLURAL = { hidePaa: true, hideGemini: true };
 // Hosts where "Keep AI on this site" means something.
 const AI_HOST_RE = /(^|\.)google\.[a-z.]+$|(^|\.)bing\.com$|(^|\.)duckduckgo\.com$|^search\.brave\.com$|(^|\.)search\.yahoo\.com$/;
 
@@ -121,6 +123,20 @@ async function currentTab() {
   if (!hasChrome || !chrome.tabs) return null;
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
   return tab || null;
+}
+// The tab's hostname as Quell's own content script reports it. Used where the
+// browser will not show the popup the tab's address: Google and Bing, which
+// Quell reaches as content-script hosts (see content/common.js). Null on any
+// page Quell has no script in.
+async function hostFromPage(id) {
+  if (id == null || !hasChrome || !chrome.tabs?.sendMessage) return null;
+  try {
+    const r = await chrome.tabs.sendMessage(id, { type: 'where' });
+    // A hostname and nothing else: letters, digits, dots and hyphens, and the
+    // same thing back when it is read as an address.
+    const h = typeof r?.host === 'string' && /^[a-z0-9.-]{1,253}$/i.test(r.host) ? r.host.toLowerCase() : null;
+    return h && hostOf('https://' + h) === h ? h : null;
+  } catch (_) { return null; } // nothing of Quell's is listening in that tab
 }
 function hostOf(url) {
   try {
@@ -243,7 +259,7 @@ function reportable(h) {
 function renderLinks() {
   const rate = $('rate');
   const B = globalThis.QuellBrowser || {};
-  const url = IS_FIREFOX ? CFG.RATE_URL_FIREFOX : B.opera ? CFG.RATE_URL_OPERA : CFG.RATE_URL_CHROME;
+  const url = IS_FIREFOX ? CFG.RATE_URL_FIREFOX : B.opera ? CFG.RATE_URL_OPERA : B.edge ? CFG.RATE_URL_EDGE : CFG.RATE_URL_CHROME;
   if (url) rate.href = url; else rate.hidden = true;
   $('sponsor').href = CFG.SPONSOR_URL || 'https://github.com/sponsors/PurpleDirective';
   $('feedback').href = CFG.FEEDBACK_MAILTO || 'mailto:support@purpledirective.com';
@@ -259,7 +275,9 @@ async function render() {
   renderCookies(s);
   renderPopups(s);
   renderSite(s);
-  $('total').textContent = Number(s.totalBlocked || 0).toLocaleString();
+  const total = Number(s.totalBlocked || 0);
+  $('total').textContent = total.toLocaleString();
+  $('totalL').textContent = (total === 1 ? 'thing' : 'things') + ' quelled so far';
   await renderStatus(s);
 }
 
@@ -312,7 +330,7 @@ for (const r of document.querySelectorAll('input[name="gmode"]')) {
 for (const [id, key] of Object.entries(SURFACE_IDS)) {
   onToggle(id, (hide) => hide
     ? save({ [key]: true })
-    : confirmThen({ title: `Show ${SURFACE_NAMES[key]} again?`, body: 'Google will show it as usual. You can hide it again any time.' }, { [key]: false }));
+    : confirmThen({ title: `Show ${SURFACE_NAMES[key]} again?`, body: SURFACE_PLURAL[key] ? 'Google will show them as usual. You can hide them again any time.' : 'Google will show it as usual. You can hide it again any time.' }, { [key]: false }));
 }
 
 onToggle('bing', (hide) => hide
@@ -525,7 +543,7 @@ $('reportSend').addEventListener('click', async () => {
   } else {
     const tab = await currentTab();
     tabId = tab?.id ?? null;
-    host = hostOf(tab?.url);
+    host = hostOf(tab?.url) || await hostFromPage(tabId);
   }
   await render();
   await renderAccess();

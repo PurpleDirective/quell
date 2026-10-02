@@ -165,8 +165,66 @@
     });
   }
 
+  // A CONTENT SCRIPT THAT HAS LOST ITS EXTENSION
+  // Chrome leaves a content script running in every open tab when its
+  // extension is updated, reloaded, switched off in the browser's extension
+  // settings or removed. That copy has no storage and no messages any more, so
+  // no switch can reach it: what it hid stays hidden and its observer goes on
+  // hiding until the tab is reloaded. Measured 2026-10-01: a Google tab left
+  // open across an update kept its AI Overview hidden with Quell switched off,
+  // and went on hiding after Quell was disabled outright. A copy that cannot
+  // be told to stop has to stop itself, so every content script hands its own
+  // teardown to onGone().
+  //
+  // chrome.runtime.id is what goes away, and nothing announces it, so it is
+  // looked at on a slow timer and whenever the tab comes back into view. A new
+  // copy of Quell arriving in the same page (the background puts one into open
+  // tabs it has access to) says so with a DOM event before it does anything
+  // else, so the old copy has put the page back before the new one starts.
+  // Only a copy that really is cut off acts on that event: a page sending it
+  // to a working Quell achieves nothing.
+  const GONE_CHECK_MS = 2000;
+  const TAKEOVER_EVENT = 'quell-takeover';
+  // google.js and engines.js; bing.js and cookies.js; popups.js.
+  const COUNTED_MARKS = ['data-quell-counted', 'data-quell-seen', 'data-quell-popup-seen'];
+  const alive = () => { try { return !!chrome.runtime.id; } catch (_) { return false; } };
+  const goneCbs = [];
+  let goneTimer = null;
+  function checkGone() {
+    if (alive()) return;
+    clearInterval(goneTimer);
+    document.removeEventListener('visibilitychange', checkGone);
+    document.removeEventListener(TAKEOVER_EVENT, checkGone);
+    for (const cb of goneCbs.splice(0)) { try { cb(); } catch (_) { /* the rest still run */ } }
+    // The page is back as the site serves it, and this copy's per-tab count
+    // went with its extension (session storage is emptied by an update). Take
+    // its "already counted" marks off too, so the copy that takes over counts
+    // what it hides: left on, the new copy hid the same things and reported
+    // none, and the badge stayed empty over a page that was hiding. The
+    // lifetime total counts those few things a second time.
+    try {
+      for (const el of document.querySelectorAll(COUNTED_MARKS.map((a) => `[${a}]`).join(','))) {
+        for (const a of COUNTED_MARKS) el.removeAttribute(a);
+      }
+    } catch (_) { /* no document left */ }
+  }
+  // Run cb() once, when this script's extension is gone. A no-op outside a
+  // page (the background) and where there never was an extension (tests that
+  // inject a content script into a plain page).
+  function onGone(cb) {
+    if (typeof document === 'undefined' || !alive()) return;
+    goneCbs.push(cb);
+    if (goneTimer !== null) return;
+    goneTimer = setInterval(checkGone, GONE_CHECK_MS);
+    document.addEventListener('visibilitychange', checkGone);
+    document.addEventListener(TAKEOVER_EVENT, checkGone);
+  }
+  if (typeof document !== 'undefined' && alive()) {
+    try { document.dispatchEvent(new Event(TAKEOVER_EVENT)); } catch (_) { /* no document to tell */ }
+  }
+
   g.QuellSettings = {
     SYNC_DEFAULTS, LOCAL_DEFAULTS, DEFAULTS, OBSOLETE_KEYS, LIST_BYTE_BUDGET,
-    home, get, set, migrate, onChange, ListFullError,
+    home, get, set, migrate, onChange, onGone, ListFullError,
   };
 })();

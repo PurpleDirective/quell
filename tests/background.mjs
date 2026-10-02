@@ -697,6 +697,90 @@ console.log('Background — 0.5.x → 0.6.0 settings migration (storage.local �
   ok(r.googleMode === 'cleanweb', 'and readers still see them');
 }
 
+console.log('Background — an update puts this version into the tabs already open:');
+{
+  // The previous version's content scripts stand down when the extension is
+  // replaced (onGone in settings.js), so an update must put the new ones in
+  // their place wherever Quell has site access — or every open tab would show
+  // its banners and pop-ups again until it was reloaded.
+  const WEB_TABS = [{ id: 31, url: 'https://example.com/' }, { id: 32, url: 'https://duckduckgo.com/?q=a' }];
+  const on = { enginesEnabled: true, cookieEnabled: true, popupsEnabled: true };
+  const files = (h) => h.of('scripting.executeScript').map((c) => `${c.target.tabId}:${(c.files || []).at(-1)}`).sort().join(' ');
+  const all = '31:src/content/cookies.js 31:src/content/engines.js 31:src/content/popups.js '
+    + '32:src/content/cookies.js 32:src/content/engines.js 32:src/content/popups.js';
+  {
+    const h = boot({ granted: ['<all_urls>'], storage: on, sync: {}, tabs: WEB_TABS });
+    await h.chrome.runtime.onInstalled.fire({ reason: 'update', previousVersion: '0.7.0' });
+    await settle();
+    ok(files(h) === all, `update: engines, cookies and pop-ups scripts go into the open tabs (${files(h)})`);
+    ok(h.of('scripting.insertCSS').map((c) => c.target.tabId).join(',') === '31,32', '...with the generic cookie stylesheet');
+  }
+  {
+    const h = boot({ granted: ['<all_urls>'], storage: on, sync: { enabled: false }, tabs: WEB_TABS });
+    await h.chrome.runtime.onInstalled.fire({ reason: 'update', previousVersion: '0.7.0' });
+    await settle();
+    ok(h.of('scripting.executeScript').length === 0 && h.of('scripting.insertCSS').length === 0,
+      'update with Quell switched off: nothing is put into any tab');
+  }
+  {
+    const h = boot({ granted: ['<all_urls>'], storage: { cookieEnabled: true }, sync: {}, tabs: WEB_TABS });
+    await h.chrome.runtime.onInstalled.fire({ reason: 'update', previousVersion: '0.7.0' });
+    await settle();
+    ok(files(h) === '31:src/content/cookies.js 32:src/content/cookies.js', `update: only the features that are on (${files(h)})`);
+  }
+  for (const fire of [(h) => h.chrome.runtime.onStartup.fire(), (h) => h.chrome.runtime.onInstalled.fire({ reason: 'chrome_update' })]) {
+    const h = boot({ granted: ['<all_urls>'], storage: on, sync: {}, tabs: WEB_TABS });
+    await fire(h);
+    await settle();
+    ok(h.of('scripting.executeScript').length === 0, 'a browser start or browser update injects nothing: the tabs load the registered scripts themselves');
+  }
+}
+
+console.log('Background — switching Quell back on reaches the search tabs already open:');
+{
+  // An update that lands while Quell is off puts nothing into any tab, and the
+  // old copies have stood down. Switching back on has to put engines.js into
+  // the open DuckDuckGo, Brave and Yahoo tabs, as it does cookies and pop-ups.
+  const TABS = [{ id: 51, url: 'https://duckduckgo.com/?q=a' }];
+  const engines = (h) => h.of('scripting.executeScript').filter((c) => (c.files || []).at(-1) === 'src/content/engines.js').map((c) => c.target.tabId).join(',');
+  const h = boot({ granted: ['<all_urls>'], storage: { enginesEnabled: true }, sync: { enabled: false }, tabs: TABS });
+  h.sync.enabled = true;
+  await h.chrome.storage.onChanged.fire({ enabled: { newValue: true } }, 'sync');
+  await settle();
+  ok(engines(h) === '51', `Quell back on: engines.js goes into the open search tab (${engines(h)})`);
+  const off = boot({ granted: ['<all_urls>'], storage: { enginesEnabled: true }, sync: {}, tabs: TABS });
+  off.sync.enabled = false;
+  await off.chrome.storage.onChanged.fire({ enabled: { newValue: false } }, 'sync');
+  await settle();
+  ok(engines(off) === '', 'Quell off: nothing is put into any tab');
+  const none = boot({ granted: ['<all_urls>'], storage: { enginesEnabled: false }, sync: { enabled: false }, tabs: TABS });
+  none.sync.enabled = true;
+  await none.chrome.storage.onChanged.fire({ enabled: { newValue: true } }, 'sync');
+  await settle();
+  ok(engines(none) === '', 'Quell back on with DuckDuckGo, Brave and Yahoo not switched on: nothing goes in');
+}
+
+console.log('Background — the badge follows the master switch:');
+{
+  const h = boot({ granted: false, storage: {}, sync: {}, tabs: [{ id: 41 }, { id: 42 }, { id: undefined }] });
+  const set = [];
+  h.chrome.action.setBadgeText = (o) => { set.push(`${o.tabId}=${o.text}`); };
+  h.chrome.storage.session.get = async () => ({ 'tab:41': 3, quellReleasingAllSites: 0 });
+  h.sync.enabled = false;
+  await h.chrome.storage.onChanged.fire({ enabled: { newValue: false } }, 'sync');
+  await settle();
+  ok(set.join(' ') === '41= 42=', `Quell off: the badge is cleared on every open tab (${set.join(' ')})`);
+  set.length = 0;
+  h.sync.enabled = true;
+  await h.chrome.storage.onChanged.fire({ enabled: { newValue: true } }, 'sync');
+  await settle();
+  ok(set.join(' ') === '41=3 42=', `Quell back on: each tab gets its own count back (${set.join(' ')})`);
+  set.length = 0;
+  await h.chrome.storage.onChanged.fire({ googleMode: { newValue: 'off' } }, 'sync');
+  await settle();
+  ok(set.length === 0, 'any other setting leaves the badges alone');
+}
+
 console.log('Background — welcome page opens once, on install only:');
 {
   const h = boot({ sync: {}, tabs: [] });
