@@ -1,7 +1,13 @@
 name: CI
 
+# Read-only token: these jobs only check out and test.
+permissions:
+  contents: read
+
 # Product-local CI for the Quell repository (the repo root is the product).
-# Self-hosted ARM64 runner pool only — no hosted runners.
+# Runs on GitHub-hosted ubuntu-latest runners (free for public repositories).
+# Nothing here uses a secret or a self-hosted machine, so pull requests from
+# forks run the same checks safely.
 #
 # No `branches:` filter on pull_request: a PR stacked on another PR's branch
 # would otherwise run zero checks. No `paths:` filter either: the repository
@@ -17,9 +23,9 @@ concurrency:
 jobs:
   quell-smoke:
     name: quell extension smoke
-    # Self-hosted ARM64 pool — zero billed minutes. Chromium has ARM64 Linux
-    # builds and `--with-deps` uses the runner's passwordless sudo.
-    runs-on: [self-hosted, Linux, ARM64]
+    # `playwright install --with-deps` and the xvfb install below use apt via
+    # the hosted runner's passwordless sudo.
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -52,8 +58,8 @@ jobs:
     # Cheap structural check on the pipeline output: the ruleset ships inside
     # the extension, so a malformed regeneration is a shipped defect.
     #
-    # Pure python3 + stdlib: nothing arch-specific, any self-hosted runner works.
-    runs-on: [self-hosted, Linux, ARM64]
+    # Pure python3 + stdlib: nothing platform-specific.
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -136,7 +142,7 @@ jobs:
 
   compliant-claims:
     name: no unqualified compliance claims
-    runs-on: [self-hosted, Linux, ARM64]
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4

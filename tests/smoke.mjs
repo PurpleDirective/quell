@@ -491,7 +491,7 @@ console.log('Bing:');
 }
 
 // --- Bing: every /copilotsearch entry point goes with Copilot (0.6.0) -------
-// Owner decision 2026-09-24: the suggestion chips are hidden TOGETHER with the
+// Since 0.6.0 the suggestion chips are hidden TOGETHER with the
 // Copilot entry point, under the one Bing switch — each chip routes into
 // Copilot, not into a web search. The #b_results guard must still hold: an
 // organic result that links to /copilotsearch is a result, not an entry point.

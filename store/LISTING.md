@@ -161,8 +161,8 @@ unrelated purpose or to determine creditworthiness or for lending.*
 the slash URL serves 200 directly. Verified serving the actual policy, not the
 homepage. The v0.4.0 rejection — "Purple Nickel", User Data Privacy — was this
 URL 200-serving the homepage via the CF Pages SPA fallback before the page and
-a real 404.html existed.) **Publish the 2026-09-25 policy
-(store/privacy-policy.md) to that URL before submitting 0.6.0** — the listing
+a real 404.html existed.) **Publish the current policy (v3.0.0,
+effective 2026-10-19; store/privacy-policy.md) to that URL before submitting 0.6.0** — the listing
 now describes the breakage report and sync, and the live policy must match.
 
 ## Assets (store/assets/)

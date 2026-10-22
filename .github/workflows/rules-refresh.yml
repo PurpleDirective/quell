@@ -4,7 +4,7 @@ name: quell-rules-refresh
 # layer's rules/popups.json. Also prints the last week's "this site looks
 # broken" reports into the job summary once the QUELL_REPORTS_TOKEN repository
 # secret exists (see server/report-worker/README.md; the secret must be created
-# in THIS repository, PurpleDirective/quell).
+# in THIS repository).
 # Opens a PR when the generated rules changed; never pushes to main directly.
 #
 # Auth: the default GITHUB_TOKEN. This only works while the repository setting
@@ -20,16 +20,18 @@ on:
     - cron: '0 6 * * 1' # Mondays 06:00 UTC
   workflow_dispatch:
 
+# Minimal token scope: contents write (to push the refresh branch) and
+# pull-requests write (to open the PR). Nothing else is granted.
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
   refresh:
-    # Self-hosted ARM64 pool, no `gh` needed: the PR is opened with a stdlib
-    # python3 call to the REST endpoint `gh pr create` uses, using the push
-    # credentials actions/checkout leaves in the workspace.
-    runs-on: [self-hosted, Linux, ARM64]
+    # GitHub-hosted runner. The PR is opened with a stdlib python3 call to the
+    # REST endpoint `gh pr create` uses, with the push credentials
+    # actions/checkout leaves in the workspace.
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -57,8 +59,7 @@ jobs:
           git add extension/rules
           git commit -m "chore(quell): weekly EasyList rules refresh (cookies + pop-ups)"
           git push -u origin "$BR"
-          # POST /repos/{repo}/pulls — what `gh pr create` calls. No `gh` on
-          # the Linux runners. urlopen raises on any non-2xx, failing the step.
+          # POST /repos/{repo}/pulls — what `gh pr create` calls. urlopen raises on any non-2xx, failing the step.
           BR="$BR" TITLE="chore(quell): weekly cookie-rules refresh $(date +%Y-%m-%d)" python3 - <<'PY'
           import json, os, urllib.request
           body = ("Automated EasyList regeneration (Cookie List + the pop-ups annoyance lists) "
