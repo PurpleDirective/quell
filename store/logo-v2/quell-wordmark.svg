@@ -1,0 +1,26 @@
+<svg width="384" height="112" viewBox="0 0 384 112" xmlns="http://www.w3.org/2000/svg">
+  <!-- Quell horizontal wordmark lockup v2 (Crescent mark + wordmark). -->
+  <!-- NOTE: "Quell" is set in a bold system/Inter stack for the working lockup; the
+       production wordmark should outline the type in the final chosen typeface so it
+       renders identically everywhere (SVG <text> depends on locally available fonts). -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#4C1D95"/>
+    </linearGradient>
+    <mask id="crescent">
+      <rect width="128" height="128" fill="#000"/>
+      <circle cx="74" cy="64" r="36" fill="#ffffff"/>
+      <circle cx="99" cy="64" r="34" fill="#000000"/>
+    </mask>
+  </defs>
+  <!-- mark tile, 76px, vertically centered -->
+  <g transform="translate(10,18) scale(0.59375)">
+    <rect width="128" height="128" rx="28" fill="url(#g)"/>
+    <circle cx="74" cy="64" r="36" fill="#ffffff" mask="url(#crescent)"/>
+  </g>
+  <!-- wordmark -->
+  <text x="104" y="63" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="54" font-weight="800" letter-spacing="-1.4" fill="#4C1D95">Quell</text>
+  <!-- tagline -->
+  <text x="106" y="90" font-family="Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" font-size="17" font-weight="500" letter-spacing="0.3" fill="#6B7280">quiet the web</text>
+</svg>

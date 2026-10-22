@@ -1,0 +1,77 @@
+name: quell-rules-refresh
+
+# Weekly EasyList -> Quell rules regeneration: cookie rules and the pop-ups
+# layer's rules/popups.json. Also prints the last week's "this site looks
+# broken" reports into the job summary once the QUELL_REPORTS_TOKEN repository
+# secret exists (see server/report-worker/README.md; the secret must be created
+# in THIS repository, PurpleDirective/quell).
+# Opens a PR when the generated rules changed; never pushes to main directly.
+#
+# Auth: the default GITHUB_TOKEN. This only works while the repository setting
+# "Allow GitHub Actions to create and approve pull requests" is ON.
+# A PR opened by GITHUB_TOKEN does not trigger on:pull_request workflows, so its
+# CI checks do not run on their own. To run them, close and reopen the PR as a
+# user (gh pr close <N>; gh pr reopen <N>), then merge normally. A PAT or GitHub
+# App token for checkout + PR creation removes that step.
+# pipeline/weekly-refresh.sh does the same job by hand under the operator's gh
+# login (its PRs run CI directly).
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    # Self-hosted ARM64 pool, no `gh` needed: the PR is opened with a stdlib
+    # python3 call to the REST endpoint `gh pr create` uses, using the push
+    # credentials actions/checkout leaves in the workspace.
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate rules
+        run: python3 pipeline/build_rules.py
+
+      - name: Breakage reports (last 7 days)
+        env:
+          QUELL_REPORTS_TOKEN: ${{ secrets.QUELL_REPORTS_TOKEN }}
+        run: python3 pipeline/fetch_reports.py 7 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Open PR if rules changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- extension/rules; then
+            echo "No rule changes this week."
+            exit 0
+          fi
+          BR="quell/rules-refresh-$(date +%Y%m%d)"
+          git config user.name "quell-rules-bot"
+          git config user.email "accounts@purpledirective.com"
+          git checkout -b "$BR"
+          git add extension/rules
+          git commit -m "chore(quell): weekly EasyList rules refresh (cookies + pop-ups)"
+          git push -u origin "$BR"
+          # POST /repos/{repo}/pulls — what `gh pr create` calls. No `gh` on
+          # the Linux runners. urlopen raises on any non-2xx, failing the step.
+          BR="$BR" TITLE="chore(quell): weekly cookie-rules refresh $(date +%Y-%m-%d)" python3 - <<'PY'
+          import json, os, urllib.request
+          body = ("Automated EasyList regeneration (Cookie List + the pop-ups annoyance lists) "
+                  "(pipeline/build_rules.py). Review the diff stats, run tests/run.sh "
+                  "locally, and bump the extension version before any store release. Not auto-merged "
+                  "— a human glance on the rule diff is intentional before it enters the product.")
+          req = urllib.request.Request(
+              f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/pulls",
+              data=json.dumps({"title": os.environ["TITLE"], "head": os.environ["BR"],
+                               "base": "main", "body": body}).encode(),
+              headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                       "Accept": "application/vnd.github+json"},
+              method="POST")
+          with urllib.request.urlopen(req, timeout=60) as r:
+              print("opened", json.load(r)["html_url"])
+          PY

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quell</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="hd">
+    <img src="../../icons/icon48.png" alt="" class="logo" width="36" height="36" />
+    <div class="hd-text">
+      <h1>Quell</h1>
+      <p class="tag" id="stateLine">Quiet the web.</p>
+    </div>
+    <label class="switch" for="enabled">
+      <input type="checkbox" role="switch" id="enabled" aria-label="Quell on or off" />
+      <span class="slider" aria-hidden="true"></span>
+    </label>
+  </header>
+
+  <!-- What Quell did on the page the user is looking at. -->
+  <p class="status" id="pageStatus" role="status" aria-live="polite"></p>
+
+  <!-- Firefox can install Quell without its Google/Bing access granted; say
+       so plainly instead of silently doing nothing. Hidden where granted. -->
+  <div class="notice" id="accessNotice" hidden>
+    <span>Quell needs your OK to work on Google and Bing.</span>
+    <button type="button" class="btn small" id="grantBase">Allow</button>
+  </div>
+
+  <main id="main">
+    <!-- This site: every per-site control in one place. -->
+    <section class="card site" id="siteCard" hidden aria-labelledby="siteHost">
+      <div class="site-h">
+        <span class="site-l">This site</span>
+        <span class="host" id="siteHost"></span>
+      </div>
+      <div class="row" id="siteAiRow" hidden>
+        <label class="row-l" for="siteAi">Keep AI on this site</label>
+        <label class="switch sm"><input type="checkbox" role="switch" id="siteAi" /><span class="slider" aria-hidden="true"></span></label>
+      </div>
+      <div class="row" id="siteRow" hidden>
+        <label class="row-l" for="siteAllow">Allow cookie banners here</label>
+        <label class="switch sm"><input type="checkbox" role="switch" id="siteAllow" /><span class="slider" aria-hidden="true"></span></label>
+      </div>
+      <div class="row" id="sitePopRow" hidden>
+        <label class="row-l" for="sitePop">Allow pop-ups here</label>
+        <label class="switch sm"><input type="checkbox" role="switch" id="sitePop" /><span class="slider" aria-hidden="true"></span></label>
+      </div>
+      <button type="button" class="link-btn" id="reportBtn">This site looks broken</button>
+    </section>
+
+    <!-- SEARCH -->
+    <section class="grp" aria-labelledby="gSearch">
+      <div class="grp-h">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l1.7 5.8 5.8 1.7-5.8 1.7L12 17.5l-1.7-5.8L4.5 10l5.8-1.7z"/></svg>
+        <div class="grp-tx">
+          <label class="grp-t" id="gSearch" for="aiEnabled">Search</label>
+          <span class="grp-d">AI answers you didn't ask for</span>
+        </div>
+        <label class="switch sm"><input type="checkbox" role="switch" id="aiEnabled" aria-describedby="gSearchD" /><span class="slider" aria-hidden="true"></span></label>
+        <span class="sr" id="gSearchD">Hides AI on Google, Bing and the other search engines you switch on.</span>
+      </div>
+
+      <div class="grp-body" id="searchBody">
+        <fieldset class="seg-f">
+          <legend class="sub-l">Google</legend>
+          <div class="seg" role="radiogroup" aria-label="How Quell handles Google">
+            <label class="seg-o"><input type="radio" name="gmode" value="hide" /><span>Hide AI</span></label>
+            <label class="seg-o"><input type="radio" name="gmode" value="cleanweb" /><span>Classic results</span></label>
+            <label class="seg-o"><input type="radio" name="gmode" value="off" /><span>Leave it</span></label>
+          </div>
+          <p class="hint" id="gmodeHint"></p>
+        </fieldset>
+
+        <div class="nested" id="surfaces">
+          <div class="row">
+            <label class="row-l" for="sOverview">AI Overview above results</label>
+            <label class="switch sm"><input type="checkbox" role="switch" id="sOverview" /><span class="slider" aria-hidden="true"></span></label>
+          </div>
+          <div class="row">
+            <label class="row-l" for="sAiMode">AI Mode</label>
+            <label class="switch sm"><input type="checkbox" role="switch" id="sAiMode" /><span class="slider" aria-hidden="true"></span></label>
+          </div>
+          <div class="row">
+            <label class="row-l" for="sPaa">Answers you open in “People also ask”<span class="row-d" id="sPaaD">Kept — you asked for these</span></label>
+            <label class="switch sm"><input type="checkbox" role="switch" id="sPaa" aria-describedby="sPaaD" /><span class="slider" aria-hidden="true"></span></label>
+          </div>
+          <div class="row">
+            <label class="row-l" for="sGemini">Gemini buttons &amp; promos</label>
+            <label class="switch sm"><input type="checkbox" role="switch" id="sGemini" /><span class="slider" aria-hidden="true"></span></label>
+          </div>
+        </div>
+
+        <div class="row sep">
+          <label class="row-l" for="bing">Bing Copilot<span class="row-d">Panel, buttons &amp; suggestions</span></label>
+          <label class="switch sm"><input type="checkbox" role="switch" id="bing" /><span class="slider" aria-hidden="true"></span></label>
+        </div>
+
+        <div class="row sep">
+          <label class="row-l" for="engines">DuckDuckGo, Brave &amp; Yahoo<span class="row-d" id="enginesD">Asks your browser for access to these three sites</span></label>
+          <label class="switch sm"><input type="checkbox" role="switch" id="engines" aria-describedby="enginesD" /><span class="slider" aria-hidden="true"></span></label>
+        </div>
+        <div class="nested" id="engineModes">
+          <div class="row">
+            <label class="row-l" for="ddgMode">DuckDuckGo</label>
+            <select class="mode" id="ddgMode">
+              <option value="clean">Off at the source</option>
+              <option value="hide">Hide it</option>
+              <option value="off">Leave it</option>
+            </select>
+          </div>
+          <div class="row">
+            <label class="row-l" for="braveMode">Brave</label>
+            <select class="mode" id="braveMode">
+              <option value="clean">Off at the source</option>
+              <option value="hide">Hide it</option>
+              <option value="off">Leave it</option>
+            </select>
+          </div>
+          <div class="row">
+            <label class="row-l" for="yahooMode">Yahoo</label>
+            <select class="mode" id="yahooMode">
+              <option value="hide">Hide it</option>
+              <option value="off">Leave it</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COOKIES -->
+    <section class="grp" aria-labelledby="gCookies">
+      <div class="grp-h">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="9.5" r="1.1"/><circle cx="14.5" cy="9" r="1.1"/><circle cx="15" cy="14.5" r="1.1"/><circle cx="9.5" cy="15" r="1.1"/></svg>
+        <div class="grp-tx">
+          <label class="grp-t" id="gCookies" for="cookies">Cookie banners</label>
+          <span class="grp-d" id="cookiesD">Asks your browser for access to all sites</span>
+        </div>
+        <label class="switch sm"><input type="checkbox" role="switch" id="cookies" aria-describedby="cookiesD" /><span class="slider" aria-hidden="true"></span></label>
+      </div>
+      <div class="grp-body" id="cookieBody" hidden>
+        <div class="row" id="rejectRow">
+          <label class="row-l" for="cookieReject">Say “reject all” for me<span class="row-d" id="rejectD">Instead of just hiding the banner. Lets the site’s consent tool load so it can answer.</span></label>
+          <label class="switch sm"><input type="checkbox" role="switch" id="cookieReject" aria-describedby="rejectD" /><span class="slider" aria-hidden="true"></span></label>
+        </div>
+      </div>
+    </section>
+
+    <!-- POP-UPS -->
+    <section class="grp" aria-labelledby="gPopups">
+      <div class="grp-h">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 10.5h8M8 14h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <div class="grp-tx">
+          <label class="grp-t" id="gPopups" for="popups">Pop-ups</label>
+          <span class="grp-d" id="popupsD">Sign-up boxes, chat bubbles, “open in app”</span>
+        </div>
+        <label class="switch sm"><input type="checkbox" role="switch" id="popups" aria-describedby="popupsD" /><span class="slider" aria-hidden="true"></span></label>
+      </div>
+      <div class="grp-body" id="popupBody" hidden>
+        <div class="row">
+          <label class="row-l" for="pNews">Newsletter sign-ups</label>
+          <label class="switch sm"><input type="checkbox" role="switch" id="pNews" /><span class="slider" aria-hidden="true"></span></label>
+        </div>
+        <div class="row">
+          <label class="row-l" for="pChat">Chat widgets</label>
+          <label class="switch sm"><input type="checkbox" role="switch" id="pChat" /><span class="slider" aria-hidden="true"></span></label>
+        </div>
+        <div class="row">
+          <label class="row-l" for="pApp">“Open in app” banners</label>
+          <label class="switch sm"><input type="checkbox" role="switch" id="pApp" /><span class="slider" aria-hidden="true"></span></label>
+        </div>
+      </div>
+    </section>
+
+    <p class="error" id="saveError" role="alert" hidden></p>
+    <p class="info" id="infoLine" role="status" aria-live="polite" hidden></p>
+
+    <div class="counter">
+      <span class="counter-n" id="total">0</span>
+      <span class="counter-l" id="totalL">things quelled so far</span>
+    </div>
+  </main>
+
+  <footer>
+    <nav class="links" aria-label="Quell links">
+      <a id="rate" href="#" target="_blank" rel="noopener">Rate Quell</a>
+      <a id="sponsor" href="#" target="_blank" rel="noopener">Support Quell</a>
+      <a id="feedback" href="#">Feedback</a>
+      <a id="privacy" href="#" target="_blank" rel="noopener">Privacy</a>
+    </nav>
+    <a class="pd" href="https://purpledirective.com" target="_blank" rel="noopener">by Purple Directive</a>
+  </footer>
+
+  <!-- Confirm before AI (or all of Quell) comes back on. -->
+  <dialog id="confirmDlg" aria-labelledby="confirmT" aria-describedby="confirmB">
+    <h2 id="confirmT"></h2>
+    <p id="confirmB"></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="confirmNo">Keep hidden</button>
+      <button type="button" class="btn" id="confirmYes">Show it</button>
+    </div>
+  </dialog>
+
+  <!-- Breakage report: shows EXACTLY what is sent before anything is sent. -->
+  <dialog id="reportDlg" aria-labelledby="reportT">
+    <h2 id="reportT">Tell us this site looks broken?</h2>
+    <p>Quell will send exactly this to Purple Directive, and nothing else:</p>
+    <pre class="payload" id="reportPayload"></pre>
+    <p class="fine">No page address, no page content, no identifiers. Like any web request it reaches our server from your IP address; the server does not log or keep it.</p>
+    <p class="fine">Need it fixed right now? Use the switches under <em>This site</em>.</p>
+    <p class="report-status" id="reportStatus" role="status" aria-live="polite"></p>
+    <div class="dlg-actions">
+      <button type="button" class="btn ghost" id="reportCancel">Cancel</button>
+      <button type="button" class="btn" id="reportSend">Send report</button>
+    </div>
+  </dialog>
+
+  <script src="../shared/settings.js"></script>
+  <script src="../shared/config.js"></script>
+  <script src="../shared/browser.js"></script>
+  <script src="../shared/report-host.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

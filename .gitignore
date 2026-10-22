@@ -1,0 +1,18 @@
+node_modules/
+*.zip
+*.pem
+.DS_Store
+dist/
+# Chrome writes indexed dNR rulesets into unpacked extension dirs; never commit
+# (leading-underscore dirs are also rejected by the Web Store packer)
+_metadata/
+tests/.profile/
+__pycache__/
+
+# Report worker: generated per-deploy config with real ids, and wrangler state
+server/report-worker/wrangler.deploy.jsonc
+.wrangler/
+
+# Secrets / local env
+.env
+.env.*

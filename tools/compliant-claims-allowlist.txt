@@ -1,0 +1,14 @@
+# Allowlist for tools/lint_compliant_claims.py
+# ------------------------------------------------------------------------------
+# Lines listed here are exempt from the "unqualified compliant/compliance claim"
+# lint. Use ONLY for text that legitimately contains the word but is not a product
+# overclaim (chiefly a statute quoted verbatim). Prefer the inline form:
+#     {# noqa: compliant-claim — quoting <statute> verbatim #}
+#
+# FORMAT — one entry per line; blank lines and #-comments ignored:
+#     <relative-path>            exempt the whole file
+#     <relative-path>:<line>     exempt one line
+#     <glob>                     fnmatch glob over "<relative-path>" or "<path>:<line>"
+# Paths are relative to the repository root. Every entry carries a rationale.
+#
+# ---- ACTIVE ENTRIES BELOW (none) ----

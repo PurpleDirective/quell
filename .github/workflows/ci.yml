@@ -1,0 +1,146 @@
+name: CI
+
+# Product-local CI for the Quell repository (the repo root is the product).
+# Self-hosted ARM64 runner pool only — no hosted runners.
+#
+# No `branches:` filter on pull_request: a PR stacked on another PR's branch
+# would otherwise run zero checks. No `paths:` filter either: the repository
+# is only Quell, so every change is a Quell change.
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quell-smoke:
+    name: quell extension smoke
+    # Self-hosted ARM64 pool — zero billed minutes. Chromium has ARM64 Linux
+    # builds and `--with-deps` uses the runner's passwordless sudo.
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # tests/run.sh resolves playwright from the GLOBAL install on purpose —
+      # ESM ignores NODE_PATH, so it symlinks the global package into
+      # tests/node_modules. Installing globally here keeps CI and local
+      # invocation on the exact same path.
+      - name: Install Playwright
+        run: npm i -g playwright
+
+      - name: Install Chromium + system deps
+        run: npx playwright install --with-deps chromium
+
+      # The suite loads an UNPACKED extension, which the headless-shell build
+      # cannot do. smoke.mjs falls back to headful when headless refuses to
+      # start a service worker, so a display has to exist for that path.
+      - name: Install xvfb
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
+
+      - name: Smoke suite
+        run: xvfb-run -a bash tests/run.sh
+
+  quell-rules-integrity:
+    name: quell rules artifacts
+    # Cheap structural check on the pipeline output: the ruleset ships inside
+    # the extension, so a malformed regeneration is a shipped defect.
+    #
+    # Pure python3 + stdlib: nothing arch-specific, any self-hosted runner works.
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate manifest + generated rulesets
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          fail = []
+
+          m = json.load(open('extension/manifest.json'))
+          if m.get('manifest_version') != 3:
+              fail.append('manifest_version must be 3')
+
+          # Every content-script file the manifest references must exist —
+          # a renamed/removed script is otherwise a silent no-op at runtime.
+          import os
+          for cs in m.get('content_scripts', []):
+              for f in cs.get('js', []):
+                  if not os.path.isfile(os.path.join('extension', f)):
+                      fail.append(f'content script missing: {f}')
+
+          google = [x for c in m.get('content_scripts', []) for x in c.get('matches', []) if 'google.' in x]
+          if len(google) < 150:
+              fail.append(f'google domain coverage regressed: {len(google)} (expected ~190)')
+
+          # <all_urls> must stay OPTIONAL — the privacy claim in the store
+          # listing and the launch copy both depend on it.
+          if '<all_urls>' in m.get('host_permissions', []):
+              fail.append('<all_urls> must be OPTIONAL, never a baseline host_permission')
+          if '<all_urls>' not in m.get('optional_host_permissions', []):
+              fail.append('<all_urls> missing from optional_host_permissions')
+
+          for rs in m.get('declarative_net_request', {}).get('rule_resources', []):
+              rules = json.load(open(os.path.join('extension', rs['path'])))
+              ids = [r['id'] for r in rules]
+              if len(ids) != len(set(ids)):
+                  fail.append(f"duplicate rule ids in {rs['path']}")
+
+          domains = json.load(open('extension/rules/cookie-domains.json'))
+          if len(domains) < 1000:
+              fail.append(f'cookie-domains.json too small: {len(domains)}')
+
+          css = open('extension/rules/cookie-generic.css').read()
+          if 'display:none' not in css or len(css) < 100_000:
+              fail.append(f'cookie-generic.css looks wrong ({len(css)} bytes)')
+
+          # Pop-ups layer rules: present, the three categories, and every
+          # selector passes the pipeline's own filter — the same function, not
+          # a second copy that can drift (0.6.0 review: the copy here accepted
+          # body.newsletter-open / html.no-scroll).
+          sys.path.insert(0, 'pipeline')
+          import build_rules
+          pop = json.load(open('extension/rules/popups.json'))
+          for cat in ('newsletter', 'chat', 'app'):
+              if cat not in pop or not pop[cat].get('generic'):
+                  fail.append(f'popups.json missing category {cat}')
+          for cat, r in pop.items():
+              for sel in r.get('generic', []) + [x for v in r.get('domains', {}).values() for x in v]:
+                  if not build_rules.popup_selector_ok(sel):
+                      fail.append(f'popups.json/{cat} ships a selector the filter rejects: {sel}')
+                      break
+
+          # Regression guard: a CMP *state* class here blanks whole pages
+          # (.didomi-popup-open sits on <body>).
+          seed = open('extension/src/content/cookies.js').read()
+          for banned in ('.didomi-popup-open', '.sp-message-open'):
+              if f"'{banned}'" in seed:
+                  fail.append(f'{banned} must never be a SEED hide selector')
+
+          print(f'manifest v{m["version"]} · {len(google)} google domains · '
+                f'{len(domains)} cookie domains · {len(css)//1024} KB generic CSS')
+          if fail:
+              print('\nFAILURES:'); [print(' -', f) for f in fail]; sys.exit(1)
+          print('all checks passed')
+          PY
+
+      - name: Pop-ups rule filter tests
+        run: python3 pipeline/test_build_rules.py
+
+  compliant-claims:
+    name: no unqualified compliance claims
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Self-test (matcher fixtures)
+        run: python3 tools/lint_compliant_claims.py --selftest
+      - name: Scan customer-facing surfaces
+        run: python3 tools/lint_compliant_claims.py

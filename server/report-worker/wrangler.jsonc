@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "quell-report",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  // No account_id here: wrangler reads CLOUDFLARE_ACCOUNT_ID from the environment.
+  // The real D1 database_id is also kept out of the repo; ./deploy.sh substitutes it.
+
+  // Only the Quell report paths on the apex; the rest of purpledirective.com
+  // is untouched (same pattern as pd-buy-redirect's /buy/*).
+  "routes": [
+    { "pattern": "purpledirective.com/api/quell/*", "zone_name": "purpledirective.com" }
+  ],
+
+  // Aggregate counts. Create with:
+  //   npx wrangler d1 create quell-reports
+  // and export the returned database_id as QUELL_D1_DATABASE_ID (see README).
+  "d1_databases": [
+    { "binding": "DB", "database_name": "quell-reports", "database_id": "REPLACE_WITH_D1_DATABASE_ID" }
+  ],
+
+  // Edge rate limits. CLIENT_LIMITER is keyed by a salted hash of the client
+  // IP (never the raw IP); GLOBAL_LIMITER bounds all clients together.
+  // namespace_id values must be unique per account.
+  "ratelimits": [
+    { "name": "CLIENT_LIMITER", "namespace_id": "4201", "simple": { "limit": 5, "period": 60 } },
+    { "name": "GLOBAL_LIMITER", "namespace_id": "4202", "simple": { "limit": 300, "period": 60 } }
+  ],
+
+  // Which extension origins may post reports (src/index.js allowedOrigin).
+  // Firefox (moz-extension://<random uuid>) is always accepted. OPERA_EXTENSION_ID
+  // is empty until the Opera listing publishes: Opera signs the package itself, so
+  // an Opera install gets a different id from the CWS one and would otherwise be
+  // refused. Empty means not accepted. Set it (no code change) once Opera assigns
+  // it, or the popup's "This site looks broken" button stays dead for Opera users.
+  // Edge was dropped 2026-10-02; its slot is gone.
+  "vars": {
+    "CHROME_EXTENSION_ID": "hipifmmjmbnkhfajkbmcjkajlfjiehho",
+    "OPERA_EXTENSION_ID": ""
+  },
+
+  // Daily retention purge (rows older than 180 days).
+  "triggers": { "crons": ["17 4 * * *"] },
+
+  // Workers Logs OFF: the platform would otherwise retain per-request metadata
+  // for this Worker, and the privacy policy says the endpoint keeps none.
+  "observability": { "enabled": false }
+}
