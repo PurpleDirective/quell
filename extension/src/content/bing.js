@@ -2,14 +2,13 @@
 // CSS does the hiding; a light sweep counts what was hidden for the badge.
 // Applies live: toggling Bing in the popup takes effect without a reload.
 //
-// 0.6.0 (owner decision 2026-09-24): the /copilotsearch suggestion chips are
-// hidden TOGETHER with the Copilot entry point, under the one Bing switch.
+// Since 0.6.0 the /copilotsearch suggestion chips are hidden TOGETHER with the Copilot entry point, under the one Bing switch.
 // 0.5.0 gave them their own switch, off by default, on the theory that a
 // chip carrying a real query reads as a related search. It does not behave
 // like one: every chip routes into Copilot, not into a web search, so it is
 // an AI entry point with a query pre-filled. One switch, one meaning.
 //
-// Live Bing (measured 2026-09-10, IMPROVEMENT-PLAN): 4 /copilotsearch links on
+// Live Bing (measured 2026-09-10): 4 /copilotsearch links on
 // one SERP — the bare "Search" tab in the scope bar, suggestion chips inside
 // #b_copilot_search_container (a direct child of <body>, a sibling AFTER
 // #b_results), and one more outside both. So the rule is the route itself:

@@ -261,7 +261,7 @@ function renderLinks() {
   const B = globalThis.QuellBrowser || {};
   const url = IS_FIREFOX ? CFG.RATE_URL_FIREFOX : B.opera ? CFG.RATE_URL_OPERA : B.edge ? CFG.RATE_URL_EDGE : CFG.RATE_URL_CHROME;
   if (url) rate.href = url; else rate.hidden = true;
-  $('sponsor').href = CFG.SPONSOR_URL || 'https://github.com/sponsors/PurpleDirective';
+  $('sponsor').href = CFG.SPONSOR_URL || 'https://github.com/sponsors/TyrianMurex';
   $('feedback').href = CFG.FEEDBACK_MAILTO || 'mailto:support@purpledirective.com';
   $('privacy').href = CFG.PRIVACY_URL || 'https://purpledirective.com/quell/privacy/';
 }
@@ -372,9 +372,9 @@ $('engines').addEventListener('change', async (e) => {
 
 // All-sites access is held only while something uses it. When the last
 // feature that needs it (Cookie banners, Pop-ups) is switched off, Quell gives
-// the access back to the browser instead of sitting on it (owner decision
-// 2026-09-25). Switching either one on again asks for it again, from that
-// click. The master switch is a pause, not a "stop using it": it keeps access.
+// the access back to the browser instead of sitting on it (least privilege:
+// hold only what is in use). Switching either one on again asks for it again,
+// from that click. The master switch is a pause, not a "stop using it": it keeps access.
 //
 // DuckDuckGo, Brave and Yahoo can lose their access with it. Chrome's
 // permissions.remove(<all_urls>) takes every granted host that <all_urls>

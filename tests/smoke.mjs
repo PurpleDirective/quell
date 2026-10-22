@@ -122,8 +122,7 @@ const BING_FIXTURE = `<!doctype html><html><body>
   <li class="b_algo" id="org-plain"><a href="https://example.com/w">An unrelated result</a></li>
 </div></div>
 <div id="b_sydConvCont">Copilot panel</div>
-<!-- The fourth /copilotsearch link measured live (IMPROVEMENT-PLAN
-     2026-09-10): outside both the scope bar and the chip row. -->
+<!-- The fourth /copilotsearch link measured live (2026-09-10): outside both the scope bar and the chip row. -->
 <div id="b_rs_copilot"><a id="cs-other" href="/copilotsearch?q=test&amp;form=CSSRCH">Ask Copilot about this</a></div>
 <div id="b_copilot_search_container"><div class="suggestion_container">
   <a class="suggestion_chip" id="chip-1" href="/copilotsearch?q=chip+one&amp;form=CSBSUG">chip query one</a>
@@ -990,7 +989,7 @@ console.log('Popup:');
   ok(await page.evaluate(() => document.getElementById('rate').href
     .includes('chromewebstore.google.com/detail/hipifmmjmbnkhfajkbmcjkajlfjiehho')),
     'Rate Quell links the real store listing');
-  ok(await page.evaluate(() => document.getElementById('sponsor').href) === 'https://github.com/sponsors/PurpleDirective',
+  ok(await page.evaluate(() => document.getElementById('sponsor').href) === 'https://github.com/sponsors/TyrianMurex',
     'Support Quell links the GitHub Sponsors profile');
   ok(await page.evaluate(() => document.getElementById('privacy').href) === 'https://purpledirective.com/quell/privacy/',
     'Privacy link points at the published policy');
@@ -1817,7 +1816,7 @@ console.log('Popup — engines switch (intent path / off path):');
   }
 }
 
-// --- Popup: all-sites access is given back (owner decision 2026-09-25) ----
+// --- Popup: all-sites access is given back (0.6.0 behavior) ----
 // The real popup against a recording chrome that models Chrome's permission
 // semantics: contains() is semantic (<all_urls> covers every origin);
 // remove(<all_urls>) takes every granted host with it (a semantic
@@ -2700,7 +2699,7 @@ console.log('Welcome page:');
   ok(/never/i.test(text) && /real search result/i.test(text), 'says what Quell will never do');
   ok(await pg.evaluate(() => document.getElementById('privacy').href) === 'https://purpledirective.com/quell/privacy/',
     'links the privacy policy');
-  ok(await pg.evaluate(() => document.getElementById('sponsor').href) === 'https://github.com/sponsors/PurpleDirective',
+  ok(await pg.evaluate(() => document.getElementById('sponsor').href) === 'https://github.com/sponsors/TyrianMurex',
     'links the GitHub Sponsors profile');
   ok(await pg.evaluate(() => document.getElementById('accessNotice').hidden) === true,
     'no access prompt on Chromium, where Google/Bing access is granted at install');

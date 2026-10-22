@@ -38,7 +38,7 @@
     hidePaa: false,
     hideGemini: true,
     // Bing: the Copilot panel, every /copilotsearch entry point AND the
-    // Copilot suggestion chips, as one switch (owner decision 2026-09-24).
+    // Copilot suggestion chips, as one switch (one meaning, one control).
     bingEnabled: true,
     ddgMode: 'hide',        // 'clean' | 'hide' | 'off'
     braveMode: 'hide',

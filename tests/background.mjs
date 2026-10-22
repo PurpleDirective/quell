@@ -379,7 +379,7 @@ console.log('Background — asks Chrome about the ENGINE origins, not something 
   ok(h.registered.has('quell-engines'), 'and the engine script stays registered');
 }
 
-// --- Giving all-sites access back (owner decision 2026-09-25) --------------
+// --- Giving all-sites access back (0.6.0 behavior) --------------
 // Cookie banners and Pop-ups are the only users of <all_urls>. With both off,
 // the access goes back to the browser; revoking it anywhere switches both off.
 console.log('Background — all-sites access is given back when unused:');

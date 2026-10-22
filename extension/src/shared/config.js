@@ -21,5 +21,5 @@ globalThis.QUELL_CONFIG = Object.freeze({
   FEEDBACK_MAILTO: 'mailto:support@purpledirective.com?subject=Quell%20feedback',
   // Plain link, same on every browser/store. No nag, no install-time prompt —
   // just a footer link a user can choose to follow.
-  SPONSOR_URL: 'https://github.com/sponsors/PurpleDirective',
+  SPONSOR_URL: 'https://github.com/sponsors/TyrianMurex',
 });

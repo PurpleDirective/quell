@@ -125,7 +125,7 @@ and app banners — in the user's browser.
 - No new permission is needed for the breakage report: it is a plain CORS
   request from the popup to purpledirective.com.
 
-**Data usage — the dashboard's answers for 0.6.0 (owner decision 2026-09-25):**
+**Data usage — the dashboard's answers for 0.6.0:**
 
 *What user data do you plan to collect from users now or in the future?*
 Tick **Web history** — and nothing else.
