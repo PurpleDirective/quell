@@ -18,7 +18,7 @@ globalThis.QUELL_CONFIG = Object.freeze({
   // Edge installs the Chrome package from the Microsoft Edge Add-ons site. Not
   // listed yet: null hides the link on Edge, same as Opera. Fill in on publish.
   RATE_URL_EDGE: null,
-  FEEDBACK_MAILTO: 'mailto:support@purpledirective.com?subject=Quell%20feedback',
+  FEEDBACK_URL: 'https://purpledirective.com/contact?topic=quell',
   // Plain link, same on every browser/store. No nag, no install-time prompt —
   // just a footer link a user can choose to follow.
   SPONSOR_URL: 'https://github.com/sponsors/TyrianMurex',
