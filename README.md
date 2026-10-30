@@ -284,4 +284,5 @@ MIT — see [LICENSE](LICENSE).
 ## Support
 
 Quell stays free. If it's useful, you can support the work that keeps its rules current at
-[github.com/sponsors/TyrianMurex](https://github.com/sponsors/TyrianMurex).
+[github.com/sponsors/TyrianMurex](https://github.com/sponsors/TyrianMurex), or chip in by card
+without a GitHub account through [Stripe](https://donate.stripe.com/8x29AT6aX4FP3ay9sp3gk0G). Not tax-deductible.

@@ -1,4 +1,6 @@
-# Quell — store listings (v0.7.1)
+# Quell — store listings (v0.7.2)
+
+Changed in 0.7.2: the popup and welcome page now show a card donation link next to GitHub Sponsors.
 
 Build with `pipeline/package.sh`:
 
