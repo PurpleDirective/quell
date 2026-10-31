@@ -22,4 +22,7 @@ globalThis.QUELL_CONFIG = Object.freeze({
   // Plain link, same on every browser/store. No nag, no install-time prompt —
   // just a footer link a user can choose to follow.
   SPONSOR_URL: 'https://github.com/sponsors/TyrianMurex',
+  // Stripe payment link, shown next to the Sponsors link for people without a GitHub
+  // account. Opens in a tab like any link; Quell makes no request to it.
+  DONATE_URL: 'https://donate.stripe.com/8x29AT6aX4FP3ay9sp3gk0G',
 });

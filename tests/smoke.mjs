@@ -990,7 +990,9 @@ console.log('Popup:');
     .includes('chromewebstore.google.com/detail/hipifmmjmbnkhfajkbmcjkajlfjiehho')),
     'Rate Quell links the real store listing');
   ok(await page.evaluate(() => document.getElementById('sponsor').href) === 'https://github.com/sponsors/TyrianMurex',
-    'Support Quell links the GitHub Sponsors profile');
+    'Sponsor on GitHub links the GitHub Sponsors profile');
+  ok(await page.evaluate(() => document.getElementById('donate').href) === 'https://donate.stripe.com/8x29AT6aX4FP3ay9sp3gk0G',
+    'Donate by card links the Stripe donate page');
   ok(await page.evaluate(() => document.getElementById('privacy').href) === 'https://purpledirective.com/quell/privacy/',
     'Privacy link points at the published policy');
   ok(await page.evaluate(() => !document.getElementById('bChips')),
@@ -2701,6 +2703,8 @@ console.log('Welcome page:');
     'links the privacy policy');
   ok(await pg.evaluate(() => document.getElementById('sponsor').href) === 'https://github.com/sponsors/TyrianMurex',
     'links the GitHub Sponsors profile');
+  ok(await pg.evaluate(() => document.getElementById('donate').href) === 'https://donate.stripe.com/8x29AT6aX4FP3ay9sp3gk0G',
+    'links the Stripe donate page');
   ok(await pg.evaluate(() => document.getElementById('accessNotice').hidden) === true,
     'no access prompt on Chromium, where Google/Bing access is granted at install');
   ok(!/\bcompliant\b/i.test(text), 'no "compliant" claim');

@@ -262,6 +262,7 @@ function renderLinks() {
   const url = IS_FIREFOX ? CFG.RATE_URL_FIREFOX : B.opera ? CFG.RATE_URL_OPERA : B.edge ? CFG.RATE_URL_EDGE : CFG.RATE_URL_CHROME;
   if (url) rate.href = url; else rate.hidden = true;
   $('sponsor').href = CFG.SPONSOR_URL || 'https://github.com/sponsors/TyrianMurex';
+  $('donate').href = CFG.DONATE_URL || 'https://donate.stripe.com/8x29AT6aX4FP3ay9sp3gk0G';
   $('feedback').href = CFG.FEEDBACK_URL || 'https://purpledirective.com/contact?topic=quell';
   $('privacy').href = CFG.PRIVACY_URL || 'https://purpledirective.com/quell/privacy/';
 }
