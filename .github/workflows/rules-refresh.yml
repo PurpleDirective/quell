@@ -20,21 +20,23 @@ on:
     - cron: '0 6 * * 1' # Mondays 06:00 UTC
   workflow_dispatch:
 
-# Minimal token scope: contents write (to push the refresh branch) and
-# pull-requests write (to open the PR). Nothing else is granted.
+# Minimal token scope: read by default; the refresh job alone gets contents write
+# (to push the refresh branch) and pull-requests write (to open the PR).
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   refresh:
+    permissions:
+      contents: write
+      pull-requests: write
     # GitHub-hosted runner. The PR is opened with a stdlib python3 call to the
     # REST endpoint `gh pr create` uses, with the push credentials
     # actions/checkout leaves in the workspace.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Regenerate rules
         run: python3 pipeline/build_rules.py
