@@ -114,10 +114,15 @@
     for (const a of body.querySelectorAll('a[href], img')) { if (!layer.contains(a) && ++links >= 15) return true; }
     return false;
   };
-  // A visible password field outside the candidate: the page is a login page.
+  // A visible password field in the body of the page, outside the candidate:
+  // the page is a login page. Not one in the header or along the top edge: a
+  // login form in the site's own header (Facebook's) is navigation, and the
+  // prompt over the page is still a prompt.
   const loginFormOutside = (layer) => {
     for (const i of document.querySelectorAll('input[type="password" i]')) {
-      if (!layer.contains(i) && !i.closest('[' + MARK + ']') && shown(i)) return true;
+      if (layer.contains(i) || i.closest('[' + MARK + ']') || i.closest(NAV_SEL)) continue;
+      const r = shown(i);
+      if (r && r.top > 120) return true;
     }
     return false;
   };

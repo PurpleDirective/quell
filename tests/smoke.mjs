@@ -3825,6 +3825,11 @@ console.log('Sign-up and log-in prompts:');
   ok(await g.evaluate(() => QuellSettings.hidden.list().items.some((i) => i.label === 'Sign-up prompt')), 'prompt: listed as "Sign-up prompt" for the popup status line');
   await g.close();
 
+  // A login form in the site's own header (Facebook) does not make the page a login page.
+  const hl = await open('softwall.test', 'signup-article.html', { popupsEnabled: true }, '/?hdrlogin');
+  ok(!(await shown(hl, '#wall')) && await shown(hl, '#hdr-pw'), 'prompt: a login form in the site\'s header does not stop the prompt over the page from closing (and the header form stays)');
+  await hl.close();
+
   // Bottom bar (X-style "Don't miss what's happening").
   const bar = await open('softwall.test', 'signup-article.html', { popupsEnabled: true }, '/?nodialog&bar');
   ok(!(await shown(bar, '#bottom-bar')), 'prompt: a fixed bottom sign-up bar is closed too');
