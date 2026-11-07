@@ -282,7 +282,7 @@
     }
     unlock();
     if (n > 0) {
-      try { chrome.runtime.sendMessage({ type: 'blocked', count: n }); } catch (_) { /* sw asleep */ }
+      try { chrome.runtime.sendMessage({ type: 'blocked', count: n, feature: 'popups' }); } catch (_) { /* sw asleep */ }
     }
   };
 

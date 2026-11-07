@@ -73,7 +73,7 @@ window.Quell = window.Quell || {
   // Tell the background how many AI elements we just removed (for the badge).
   report(n) {
     if (n > 0) {
-      try { chrome.runtime.sendMessage({ type: 'blocked', count: n }); } catch (_) { /* sw asleep */ }
+      try { chrome.runtime.sendMessage({ type: 'blocked', count: n, feature: 'ai' }); } catch (_) { /* sw asleep */ }
     }
   },
 };

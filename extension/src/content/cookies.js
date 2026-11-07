@@ -468,7 +468,7 @@
     if (rejectOn) tryReject();
     unlock();
     if (n > 0) {
-      try { chrome.runtime.sendMessage({ type: 'blocked', count: n }); } catch (_) { /* sw asleep */ }
+      try { chrome.runtime.sendMessage({ type: 'blocked', count: n, feature: 'cookies' }); } catch (_) { /* sw asleep */ }
     }
   };
 

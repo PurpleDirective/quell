@@ -26,6 +26,10 @@ const BG = readFileSync(process.env.QUELL_BG || path.join(EXT, 'src/background.j
 // Loaded first, the way Firefox's background.scripts and Chrome's importScripts do.
 const SETTINGS = readFileSync(path.join(EXT, 'src/shared/settings.js'), 'utf8');
 
+// config.js, browser.js and analytics.js, loaded the way Firefox's background.scripts do.
+const ANALYTICS_DEPS = ['config', 'browser', 'analytics']
+  .map((f) => readFileSync(path.join(EXT, 'src/shared', f + '.js'), 'utf8')).join('\n;');
+
 let passed = 0, failed = 0;
 const ok = (cond, name) => {
   if (cond) { passed++; console.log(`  ✓ ${name}`); }
@@ -161,6 +165,9 @@ function makeChrome({ granted = false, storage = {}, tabs = [], sync = null } = 
       onStartup: event(),
       onMessage: event(),
       getURL: (p) => 'chrome-extension://test/' + p,
+      getManifest: () => ({ version: '0.7.3' }),
+      setUninstallURL: async (u) => { rec('runtime.setUninstallURL', u); },
+      id: 'test',
     },
   };
   return { chrome, calls, registered, local, sync: syncData, state };
@@ -173,10 +180,11 @@ function boot(opts) {
   const sandbox = {
     chrome: h.chrome,
     fetch: async (u) => ({ json: async () => (opts?.fetchJson ? opts.fetchJson(u) : {}) }),
-    URL, setTimeout, clearTimeout, console,
+    URL, URLSearchParams, crypto: globalThis.crypto, setTimeout, clearTimeout, console,
   };
   vm.createContext(sandbox);
   vm.runInContext(SETTINGS, sandbox, { filename: 'settings.js' });
+  vm.runInContext(ANALYTICS_DEPS, sandbox, { filename: 'analytics-deps' });
   vm.runInContext(BG, sandbox, { filename: 'background.js' });
   h.ENGINE_ORIGINS = ENGINE_ORIGINS;
   h.ENGINE_MATCHES = ENGINE_MATCHES;
@@ -866,6 +874,47 @@ console.log('Background — pop-ups layer (0.6.0, off by default):');
     `the host slice matches www.news.test → news.test, never another host's rules, never a bare TLD (${JSON.stringify(r.site)})`);
   const r2 = await ask(['bogus'], 'https://news.test/');
   ok(r2.generic.length === 0 && r2.site.length === 0, 'an unknown category name serves nothing');
+}
+
+// --- Usage counts: the worker's side (consent gate, UI events, uninstall URL) --
+console.log('Background — usage counts:');
+{
+  const ui = { id: 'test' };           // a message from Quell's own page (no tab)
+  const counted = (h) => { const q = h.local.quellAnalytics; return q ? Object.values(q.days)[0] : null; };
+
+  let h = boot({ storage: {} });       // analytics defaults to 'unset'
+  await h.chrome.runtime.onMessage.fire({ type: 'quell:track', name: 'popup_open' }, ui);
+  await h.chrome.runtime.onMessage.fire({ type: 'blocked', count: 3, feature: 'ai' }, { tab: { id: 1 } });
+  await settle(); await settle();
+  ok(!('quellAnalytics' in h.local), 'unset: a UI event and a hide count record nothing');
+
+  h = boot({ storage: { analytics: 'on' } });
+  await h.chrome.runtime.onMessage.fire({ type: 'quell:track', name: 'popup_open' }, ui);
+  await h.chrome.runtime.onMessage.fire({ type: 'quell:track', name: 'undo' }, { id: 'someone-else' });
+  await h.chrome.runtime.onMessage.fire({ type: 'quell:track', name: 'peek' }, { id: 'test', tab: { id: 4 } });
+  await h.chrome.runtime.onMessage.fire({ type: 'blocked', count: 3, feature: 'cookies' }, { tab: { id: 1 } });
+  await h.chrome.runtime.onMessage.fire({ type: 'blocked', count: 2 }, { tab: { id: 1 } });
+  await settle(); await settle();
+  const b = counted(h);
+  ok(b && b.events.popup_open === 1 && !b.events.undo && !b.events.peek, 'on: Quell\'s own page is counted; another sender and a tab sender are not');
+  ok(b && b.hides.cookies === 3 && b.hides.ai === 2, 'on: hides are counted per feature (no feature = ai)');
+
+  // Turning it off deletes the queue immediately.
+  h.local.analytics = 'off';
+  await h.chrome.storage.onChanged.fire({ analytics: { oldValue: 'on', newValue: 'off' } }, 'local');
+  ok(!('quellAnalytics' in h.local), 'on -> off clears the queued counts at once');
+  const urls = h.of('runtime.setUninstallURL');
+  ok(urls.length && !/[?&]i=/.test(urls[urls.length - 1]), 'and the uninstall link loses the install id');
+
+  h = boot({ storage: {} });
+  await h.chrome.runtime.onStartup.fire();
+  const u0 = h.of('runtime.setUninstallURL');
+  ok(u0.length === 1 && u0[0] === 'https://purpledirective.com/quell/goodbye?v=0.7.3&b=chrome', `startup sets the uninstall URL with version + browser only (${u0[0]})`);
+  h = boot({ storage: { analytics: 'on' } });
+  await h.chrome.runtime.onStartup.fire();
+  const u1 = h.of('runtime.setUninstallURL')[0];
+  ok(/&i=[0-9a-f-]{36}$/.test(u1), 'with usage counts on, the install id is in the uninstall URL');
+  ok(!JSON.stringify(h.chrome.runtime).includes('alarms') && !('alarms' in h.chrome), 'no alarms permission or API is needed');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

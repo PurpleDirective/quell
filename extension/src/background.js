@@ -1,6 +1,7 @@
 // Quell — background (Chrome/Edge: service worker; Firefox: event page).
-// No network calls, no tracking. The only thing Quell ever sends anywhere is a
-// breakage report the user clicks, and that is sent from the popup, not here.
+// Quell sends two things, both optional: a breakage report the user clicks
+// (sent from the popup), and — only if the user ticked the first-run box —
+// anonymous daily usage counts (src/shared/analytics.js, sent from here).
 // Settings: storage.sync (the user's choices, synced by the browser to their
 // own account) + storage.local (grant-bound switches, counter) — see
 // src/shared/settings.js.
@@ -9,6 +10,11 @@
 // settings.js first in background.scripts, so it is already defined there.
 if (typeof QuellSettings === 'undefined' && typeof importScripts === 'function') {
   importScripts('/src/shared/settings.js');
+}
+// Usage counts (consent-gated; see analytics.js). Firefox lists these in
+// background.scripts, Chrome loads them here.
+if (typeof QuellAnalytics === 'undefined' && typeof importScripts === 'function') {
+  importScripts('/src/shared/config.js', '/src/shared/browser.js', '/src/shared/analytics.js');
 }
 
 // Only the keys this worker reads; everything else is the content scripts'.
@@ -324,6 +330,20 @@ async function syncRejectRules(on) {
   }).catch(() => {});
 }
 
+// Usage counts are optional and consent-gated; every call is a no-op until the
+// user has answered 'on' (analytics.js checks at the moment of use).
+const qa = () => (typeof QuellAnalytics !== 'undefined' ? QuellAnalytics : null);
+
+// The page the browser opens when Quell is removed. Carries version + browser;
+// the install id too, but only while usage counts are on.
+async function syncUninstallUrl() {
+  try {
+    const A = qa();
+    const url = A ? await A.uninstallUrl() : '';
+    if (url) await chrome.runtime.setUninstallURL(url);
+  } catch (_) { /* unsupported or URL rejected: no survey, nothing else changes */ }
+}
+
 // Reconcile feature state on install/startup. Defaults are deliberately NOT
 // written into storage here: every reader merges DEFAULTS at read time via
 // get(DEFAULTS), so seeding added nothing — and its read-then-write raced
@@ -341,6 +361,9 @@ async function init() {
   await syncAllowRules(current.cookieAllowlist);
   await syncRejectRules(current.enabled && current.cookieEnabled && current.cookieReject);
   await releaseAllSitesIfUnused();
+  await syncUninstallUrl();
+  const A = qa();
+  if (A) { A.touch(); A.maybeFlush(); }
 }
 
 // An update leaves the previous version's content scripts in every open tab,
@@ -382,6 +405,14 @@ chrome.runtime.onStartup.addListener(init);
 // them, and where they stay if a browser has no sync area).
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area !== 'local' && area !== 'sync') return;
+  // Usage-count consent changed (local only). Anything but 'on' ends it NOW:
+  // queued counts and the install id are deleted. Turning it on starts fresh.
+  if (area === 'local' && changes.analytics) {
+    const A = qa();
+    if (A && changes.analytics.newValue !== 'on') await A.stop();
+    await syncUninstallUrl();
+    if (A && changes.analytics.newValue === 'on') A.touch();
+  }
   const changed = (k) => k in changes && (QuellSettings.home(k) === 'sync' || area === 'local');
   if (changed('enginesEnabled')) {
     await applyEngineScripts();
@@ -473,6 +504,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === 'blocked' && sender.tab && Number.isInteger(msg.count) && msg.count > 0) {
     const count = Math.min(msg.count, 500);
     const tabId = sender.tab.id;
+    const A = qa();
+    // Which feature hid them: 'ai' (search engines; the default), 'cookies' or 'popups'.
+    if (A) A.hides(typeof msg.feature === 'string' ? msg.feature : 'ai', count);
     queue = queue.then(async () => {
       const key = 'tab:' + tabId;
       const cur = (await chrome.storage.session.get({ [key]: 0 }))[key] + count;
@@ -481,6 +515,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const { totalBlocked } = await chrome.storage.local.get({ totalBlocked: 0 });
       await chrome.storage.local.set({ totalBlocked: totalBlocked + count });
     }).catch(() => {});
+    return;
+  }
+
+  // A UI event counted by the popup / welcome page (popup_open, peek, undo, ...).
+  // Only Quell's own pages may send it, and only a fixed list of names counts;
+  // analytics.js drops everything unless the user said yes.
+  if (msg?.type === 'quell:track' && sender.id === chrome.runtime.id && !sender.tab) {
+    const A = qa();
+    if (A && typeof msg.name === 'string') A.event(msg.name);
     return;
   }
 
@@ -526,3 +569,17 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   chrome.storage.session.remove('tab:' + tabId);
 });
+
+// Errors: message + source file only, URL-like text stripped (analytics.js).
+// Counted only with consent; the page's own errors never reach this worker.
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('error', (e) => {
+    const A = qa();
+    if (A) A.error(e && e.message, e && e.filename);
+  });
+  globalThis.addEventListener('unhandledrejection', (e) => {
+    const A = qa();
+    const r = e && e.reason;
+    if (A) A.error(r && r.message ? r.message : r, r && r.stack ? (String(r.stack).match(/([\w.-]+\.js)/) || [])[1] : '');
+  });
+}

@@ -7,6 +7,12 @@
 // (text/plain body), so no host permission is needed to make it.
 globalThis.QUELL_CONFIG = Object.freeze({
   REPORT_ENDPOINT: 'https://purpledirective.com/api/quell/report',
+  // Anonymous usage counts, only after the user ticks the first-run box
+  // (src/shared/analytics.js). Same Worker as the report endpoint.
+  EVENTS_ENDPOINT: 'https://purpledirective.com/api/quell/events',
+  // Opened by the browser when Quell is removed. ?v=<version>&b=<browser>, plus
+  // &i=<install id> only while usage counts are on.
+  UNINSTALL_URL: 'https://purpledirective.com/quell/goodbye',
   PRIVACY_URL: 'https://purpledirective.com/quell/privacy/',
   // Where "Rate Quell" points, per store. The Opera listing is not public yet
   // (in review): null hides the link on that browser rather than pointing at

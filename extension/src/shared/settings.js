@@ -59,6 +59,9 @@
     cookieEnabled: false,   // grant-bound: <all_urls>
     popupsEnabled: false,   // grant-bound: <all_urls>; OFF by default
     totalBlocked: 0,
+    // Usage-counts consent: 'unset' (nobody has answered; nothing is sent) |
+    // 'on' | 'off'. Local, never synced: each install answers for itself.
+    analytics: 'unset',
   };
 
   // Keys that existed in 0.5.x and are gone. hideBingChips was the separate
