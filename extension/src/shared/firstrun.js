@@ -135,7 +135,7 @@
         return;
       }
       track('firstrun_turn_on');
-      await finish({ cookieEnabled: true, popupsEnabled: true });
+      await finish({ cookieEnabled: true, popupsEnabled: true, aiWebAccess: true });
     });
     q('skip').addEventListener('click', async () => { track('firstrun_skip'); await finish({}); });
     q('done').addEventListener('click', async () => { track('firstrun_done'); await finish({}); });

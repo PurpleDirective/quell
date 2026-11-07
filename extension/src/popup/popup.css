@@ -57,7 +57,7 @@ main { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 
 .settings { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 16px 0; }
 
 /* ---- hero ---- */
-.hero { padding: 16px 0 16px; text-align: center; display: flex; flex-direction: column; align-items: center; }
+.hero { padding: 12px 0 12px; text-align: center; display: flex; flex-direction: column; align-items: center; }
 .moon { position: relative; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; color: var(--accent); cursor: pointer; }
 .moon input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 2; border-radius: 50%; }
 .moon:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 6px; }
@@ -109,7 +109,7 @@ main { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 
 .items { padding: 0 16px; }
 .items ul { list-style: none; margin: 0; padding: 0; }
 .item + .item { border-top: 1px solid var(--line); }
-.line { display: flex; align-items: center; gap: 12px; min-height: 48px; }
+.line { display: flex; align-items: center; gap: 12px; min-height: 44px; }
 .ii { width: 16px; height: 16px; display: grid; place-items: center; flex: none; color: var(--accent); }
 .il { flex: 1; display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .il b { font-size: 13px; font-weight: 600; }
@@ -138,7 +138,7 @@ main { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 
 .feat { padding: 0 8px; }
 .frow { display: flex; align-items: center; }
 .frow + .frow, .frow + .opts + .frow { border-top: 1px solid var(--line); }
-.rs { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0 8px; min-height: 48px; border-radius: 8px; cursor: pointer; }
+.rs { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0 8px; min-height: 42px; border-radius: 8px; cursor: pointer; }
 .rs:hover { background: var(--hover); }
 .rs:has(.rsin:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
 .rsin { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }

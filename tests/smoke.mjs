@@ -300,9 +300,12 @@ const YAHOO_FIXTURE = `<!doctype html><html><body>
 
 // Playwright's bundled Chromium (NOT stable Chrome — it dropped --load-extension).
 async function getContext() {
-  for (const headless of [true, false]) {
+  // QUELL_HEADLESS_ONLY=1: never open a visible window. New headless (channel 'chromium')
+  // loads extensions; the headed pass below is only a fallback for machines without it.
+  for (const mode of process.env.QUELL_HEADLESS_ONLY ? ['new'] : ['new', 'headed']) {
+    const headless = mode === 'new';
     const c = await chromium.launchPersistentContext('', {
-      headless,
+      headless, ...(headless ? { channel: 'chromium' } : {}),
       args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
     }).catch(() => null);
     if (!c) continue;
@@ -3637,7 +3640,7 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
     await p.click('#pauseBtn');
     await p.waitForTimeout(500);
     const rec = (await sw.evaluate(() => QuellSettings.get({ sitePauses: {} }))).sitePauses['www.google.com'];
-    ok(rec && rec.until > Date.now() + 3500e3 && rec.until < Date.now() + 3700e3 && rec.added.join() === 'aiAllowlist', `1 hour is recorded as an expiry and what the pause added (${JSON.stringify(rec)})`);
+    ok(rec && rec.until > Date.now() + 3500e3 && rec.until < Date.now() + 3700e3 && rec.added.join() === 'aiAllowlist,aiWebAllowlist', `1 hour is recorded as an expiry and what the pause added (${JSON.stringify(rec)})`);
     await p.close();
     await sw.evaluate((r) => QuellSettings.set(r), reset);
     // Resume takes back only what the pause added: an allow the user made earlier stays.

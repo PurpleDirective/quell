@@ -1,6 +1,6 @@
 # Quell Privacy Policy
 
-Version 3.1.0 · Effective November 6, 2026
+Version 3.2.0 · Effective with Quell 0.7.4
 
 This policy explains how Purple Directive ("we", "us") collects, uses and shares information when you use Quell and its related websites, communications and services (the "Services"). The information we collect depends on how you use the Services and on the choices you make.
 
@@ -27,6 +27,14 @@ When you first open Quell, it asks whether you will let it send anonymous usage 
 **Turning it off.** You can turn usage counts off at any time in Quell's settings. Quell then stops sending at once and deletes the queued counts and the install identifier from your device. Removing Quell stops everything.
 
 **The uninstall page.** When you remove Quell, your browser opens a short page on purpledirective.com asking why. The address carries the Quell version and your browser. If usage counts were on, it also carries the install identifier, so that your answer can be matched to those counts; if they were off, it carries no identifier. Answering is optional. You can pick a reason, add up to 500 characters of text, and give an email address if you would like a reply. We store the reason, the text, the email address if you gave one, the version, the browser, the identifier if it was in the address, and the date. We do not store your IP address or browser details. We delete answers after two years, and sooner if you ask us to at support@purpledirective.com.
+
+## AI on other websites
+
+Quell can hide AI buttons, panels and chat assistants on the websites you visit, and stop the scripts of some AI chat, support-chat and session-recording services from loading. It does this on your device, from rules that ship inside the extension. Quell sends nothing to us when it does, and it does not record which sites it acted on or what it hid.
+
+The part that hides buttons and panels on pages runs on every site, so it needs your browser's access to all sites. Quell asks once, on your click, and gives the access back when nothing uses it. Blocking the scripts of the AI chat services needs no site access. You can pause all of it for a site from Quell's popup, and switch each part off: AI buttons and panels, AI chat assistants, support chats that use AI, and AI session recording. The last two are off until you turn them on, because blocking a support chat can remove a site's own help chat.
+
+What this does not do. AI crawlers and AI features that run on a website's servers are not affected, and no browser extension can stop them. AI built into the browser itself is not affected. Features that appear only when you are signed in to a site may not be covered, because Quell's rules are written from the logged-out pages. Quell hides what you see and blocks what loads in your browser; it does not delete anything an AI service already holds.
 
 ## Information we collect
 

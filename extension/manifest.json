@@ -25,6 +25,7 @@
   "permissions": [
     "storage",
     "declarativeNetRequest",
+    "declarativeNetRequestFeedback",
     "scripting"
   ],
   "optional_host_permissions": [
@@ -46,6 +47,21 @@
         "id": "cookie_cmp_easylist",
         "enabled": false,
         "path": "rules/cookie-cmp-easylist.json"
+      },
+      {
+        "id": "ai_web_chat",
+        "enabled": false,
+        "path": "rules/ai-web-chat.json"
+      },
+      {
+        "id": "ai_web_support",
+        "enabled": false,
+        "path": "rules/ai-web-support.json"
+      },
+      {
+        "id": "ai_web_replay",
+        "enabled": false,
+        "path": "rules/ai-web-replay.json"
       }
     ]
   },

@@ -34,6 +34,8 @@ const DEFAULTS = {
   cookieReject: false,  // "Say reject all for me"
   popupsEnabled: false,
   totalBlocked: 0,
+  aiWebOn: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebReplay: false,
+  aiWebAllowlist: [], aiWebAccess: false,
 };
 const readSettings = (d = DEFAULTS) => QuellSettings.get(d);
 
@@ -46,6 +48,12 @@ const POPUP_SCRIPT_ID = 'quell-popups';
 const COOKIE_FILES = ['src/shared/settings.js', 'src/content/cookies.js'];
 const ENGINE_FILES = ['src/shared/settings.js', 'src/content/common.js', 'src/content/engines.js'];
 const POPUP_FILES = ['src/shared/settings.js', 'src/content/popups.js'];
+// AI on websites (0.7.4): three network rulesets (no site access needed) and
+// one cosmetic content script (needs the all-sites grant, like Cookie banners).
+const AIWEB_RULESETS = { aiWebChat: 'ai_web_chat', aiWebSupport: 'ai_web_support', aiWebReplay: 'ai_web_replay' };
+const AIWEB_SCRIPT_ID = 'quell-aiweb';
+const AIWEB_FILES = ['src/shared/settings.js', 'src/content/aiweb.js'];
+const AIWEB_ALLOW_BASE = 200000;
 
 // DuckDuckGo / Brave / Yahoo are OPTIONAL hosts, requested from the popup and
 // registered here once granted. They are deliberately not in the manifest's
@@ -216,13 +224,13 @@ chrome.permissions.onRemoved.addListener(async () => {
 // and only the popup, on a click, can ask for those back.
 async function releaseAllSitesIfUnused() {
   const s = await readSettings();
-  if (s.cookieEnabled || s.popupsEnabled || s.enginesEnabled) return;
+  if (s.cookieEnabled || s.popupsEnabled || s.enginesEnabled || s.aiWebAccess) return;
   const held = await chrome.permissions.contains({ origins: ['<all_urls>'] }).catch(() => false);
   if (!held) return;
   // Re-read: a popup click can grant access for a feature switched on in the
   // moment since the first read (browser start). Never take it back from that.
   const now = await readSettings();
-  if (now.cookieEnabled || now.popupsEnabled || now.enginesEnabled) return;
+  if (now.cookieEnabled || now.popupsEnabled || now.enginesEnabled || now.aiWebAccess) return;
   await chrome.permissions.remove({ origins: ['<all_urls>'] }).catch(() => false);
 }
 
@@ -282,12 +290,79 @@ async function syncPopupLayerInOpenTabs() {
   }
 }
 
+// ---- AI on websites -------------------------------------------------------
+// The group master and the switches gate everything; the network rulesets
+// need no site access, the page-level hiding needs the all-sites grant the
+// user asked for (aiWebAccess) and the browser still holds.
+const aiWebCosmeticOn = (s, hasHosts) => !!(s.enabled && s.aiWebOn && s.aiWebAccess && hasHosts
+  && (s.aiWebButtons || s.aiWebChat || s.aiWebSupport));
+async function applyAiWeb() {
+  const s = await readSettings();
+  const enableRulesetIds = [], disableRulesetIds = [];
+  for (const [key, id] of Object.entries(AIWEB_RULESETS)) {
+    (s.enabled && s.aiWebOn && s[key] ? enableRulesetIds : disableRulesetIds).push(id);
+  }
+  try { await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds, disableRulesetIds }); } catch (_) { /* already so */ }
+  const hasHosts = await chrome.permissions.contains({ origins: ['<all_urls>'] }).catch(() => false);
+  const want = aiWebCosmeticOn(s, hasHosts);
+  const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [AIWEB_SCRIPT_ID] }).catch(() => []);
+  if (want && existing.length === 0) {
+    await chrome.scripting.registerContentScripts([{
+      id: AIWEB_SCRIPT_ID, matches: ['<all_urls>'], js: AIWEB_FILES, runAt: 'document_start', allFrames: false,
+    }]).catch(() => {});
+  } else if (!want && existing.length > 0) {
+    await chrome.scripting.unregisterContentScripts({ ids: [AIWEB_SCRIPT_ID] }).catch(() => {});
+  }
+  if (want) {
+    const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] }).catch(() => []);
+    for (const tab of tabs) {
+      if (tab.id) chrome.scripting.executeScript({ target: { tabId: tab.id }, files: AIWEB_FILES }).catch(() => {});
+    }
+  }
+}
+// The per-site pause covers the network rules too: one allow rule per paused
+// host, limited to the vendors' own hosts (the cookie allow rules above are a
+// different set and are left alone).
+let aiWebDomainsPromise = null;
+function aiWebDomains() {
+  aiWebDomainsPromise ??= Promise.all(Object.values(AIWEB_RULESETS).map((id) =>
+    fetch(chrome.runtime.getURL('rules/' + id.replace('ai_web_', 'ai-web-') + '.json')).then((r) => r.json()).catch(() => [])))
+    .then((sets) => [...new Set(sets.flat().flatMap((r) => (r.condition && r.condition.requestDomains) || []))]);
+  return aiWebDomainsPromise;
+}
+async function syncAiWebAllow(list) {
+  const existing = await chrome.declarativeNetRequest.getDynamicRules().catch(() => []);
+  const removeRuleIds = existing.map((r) => r.id).filter((id) => id >= AIWEB_ALLOW_BASE);
+  const domains = (list || []).length ? await aiWebDomains() : [];
+  const addRules = domains.length ? (list || []).slice(0, 500).map((host, i) => ({
+    id: AIWEB_ALLOW_BASE + i, priority: 2, action: { type: 'allow' },
+    condition: { initiatorDomains: [host], requestDomains: domains,
+      resourceTypes: ['script', 'xmlhttprequest', 'sub_frame', 'stylesheet', 'image', 'media', 'ping', 'websocket'] },
+  })) : [];
+  await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules }).catch(() => {});
+}
+let aiWebRulesPromise = null;
+function getAiWebRules() {
+  aiWebRulesPromise ??= fetch(chrome.runtime.getURL('rules/ai-web-cosmetic.json'))
+    .then((r) => r.json()).then((j) => j.rules || []).catch(() => []);
+  return aiWebRulesPromise;
+}
+// This host's rules, for the groups that are on. Matching is on the hostname
+// (and its subdomains), never on page content.
+async function aiWebRulesFor(host) {
+  const s = await readSettings();
+  const groups = { buttons: s.aiWebButtons, chat: s.aiWebChat, support: s.aiWebSupport };
+  return (await getAiWebRules()).filter((r) => groups[r.g]
+    && r.h.some((h) => h === '*' || host === h || host.endsWith('.' + h)))
+    .map((r) => ({ sel: r.sel, what: r.what }));
+}
+
 // The network layer must also respect the per-site pause: one dNR "allow" rule
 // per allowlisted host exempts requests that site initiates from the static
 // block rules (higher priority wins).
 async function syncAllowRules(allowlist) {
   const existing = await chrome.declarativeNetRequest.getDynamicRules().catch(() => []);
-  const removeRuleIds = existing.map((r) => r.id).filter((id) => id >= ALLOW_RULE_BASE);
+  const removeRuleIds = existing.map((r) => r.id).filter((id) => id >= ALLOW_RULE_BASE && id < AIWEB_ALLOW_BASE);
   const addRules = (allowlist || []).slice(0, 500).map((host, i) => ({
     id: ALLOW_RULE_BASE + i,
     priority: 2,
@@ -358,6 +433,8 @@ async function init() {
   await applyCookieBlocking(current.enabled && current.cookieEnabled);
   await applyEngineScripts();
   await applyPopupLayer(current.enabled && current.popupsEnabled);
+  await applyAiWeb();
+  await syncAiWebAllow(current.aiWebAllowlist);
   await syncAllowRules(current.cookieAllowlist);
   await syncRejectRules(current.enabled && current.cookieEnabled && current.cookieReject);
   await releaseAllSitesIfUnused();
@@ -429,6 +506,8 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
     const s = await readSettings();
     await syncRejectRules(s.enabled && s.cookieEnabled && s.cookieReject);
   }
+  if (['enabled', 'aiWebOn', 'aiWebButtons', 'aiWebChat', 'aiWebSupport', 'aiWebReplay', 'aiWebAccess'].some(changed)) await applyAiWeb();
+  if (changed('aiWebAllowlist')) await syncAiWebAllow((await readSettings()).aiWebAllowlist);
   if (changed('enabled') || changed('popupsEnabled')) {
     const s = await readSettings();
     const on = s.enabled && s.popupsEnabled;
@@ -537,6 +616,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     try { host = new URL(sender.url).hostname; } catch (_) { /* opaque origin */ }
     selectorsForHost(host).then((selectors) => sendResponse({ selectors }));
     return true; // async response
+  }
+
+  // Page-level hide rules for this host (AI on websites). Host comes from sender.url.
+  if (msg?.type === 'aiWebRules' && sender.url) {
+    let host = '';
+    try { host = new URL(sender.url).hostname; } catch (_) { /* opaque origin */ }
+    aiWebRulesFor(host).then((rules) => sendResponse({ rules })).catch(() => sendResponse({ rules: [] }));
+    return true;
   }
 
   if (msg?.type === 'popupRules' && sender.url) {

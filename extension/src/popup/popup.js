@@ -169,13 +169,13 @@ const iconFor = (it) => it.kind === 'cookie' ? ICONS.cookie : it.kind === 'popup
 
 let tab = { items: [], active: [], reachable: false, session: 0 };
 let itemsExpanded = false;
-const expanded = { search: false, cookie: false, popup: false };
+const expanded = { search: false, cookie: false, popup: false, aiweb: false };
 const SHOWN_ITEMS = 3;
 
 // What the tab says Quell hid on it (a kind and a short label per item: the
 // page's text is never asked for here), plus the toolbar count for the tab.
 async function loadTab() {
-  const out = { items: [], active: [], reachable: false, session: 0 };
+  const out = { items: [], active: [], reachable: false, session: 0, netBlocked: 0 };
   if (PAGE_VIEW || tabId == null || !hasChrome) return out;
   if (chrome.storage?.session) {
     const key = 'tab:' + tabId;
@@ -187,16 +187,31 @@ async function loadTab() {
       if (r && Array.isArray(r.items)) { out.items = r.items; out.active = r.active || []; out.reachable = true; }
     } catch (_) { /* nothing of Quell's in that tab */ }
   }
+  out.netBlocked = await netBlockedFor(tabId);
   return out;
 }
+// How many AI scripts the network rules stopped in this tab. The browser's own
+// matched-rule record (declarativeNetRequest.getMatchedRules, which needs the
+// declarativeNetRequestFeedback permission) is the only honest source: it
+// holds the last few minutes, and the browser limits how often it can be read,
+// so a failure just means no count is shown.
+async function netBlockedFor(id) {
+  try {
+    const dnr = chrome.declarativeNetRequest;
+    if (!dnr || typeof dnr.getMatchedRules !== 'function') return 0;
+    const r = await dnr.getMatchedRules({ tabId: id });
+    return (r.rulesMatchedInfo || []).filter((m) => /^ai_web_/.test(m.rule && m.rule.rulesetId)).length;
+  } catch (_) { return 0; }
+}
 
-const AI_KEYS = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist'];
+const AI_KEYS = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist', 'aiWebAllowlist'];
 // The allowlists a pause on this host has to cover: the features that are on.
 function pauseKeys(s) {
   const k = [];
   if (AI_HOST_RE.test(host || '') && s.aiEnabled) k.push('aiAllowlist');
   if (s.cookieEnabled) k.push('cookieAllowlist');
   if (s.popupsEnabled) k.push('popupAllowlist');
+  if (s.aiWebOn) k.push('aiWebAllowlist');
   return k;
 }
 // "Paused" means Pause here was used on this site (it left a record) and every
@@ -215,7 +230,7 @@ function renderHero(s) {
   const app = $('app');
   const paused = !!host && s.enabled && isPaused(s);
   const first = firstRunOn(s);
-  const n = Math.max(tab.items.length, tab.session);
+  const n = Math.max(tab.items.length, tab.session) + (tab.netBlocked || 0);
   const total = Number(s.totalBlocked || 0);
   const state = first ? 'first-run' : paused ? 'paused' : !s.enabled ? 'off' : !host ? 'no-run' : 'normal';
   app.dataset.state = state;
@@ -338,11 +353,26 @@ function rowStatus(kind, s, paused) {
   }
   return `Hid ${mine.length} here`;
 }
+// AI on websites: page-level hides come from the tab's own list; network
+// blocks are counted per tab (declarativeNetRequest.getMatchedRules, see netBlockedFor).
+function aiWebStatus(s, paused) {
+  if (!s.enabled) return 'Quell is off';
+  if (!s.aiWebOn) return 'Off';
+  if (paused) return 'Paused here';
+  const hid = tab.items.filter((i) => i.kind === 'ai-web' && !i.kept).length;
+  const blocked = tab.netBlocked || 0;
+  if (hid || blocked) {
+    return [hid ? `Hid ${hid} here` : '', blocked ? `Blocked ${blocked} AI ${blocked === 1 ? 'script' : 'scripts'}` : ''].filter(Boolean).join(' · ');
+  }
+  if (!s.aiWebAccess && (s.aiWebButtons || s.aiWebChat)) return 'Chat scripts blocked. Allow all sites to hide buttons';
+  return !host || !tab.reachable ? 'On for other pages' : 'Watching. Nothing to hide here';
+}
 function renderRows(s) {
   const paused = !!host && s.enabled && isPaused(s);
   $('gSearchD').textContent = rowStatus('search', s, paused && AI_HOST_RE.test(host) );
   $('cookiesD').textContent = rowStatus('cookie', s, paused);
   $('popupsD').textContent = rowStatus('popup', s, paused);
+  $('aiWebD').textContent = aiWebStatus(s, paused);
 }
 
 async function renderAccess() {
@@ -397,6 +427,13 @@ function renderCookies(s) {
   $('cookieReject').checked = !!s.cookieReject;
   // The reject row only means anything while the cookie layer is on.
   $('rejectRow').hidden = !(s.enabled && s.cookieEnabled);
+}
+
+function renderAiWeb(s) {
+  $('aiWeb').checked = !!s.aiWebOn;
+  setExpander($('aiWebExpand'), $('aiWebBody'), expanded.aiweb, !!s.aiWebOn);
+  for (const k of ['aiWebButtons', 'aiWebChat', 'aiWebSupport', 'aiWebReplay']) $(k).checked = !!s[k];
+  $('aiWebAccessRow').hidden = !!s.aiWebAccess;
 }
 
 function renderPopups(s) {
@@ -460,6 +497,7 @@ async function render() {
   renderSearch(s, engines);
   renderCookies(s);
   renderPopups(s);
+  renderAiWeb(s);
   renderSite(s);
   renderHero(s);
   renderItems(s);
@@ -582,7 +620,7 @@ $('engines').addEventListener('change', async (e) => {
 // the click itself), the engines switch goes off and the user is told why.
 async function releaseAllSitesIfUnused() {
   if (!hasChrome || !chrome.permissions) return;
-  if (current.cookieEnabled || current.popupsEnabled) return; // still in use
+  if (current.cookieEnabled || current.popupsEnabled || current.aiWebAccess) return; // still in use
   const held = await chrome.permissions.contains({ origins: ALL_SITES }).catch(() => false);
   if (!held) return;
   const keepEngines = await enginesOn(current);
@@ -659,6 +697,22 @@ $('grantBase').addEventListener('click', async () => {
   await renderAccess();
 });
 
+// AI on websites: the group master and the four switches are plain settings
+// (the network rules need no access); hiding buttons and panels on pages needs
+// the all-sites grant, asked for here on the click and released with the
+// others when nothing uses it.
+for (const [id, key] of [['aiWeb', 'aiWebOn'], ['aiWebButtons', 'aiWebButtons'], ['aiWebChat', 'aiWebChat'],
+  ['aiWebSupport', 'aiWebSupport'], ['aiWebReplay', 'aiWebReplay']]) {
+  $(id).addEventListener('change', async (e) => { await save({ [key]: e.target.checked }); await render(); });
+}
+$('aiWebGrant').addEventListener('click', async () => {
+  if (!hasChrome || !chrome.permissions) return;
+  if (GRANT_IN_TAB) { openPageView({ grant: 'aiweb' }); return; }
+  const granted = await chrome.permissions.request({ origins: ALL_SITES }).catch(() => false);
+  if (granted) await save({ aiWebAccess: true });
+  await render();
+});
+
 // ---------------------------------------------------- pause, settings, more --
 // Pause here: the features that are on step back on this site, for an hour,
 // until midnight, or until resumed. It is the per-site allowlists the
@@ -703,6 +757,7 @@ function toggler(btn, onFlip) {
 toggler($('searchExpand'), (o) => { expanded.search = o; render(); });
 toggler($('cookieExpand'), (o) => { expanded.cookie = o; render(); });
 toggler($('popupExpand'), (o) => { expanded.popup = o; render(); });
+toggler($('aiWebExpand'), (o) => { expanded.aiweb = o; render(); });
 toggler($('siteMore'), (o) => { $('siteMore').setAttribute('aria-expanded', String(o)); $('siteDetail').hidden = !o; closeMenu(); });
 function closeMenu() { $('siteMenu').hidden = true; $('siteMenuBtn').setAttribute('aria-expanded', 'false'); }
 $('siteMenuBtn').addEventListener('click', (e) => {
@@ -825,8 +880,9 @@ $('reportSend').addEventListener('click', async () => {
   await render();
   await renderAccess();
   const grant = params.get('grant');
-  const focusId = { engines: 'engines', cookies: 'cookies', popups: 'popups', base: 'grantBase', analytics: 'analyticsSwitch', firstrun: 'firstRun' }[grant];
+  const focusId = { engines: 'engines', cookies: 'cookies', popups: 'popups', base: 'grantBase', analytics: 'analyticsSwitch', firstrun: 'firstRun', aiweb: 'aiWebGrant' }[grant];
   if (PAGE_VIEW && grant === 'engines') { expanded.search = true; await render(); }
+  if (PAGE_VIEW && grant === 'aiweb') { expanded.aiweb = true; await render(); }
   if (PAGE_VIEW && grant === 'analytics') { $('gearBtn').click(); }
   if (PAGE_VIEW && focusId) {
     $(focusId).focus?.();

@@ -26,6 +26,9 @@ node smoke.mjs || rc=1
 echo
 node compat.mjs || rc=1
 echo
+# 0.7.4: Google blank-box collapse + AI Mode chrome (live-page fixture), AI on websites (ten sites), the popup group.
+node q074.mjs || rc=1
+echo
 # The pop-ups rule filter (pipeline) and the shipped rules it produced.
 python3 ../pipeline/test_build_rules.py || rc=1
 echo

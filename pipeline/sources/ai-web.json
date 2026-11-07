@@ -1,0 +1,833 @@
+{
+ "generated": "2026-11-06",
+ "note": "Source for pipeline/build_ai_web.py. Cosmetic: only verified rules with no gap. Network: vendors marked skip or with no clean host are dropped.",
+ "cosmetic": [
+  {
+   "id": "learn-microsoft-com-0",
+   "group": "buttons",
+   "hosts": [
+    "learn.microsoft.com"
+   ],
+   "selectors": [
+    "button[data-test-id='ask-learn-assistant-flyout-entry']",
+    "button[data-bi-name='ask-learn-assistant-entry']"
+   ],
+   "hide": "element",
+   "what": "Ask Learn (Copilot) button in article header"
+  },
+  {
+   "id": "learn-microsoft-com-1",
+   "group": "buttons",
+   "hosts": [
+    "learn.microsoft.com"
+   ],
+   "selectors": [
+    "#ms--ai-summary-cta",
+    "button[data-test-id='ai-summary-cta']"
+   ],
+   "hide": "element",
+   "what": "Summarize this article for me (AI summary) chip"
+  },
+  {
+   "id": "docs-stripe-com-2",
+   "group": "buttons",
+   "hosts": [
+    "docs.stripe.com"
+   ],
+   "selectors": [
+    "[data-testid='StripeAssistant--Header-AskAI']",
+    "a[aria-controls='StripeAssistant']"
+   ],
+   "hide": "element",
+   "what": "Ask AI (Stripe Assistant) header button"
+  },
+  {
+   "id": "docs-docker-com-3",
+   "group": "buttons",
+   "hosts": [
+    "docs.docker.com"
+   ],
+   "selectors": [
+    "button[aria-label^='Ask Gordon']"
+   ],
+   "hide": "element",
+   "what": "Ask Gordon AI assistant header button"
+  },
+  {
+   "id": "docs-pinecone-io-4",
+   "group": "buttons",
+   "hosts": [
+    "docs.pinecone.io"
+   ],
+   "selectors": [
+    "#chat-assistant-textarea",
+    ".chat-assistant-floating-input"
+   ],
+   "hide": "ancestor:.chat-assistant-floating-input",
+   "what": "Mintlify AI assistant floating ask bar"
+  },
+  {
+   "id": "mongodb-com-5",
+   "group": "buttons",
+   "hosts": [
+    "www.mongodb.com"
+   ],
+   "selectors": [
+    "button[class*='action-bar_chatbot-button']",
+    "button[class*='chatbot-button']"
+   ],
+   "hide": "element",
+   "what": "Ask MongoDB AI button in docs action bar"
+  },
+  {
+   "id": "kayak-com-6",
+   "group": "buttons",
+   "hosts": [
+    "www.kayak.com"
+   ],
+   "selectors": [
+    "[role='button'][aria-label='Open AI chat']"
+   ],
+   "hide": "ancestor:div:has(> [role='button'][aria-label='Open AI chat'])",
+   "what": "Open AI chat bar (fixed at bottom)"
+  },
+  {
+   "id": "etsy-com-9",
+   "group": "buttons",
+   "hosts": [
+    "www.etsy.com"
+   ],
+   "selectors": [
+    "#gifting-assistant-prompt-banner-root"
+   ],
+   "hide": "element",
+   "what": "AI gift assistant prompt banner"
+  },
+  {
+   "id": "facebook-com-10",
+   "group": "buttons",
+   "hosts": [
+    "www.facebook.com"
+   ],
+   "selectors": [
+    "a[href*='meta.ai']"
+   ],
+   "hide": "element",
+   "what": "Meta AI footer link"
+  },
+  {
+   "id": "instagram-com-11",
+   "group": "buttons",
+   "hosts": [
+    "www.instagram.com"
+   ],
+   "selectors": [
+    "a[href*='meta.ai']"
+   ],
+   "hide": "ancestor:div:has(> a[href*='meta.ai'])",
+   "what": "Meta AI footer link"
+  },
+  {
+   "id": "stackoverflow-com-12",
+   "group": "buttons",
+   "hosts": [
+    "stackoverflow.com"
+   ],
+   "selectors": [
+    "#nav-askstack",
+    "a[href*='ai-assist']"
+   ],
+   "hide": "ancestor:li:has(> #nav-askstack)",
+   "what": "AI Assist left-nav entry"
+  },
+  {
+   "id": "docs-sentry-io-14",
+   "group": "buttons",
+   "hosts": [
+    "docs.sentry.io"
+   ],
+   "selectors": [
+    "button[aria-label='Ask AI']"
+   ],
+   "hide": "element",
+   "what": "Ask AI header button"
+  },
+  {
+   "id": "docs-temporal-io-15",
+   "group": "buttons",
+   "hosts": [
+    "docs.temporal.io"
+   ],
+   "selectors": [
+    "button.ask-ai-navbar-button",
+    "button[aria-label='Ask AI']"
+   ],
+   "hide": "element",
+   "what": "Ask AI navbar button"
+  },
+  {
+   "id": "shopify-dev-16",
+   "group": "buttons",
+   "hosts": [
+    "shopify.dev"
+   ],
+   "selectors": [
+    "#open-assistant"
+   ],
+   "hide": "ancestor:li:has(> #open-assistant)",
+   "what": "Ask assistant header button"
+  },
+  {
+   "id": "docs-datadoghq-com-17",
+   "group": "buttons",
+   "hosts": [
+    "docs.datadoghq.com"
+   ],
+   "selectors": [
+    "button.home-ai-btn",
+    "button.conv-search-float-btn",
+    "button[title='Ask AI']"
+   ],
+   "hide": "element",
+   "what": "Ask AI buttons"
+  },
+  {
+   "id": "redis-io-18",
+   "group": "buttons",
+   "hosts": [
+    "redis.io"
+   ],
+   "selectors": [
+    "#search-welcome"
+   ],
+   "hide": "ancestor:form:has(#search-welcome)",
+   "what": "Ask our chatbot input"
+  },
+  {
+   "id": "docs-mapbox-com-19",
+   "group": "buttons",
+   "hosts": [
+    "docs.mapbox.com"
+   ],
+   "selectors": [
+    "a[href='/ask-ai/']"
+   ],
+   "hide": "element",
+   "what": "Developer AI Assistant link"
+  },
+  {
+   "id": "logrocket-com-20",
+   "group": "support",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "#intercom-container",
+    ".intercom-lightweight-app-launcher",
+    "iframe[name='intercom-launcher-frame']",
+    "[aria-label='Open Intercom Messenger']"
+   ],
+   "hide": "element",
+   "what": "Intercom Messenger launcher (Fin AI agent front door)"
+  },
+  {
+   "id": "zendesk-com-21",
+   "group": "support",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "button[aria-label='Open chat']",
+    "iframe#launcher",
+    "iframe[data-product='web_widget']"
+   ],
+   "hide": "element",
+   "what": "Zendesk messaging launcher (AI agent chat)"
+  },
+  {
+   "id": "hubspot-com-22",
+   "group": "support",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "#hubspot-messages-iframe-container"
+   ],
+   "hide": "element",
+   "what": "HubSpot chat widget / chatbot container"
+  },
+  {
+   "id": "forethought-ai-23",
+   "group": "chat",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "iframe#forethought-chat",
+    "iframe[name='Virtual Assistant Chat']"
+   ],
+   "hide": "element",
+   "what": "Forethought Solve virtual assistant"
+  },
+  {
+   "id": "gorgias-com-24",
+   "group": "support",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "iframe#chat-button",
+    "iframe#chat-campaigns"
+   ],
+   "hide": "element",
+   "what": "Gorgias chat button and campaign popup"
+  },
+  {
+   "id": "chatbase-co-25",
+   "group": "chat",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "#chatbase-bubble-button",
+    "#chatbase-message-bubbles"
+   ],
+   "hide": "element",
+   "what": "Chatbase AI agent bubble"
+  },
+  {
+   "id": "landbot-io-26",
+   "group": "chat",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "#awe-launch",
+    "#awe-panel"
+   ],
+   "hide": "element",
+   "what": "Landbot AI launcher and panel (site-specific ids)"
+  },
+  {
+   "id": "fullstory-com-27",
+   "group": "chat",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "iframe#q-messenger-frame"
+   ],
+   "hide": "element",
+   "what": "Qualified (Piper AI SDR) messenger iframe"
+  },
+  {
+   "id": "livechat-com-28",
+   "group": "support",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "#chat-widget-container"
+   ],
+   "hide": "element",
+   "what": "LiveChat widget container (AI assistant)"
+  },
+  {
+   "id": "yellow-ai-29",
+   "group": "chat",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "#ymDivBar",
+    "#ymDivWrapper"
+   ],
+   "hide": "element",
+   "what": "Yellow.ai Mia chat launcher"
+  },
+  {
+   "id": "algolia-com-30",
+   "group": "support",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "#agentforce-facade-container",
+    "#agentforce-bubble",
+    "#agentforce-facade"
+   ],
+   "hide": "element",
+   "what": "Salesforce Agentforce chat facade"
+  },
+  {
+   "id": "inkeep-com-32",
+   "group": "buttons",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "button[aria-label='Ask AI']"
+   ],
+   "hide": "element",
+   "what": "Inkeep Ask AI floating button"
+  }
+ ],
+ "network": [
+  {
+   "vendor": "Intercom (Fin AI agent)",
+   "group": "support",
+   "domains": [
+    "api-iam.intercom.io",
+    "intercom.io",
+    "js.intercomcdn.com",
+    "widget.intercom.io"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Zendesk (Messaging / AI agents)",
+   "group": "support",
+   "domains": [
+    "ekr.zdassets.com",
+    "smooch.io",
+    "static.zdassets.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Forethought (Solve)",
+   "group": "chat",
+   "domains": [
+    "solve-widget.forethought.ai"
+   ],
+   "types": [
+    "script",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Gorgias chat (AI agent)",
+   "group": "support",
+   "domains": [
+    "assets.gorgias.chat",
+    "config.gorgias.chat"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Yellow.ai",
+   "group": "chat",
+   "domains": [
+    "cdn.yellowmessenger.com",
+    "interactlabs.ai",
+    "script.interactlabs.ai"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Botpress",
+   "group": "chat",
+   "domains": [
+    "botpress.cloud",
+    "cdn.botpress.cloud",
+    "r.botpress.dev"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Landbot",
+   "group": "chat",
+   "domains": [
+    "cdn.landbot.io",
+    "get.landbotlab.com",
+    "landbot.io"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "HubSpot chat / chatbot",
+   "group": "support",
+   "domains": [
+    "api.usemessages.com",
+    "js.usemessages.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Qualified (Piper AI SDR)",
+   "group": "chat",
+   "domains": [
+    "app.qualified.com",
+    "assets.qualified.com",
+    "js.qualified.com",
+    "messenger-assets.qualified.com",
+    "visitor1.qualified.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "LiveChat / ChatBot.com",
+   "group": "support",
+   "domains": [
+    "accounts.livechatinc.com",
+    "api.livechatinc.com",
+    "cdn.livechatinc.com",
+    "secure.livechatinc.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Tidio (Lyro)",
+   "group": "support",
+   "domains": [
+    "code.tidio.co",
+    "tidio.co",
+    "tidio.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "media"
+   ]
+  },
+  {
+   "vendor": "Kapa.ai",
+   "group": "chat",
+   "domains": [
+    "metrics.kapa.ai",
+    "proxy.kapa.ai",
+    "widget.kapa.ai"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest"
+   ]
+  },
+  {
+   "vendor": "Inkeep",
+   "group": "chat",
+   "domains": [
+    "api.agents.inkeep.com",
+    "api.inkeep.com",
+    "api.io.inkeep.com",
+    "uikit.inkeep.com"
+   ],
+   "types": [
+    "xmlhttprequest",
+    "script"
+   ]
+  },
+  {
+   "vendor": "Mendable / Firecrawl chat",
+   "group": "chat",
+   "domains": [
+    "api.mendable.ai",
+    "mendable.ai"
+   ],
+   "types": [
+    "xmlhttprequest",
+    "script"
+   ]
+  },
+  {
+   "vendor": "CommandBar / Command AI",
+   "group": "support",
+   "domains": [
+    "api.commandbar.com",
+    "command.ai",
+    "commandbar.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Drift / Salesloft chat",
+   "group": "support",
+   "domains": [
+    "event.api.drift.com",
+    "js.driftt.com",
+    "targeting.api.drift.com",
+    "widget.drift.com"
+   ],
+   "types": [
+    "script",
+    "sub_frame",
+    "xmlhttprequest"
+   ]
+  },
+  {
+   "vendor": "Crisp (AI agent)",
+   "group": "support",
+   "domains": [
+    "client.crisp.chat",
+    "client.relay.crisp.chat",
+    "crisp.chat"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "websocket",
+    "stylesheet"
+   ]
+  },
+  {
+   "vendor": "tawk.to (AI Assist)",
+   "group": "support",
+   "domains": [
+    "embed.tawk.to",
+    "tawk.link",
+    "tawk.to"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame",
+    "websocket"
+   ]
+  },
+  {
+   "vendor": "Freshchat (Freddy AI)",
+   "group": "support",
+   "domains": [
+    "freshchat.com",
+    "freshworksapi.com",
+    "wchat.freshchat.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Ada",
+   "group": "chat",
+   "domains": [
+    "ada.support",
+    "messaging-assets.ada.support",
+    "static.ada.support"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Voiceflow",
+   "group": "chat",
+   "domains": [
+    "cdn.voiceflow.com",
+    "general-runtime.voiceflow.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest"
+   ]
+  },
+  {
+   "vendor": "LivePerson (conversational AI)",
+   "group": "support",
+   "domains": [
+    "cdn.lpsnmedia.net",
+    "liveperson.net",
+    "lpsnmedia.net"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Atlassian Jira Service chat widget",
+   "group": "chat",
+   "domains": [
+    "jcs-chat-widget.atlassian.com"
+   ],
+   "types": [
+    "script"
+   ]
+  },
+  {
+   "vendor": "Sierra agent",
+   "group": "chat",
+   "domains": [
+    "sierra.chat"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "stylesheet"
+   ]
+  },
+  {
+   "vendor": "Pylon (support widget)",
+   "group": "support",
+   "domains": [
+    "app.usepylon.com",
+    "assets.usepylon.com",
+    "graph.usepylon.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest"
+   ]
+  },
+  {
+   "vendor": "Salesforce Agentforce / Embedded Service",
+   "group": "support",
+   "domains": [
+    "salesforce-scrt.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "sub_frame"
+   ]
+  },
+  {
+   "vendor": "Hotjar (Contentsquare)",
+   "group": "replay",
+   "domains": [
+    "hotjar.com",
+    "hotjar.io",
+    "script.hotjar.com",
+    "static.hotjar.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest",
+    "ping",
+    "websocket"
+   ]
+  },
+  {
+   "vendor": "Contentsquare",
+   "group": "replay",
+   "domains": [
+    "c.contentsquare.net",
+    "contentsquare.net",
+    "t.contentsquare.net"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest"
+   ]
+  },
+  {
+   "vendor": "Fullstory",
+   "group": "replay",
+   "domains": [
+    "edge.fullstory.com",
+    "rs.fullstory.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest"
+   ]
+  },
+  {
+   "vendor": "Microsoft Clarity",
+   "group": "replay",
+   "domains": [
+    "clarity.ms",
+    "www.clarity.ms"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest"
+   ]
+  },
+  {
+   "vendor": "Heap",
+   "group": "replay",
+   "domains": [
+    "cdn.heapanalytics.com",
+    "heapanalytics.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest"
+   ]
+  },
+  {
+   "vendor": "Quantum Metric",
+   "group": "replay",
+   "domains": [
+    "cdn.quantummetric.com",
+    "quantummetric.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest"
+   ]
+  },
+  {
+   "vendor": "LogRocket",
+   "group": "replay",
+   "domains": [
+    "cdn.lr-ingest.com",
+    "lr-ingest.io",
+    "relay.lr-wa.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest"
+   ]
+  },
+  {
+   "vendor": "Amplitude (session replay)",
+   "group": "replay",
+   "domains": [
+    "api-sr.amplitude.com",
+    "api2.amplitude.com",
+    "cdn.amplitude.com",
+    "sr-client-cfg.amplitude.com"
+   ],
+   "types": [
+    "script",
+    "xmlhttprequest"
+   ]
+  }
+ ]
+}
