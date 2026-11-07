@@ -35,9 +35,10 @@ WHAT IT DOES
 • Bing: hides the Copilot panel, its buttons and its suggestions, with one switch.
 • DuckDuckGo, Brave and Yahoo: hides their AI answers too. Off until you switch it on; your browser then asks once for access to those three sites and nothing else.
 • Cookie banners: hides "we use cookies" notices. Off until you switch it on. Optionally says "reject all" for you on the consent tools Quell recognises. That is a separate switch, off by default, and Quell never overrides a choice you already made.
-• Pop-ups: newsletter sign-up boxes, chat bubbles and "open in app" banners, each with its own switch. Off until you switch it on. It hides them; it never blocks a page.
+• Pop-ups: newsletter sign-up boxes, chat bubbles, "open in app" banners, and the "sign up or log in to keep reading" boxes that cover a page whose text is already there, each with its own switch. Off until you switch it on. It hides them and lets the page scroll again; it never blocks a page, never gets around a paywall, and never touches the sign-in button a site gives you or a login you opened yourself.
+• Links: takes tracking codes (utm_, fbclid, gclid and the like) off links, and sends a Google or Bing result straight to its site. On once you have allowed all-sites access. Affiliate codes are never touched. A separate switch, off by default, warns you if a shopping page swaps its affiliate code; it only warns, and your browser asks once for one more permission when you turn it on.
 
-Cookie banners and pop-ups need your browser's all-sites access. Quell asks once, only when you turn either on, and gives it back when you turn both off.
+Cookie banners, pop-ups and links need your browser's all-sites access. Quell asks once, only when you turn one on, and gives it back when you turn all of them off.
 
 SEE WHAT IT HID
 Open Quell on any page to see what it hid there. Peek at an item, or bring it back with Undo. If a site looks wrong, pause Quell on it for an hour, for today, or until you resume. You can also send a "this site looks broken" report from the same place.
@@ -66,7 +67,14 @@ and app banners — in the user's browser.
   feature switches, the hidden-items counter, your usage-counts answer and,
   only if you said yes, the queued counts. Settings are never sent to us.
 - `declarativeNetRequest` — blocks known cookie-consent-platform scripts by
-  URL rule, without Quell ever reading the user's traffic.
+  URL rule, without Quell ever reading the user's traffic; and, for the Links
+  switch, a fixed set of redirect rules that take known tracking parameters
+  (utm_*, fbclid, gclid and similar) out of a page address.
+- `webNavigation` (OPTIONAL) — requested only when the user turns on "Warn me
+  if a site swaps an affiliate code", and given back when they turn it off. It
+  lets Quell see, on Amazon pages only, whether a page was reached by a
+  redirect and whether its tag= code changed, to show a notice in the page.
+  Nothing is stored beyond the tab's life and nothing is sent.
 - `scripting` — registers and unregisters content scripts at runtime as the user
   turns optional features on and off: the cookie-banner and pop-up scripts
   (with `<all_urls>`) and the AI-hiding script for DuckDuckGo, Brave and Yahoo
@@ -83,10 +91,12 @@ and app banners — in the user's browser.
   same job as the Google and Bing host permissions. Optional so that existing
   users are not disabled on update.
 - `<all_urls>` (OPTIONAL) — requested at runtime only when the user enables
-  Cookie banners or Pop-ups, and **given back** (`permissions.remove`) as soon
-  as both are switched off again — Quell does not keep all-sites access it is
+  Cookie banners, Pop-ups or Links (on by default once access exists), and
+  **given back** (`permissions.remove`) as soon as all are switched off again — Quell does not keep all-sites access it is
   not using. Used to hide those elements on the sites the user visits; to read
-  the active tab's hostname so the popup can offer the per-site switches and
+  the active tab's hostname so the popup can offer the per-site switches; to
+  clean tracking parameters out of links on the page and show the affiliate
+  notice (nothing is sent); and
   the breakage report; and, if the user additionally switches on "Say reject
   all for me" (off by default), to click the consent platform's own Reject-all
   control.

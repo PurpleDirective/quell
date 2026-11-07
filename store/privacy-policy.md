@@ -1,12 +1,14 @@
 # Quell Privacy Policy
 
-Version 3.1.0 · Effective November 6, 2026
+Version 3.2.0 · Effective November 7, 2026
 
 This policy explains how Purple Directive ("we", "us") collects, uses and shares information when you use Quell and its related websites, communications and services (the "Services"). The information we collect depends on how you use the Services and on the choices you make.
 
 ## About Quell
 
 Quell is a browser extension that hides content you did not ask for on the pages you visit, such as AI answers in search results, cookie banners and pop-ups. It asks for access to the sites where it works so it can hide the page elements you choose. Some features act on a page for you, such as declining a cookie banner; the site and its tools handle that choice under their own policies. You do not need an account to use it. The extension sends us nothing unless you choose to: a problem report you send, or, if you leave the first-run box ticked, the anonymous usage counts described in "Quell usage counts and the uninstall page" below. The rest of this policy covers our websites and any information you choose to send us.
+
+**What the newer switches do on your device, and what they send.** Quell can close "sign up or log in to keep reading" boxes, take tracking codes (such as utm_ and fbclid) off the links you open and off links in the page, send a Google or Bing result straight to its site, and, only if you turn it on, warn you when a shopping page changes its affiliate code. All of this happens in your browser. Quell reads a page's text and addresses on your device to do it, keeps nothing about them after the tab closes, and sends none of it anywhere. Quell never changes an affiliate code. The affiliate warning asks your browser for one extra permission when you turn it on and gives it back when you turn it off. Nothing here adds anything to the problem report or the usage counts.
 
 Your Quell settings are stored in your browser, and your browser may sync them across your devices under its own terms. If you choose to report a problem, we receive the information needed to look into it, such as the site's address and the version of Quell you are using. Sending a report is optional. If a feature sends information to us, we handle it as this policy describes. Our website, purpledirective.com, has its own privacy policy (https://purpledirective.com/privacy/).
 
