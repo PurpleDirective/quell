@@ -37,14 +37,11 @@ const FIXTURE = `<!doctype html><html><head><title>q - Google Search</title></he
 </div></div></body></html>`;
 
 async function getContext() {
-  // QUELL_HEADLESS_ONLY=1: never open a visible window. New headless (channel 'chromium')
-  // loads extensions; the headed pass below is only a fallback for machines without it.
-  for (const mode of process.env.QUELL_HEADLESS_ONLY ? ['new'] : ['new', 'headed']) {
-    const headless = mode === 'new';
+  for (const headless of (process.env.QUELL_HEADLESS_ONLY ? [true] : [true, false])) {
     // Load BOTH unpacked extensions. Order matters to Chrome only for install
     // id, not for content-script ordering, but keep Quell first for clarity.
     const c = await chromium.launchPersistentContext('', {
-      headless, ...(headless ? { channel: 'chromium' } : {}),
+      headless, ...(process.env.QUELL_HEADLESS_ONLY ? { channel: 'chromium' } : {}),
       args: [
         `--disable-extensions-except=${EXT},${RIVAL}`,
         `--load-extension=${EXT}`,

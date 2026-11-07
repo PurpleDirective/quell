@@ -64,7 +64,7 @@ def firefox(m):
     m["name"] = FIREFOX_NAME
     m["background"] = {"scripts": [
         "src/shared/settings.js", "src/shared/config.js", "src/shared/browser.js",
-        "src/shared/analytics.js", "src/background.js",
+        "src/shared/analytics.js", "src/shared/affiliate.js", "src/background.js",
     ]}
     m.pop("minimum_chrome_version", None)
     m["browser_specific_settings"] = {

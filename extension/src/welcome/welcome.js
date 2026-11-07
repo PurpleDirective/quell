@@ -25,7 +25,7 @@
   const card = document.getElementById('firstRun');
   const chips = async () => {
     const s = await S.get();
-    for (const [id, on] of [['chipCookies', s.cookieEnabled], ['chipPopups', s.popupsEnabled]]) {
+    for (const [id, on] of [['chipCookies', s.cookieEnabled], ['chipPopups', s.popupsEnabled], ['chipLinks', s.linksEnabled]]) {
       const el = document.getElementById(id);
       el.textContent = on ? 'On' : 'Off';
       el.classList.toggle('on', !!on);
@@ -44,7 +44,7 @@
   } else if (s0) {
     card.hidden = true;
   }
-  S.onChange(['cookieEnabled', 'popupsEnabled'], () => { chips().catch(() => {}); });
+  S.onChange(['cookieEnabled', 'popupsEnabled', 'linksEnabled'], () => { chips().catch(() => {}); });
 
   if (typeof chrome === 'undefined' || !chrome.permissions || !chrome.runtime?.getManifest) return;
   // Firefox only: on Chromium those hosts are required at install, and

@@ -57,7 +57,7 @@ main { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 
 .settings { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 16px 0; }
 
 /* ---- hero ---- */
-.hero { padding: 12px 0 12px; text-align: center; display: flex; flex-direction: column; align-items: center; }
+.hero { padding: 8px 0 8px; text-align: center; display: flex; flex-direction: column; align-items: center; }
 .moon { position: relative; width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; color: var(--accent); cursor: pointer; }
 .moon input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 2; border-radius: 50%; }
 .moon:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 6px; }

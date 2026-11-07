@@ -28,6 +28,9 @@
     "declarativeNetRequestFeedback",
     "scripting"
   ],
+  "optional_permissions": [
+    "webNavigation"
+  ],
   "optional_host_permissions": [
     "<all_urls>",
     "*://duckduckgo.com/*",
@@ -62,6 +65,11 @@
         "id": "ai_web_replay",
         "enabled": false,
         "path": "rules/ai-web-replay.json"
+      },
+      {
+        "id": "links_clean",
+        "enabled": false,
+        "path": "rules/links-clean.json"
       }
     ]
   },

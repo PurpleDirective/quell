@@ -144,5 +144,15 @@ ok(all(res.get("ai_web_" + g, {}).get("path") == f"rules/ai-web-{g}.json" and re
 ok("declarativeNetRequestFeedback" in man["permissions"] and "<all_urls>" not in man.get("host_permissions", []),
    "the matched-rule feedback permission is declared; <all_urls> stays optional")
 
+print("Links ruleset (0.7.4):")
+gen = b.links_ruleset()
+shipped = json.loads((Path(__file__).resolve().parent.parent / "extension" / "rules" / "links-clean.json").read_text())
+ok(gen == shipped, "rules/links-clean.json is exactly what the pipeline generates (never hand-edited)")
+ok(not set(b.LINK_PROTECTED_PARAMS) & set(b.LINK_TRACKING_PARAMS), "no protected (affiliate / page-changing) parameter is in the tracking list")
+ok(not set(b.YOUTUBE_ONLY_PARAMS) & set(b.LINK_PROTECTED_PARAMS - {"si"} if isinstance(b.LINK_PROTECTED_PARAMS, set) else b.LINK_PROTECTED_PARAMS), "the YouTube-only parameter is not a protected one")
+ok(len(set(b.LINK_TRACKING_PARAMS)) == len(b.LINK_TRACKING_PARAMS), "the tracking list has no duplicates")
+ok(all(len(r["condition"]["regexFilter"]) < 1500 for r in gen), "each regexFilter is well under Chrome's 2 KB regex limit")
+ok(len(gen) < 50, f"{len(gen)} static redirect rules, far under the unsafe-rule limit")
+
 print(f"\n{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

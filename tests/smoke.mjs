@@ -262,11 +262,21 @@ const YAHOO_FIXTURE = `<!doctype html><html><body>
 <div id="sticky-hd"><div id="hd"><div id="scoutPromoTooltip" class="scout-promo-tooltip">
   <div class="scout-promo-tooltip-card"><h3 class="scout-promo-tooltip-title">Try Yahoo Scout</h3></div>
 </div></div></div>
+<!-- Live 2026-11-06 additions (search.yahoo.com, "how long to boil an egg", real UA, logged out):
+     the search bar's sparkle switch, the floating sparkle, the "Explore AI results" panel with
+     its /scout/chat links, and "AI Takeaways" as the head of the Top Stories module INSIDE
+     ol.searchCenterMiddle. -->
+<form id="search_p" role="search"><input type="text" name="p" value="test" id="yahoo-searchbox">
+  <button type="button" role="switch" aria-checked="false" aria-label="Ask Scout" id="yahoo-sparkle-switch"><span aria-hidden="true">Search</span></button>
+  <button type="submit" id="yahoo-other-btn" aria-label="Clear">x</button></form>
+<div id="scout-widget" class="scout-widget"><button class="scout-widget__fab fixed" id="yahoo-fab" type="button" aria-label="Ask Yahoo Scout">*</button></div>
+
 <div id="horizontal-bar"><ol class="reg searchLeftTop">
   <li class="first"><div class="dd scoutNav" id="yahoo-scout-nav"><div class="compText"><p><a href="https://scout.yahoo.com/chat?q=test">Yahoo Scout</a></p></div></div></li>
   <li><div class="dd" id="yahoo-nav-news"><a href="https://news.search.yahoo.com/search?p=test">News</a></div></li>
 </ol></div>
-<div id="right"><ol class="reg searchRightBottom">
+<div id="right"><ol class="reg searchRightBottom"><li class="first last"><div class="dd p-0 bd-0 AlsoTry_E" id="yahoo-explore-live"><div class="compTitle pt-12"><div class="title at-title"><a class="at-icon" href="https://search.yahoo.com/scout/chat;_ylt=x?p=test" aria-label="Yahoo Scout"></a>Explore AI results with Yahoo Scout</div></div>
+  <table class="compTable"><tr><td><a href="https://search.yahoo.com/scout/chat?q=test+minutes">test minutes</a></td></tr></table></div></li></ol><ol class="reg searchRightBottom">
   <li class="first"><div class="dd kp" id="yahoo-right-kp"><div class="compTitle"><a href="https://en.wikipedia.org/wiki/Test">Test — knowledge panel</a></div><p>Not AI.</p></div></li>
   <li class="last"><div class="dd p-0 bd-0" id="yahoo-scout-explore">
     <div class="compTitle"><div class="title at-title"><a href="https://scout.yahoo.com/chat?q=test">Explore AI results with Yahoo Scout</a></div></div>
@@ -280,6 +290,11 @@ const YAHOO_FIXTURE = `<!doctype html><html><body>
   </div></div>
 </li></ol>
 <ol class="reg searchCenterMiddle">
+  <li class="first"><div class="dd tn-carousel" id="yahoo-topstories">
+    <div id="l-root-abc" class="uds"><div class="fabric uds news-ai-overview-host" id="yahoo-takeaways"><div class="news-ai-overview" data-state="collapsed"><span>AI Takeaways</span><h2>Latest on test</h2><button type="button">Show more</button></div></div></div>
+    <div class="compTitle moduleTitle"><h3 class="title" id="yahoo-topstories-title">Top Stories</h3></div>
+    <div id="yahoo-story-1"><a href="https://news.example.com/story">A real news story</a></div>
+  </div></li>
   <li class="first"><div class="dd algo algo-sr" id="yahoo-organic-1"><a href="https://example.com/c">A real result</a></div></li>
   <!-- TRAP: the REAL Britannica organic result. A bare domain-substring
        selector would hit the citation chip above and this together. -->
@@ -300,12 +315,9 @@ const YAHOO_FIXTURE = `<!doctype html><html><body>
 
 // Playwright's bundled Chromium (NOT stable Chrome — it dropped --load-extension).
 async function getContext() {
-  // QUELL_HEADLESS_ONLY=1: never open a visible window. New headless (channel 'chromium')
-  // loads extensions; the headed pass below is only a fallback for machines without it.
-  for (const mode of process.env.QUELL_HEADLESS_ONLY ? ['new'] : ['new', 'headed']) {
-    const headless = mode === 'new';
+  for (const headless of (process.env.QUELL_HEADLESS_ONLY ? [true] : [true, false])) {
     const c = await chromium.launchPersistentContext('', {
-      headless, ...(headless ? { channel: 'chromium' } : {}),
+      headless, ...(process.env.QUELL_HEADLESS_ONLY ? { channel: 'chromium' } : {}),
       args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
     }).catch(() => null);
     if (!c) continue;
@@ -1519,11 +1531,24 @@ console.log('Engines (DuckDuckGo / Brave / Yahoo):');
     ok(!(await visOn(pg, 'yahoo-also-try')), 'Yahoo: the footer "Explore AI results with Yahoo Scout" Also-try block is hidden');
     ok(await visOn(pg, 'yahoo-also-try-plain'), 'Yahoo: a plain "Also try" footer with no Scout title survives');
     ok(await visOn(pg, 'yahoo-nav-news'), 'Yahoo: the other vertical tabs survive');
+    // Live 2026-11-06 additions.
+    ok(!(await visOn(pg, 'yahoo-takeaways')), 'Yahoo: the "AI Takeaways" block (inside the Top Stories module) is hidden');
+    ok(await visOn(pg, 'yahoo-topstories-title') && await visOn(pg, 'yahoo-story-1') && await visOn(pg, 'yahoo-topstories'),
+      'Yahoo: Top Stories and its stories stay under the hidden AI Takeaways');
+    ok(await pg.evaluate(() => { const r = document.getElementById('yahoo-takeaways').parentElement; const b = r.getBoundingClientRect(); return b.height === 0 && getComputedStyle(r).display === 'none'; }),
+      'Yahoo: the AI Takeaways wrapper is hidden with it (no empty box left)');
+    ok(!(await visOn(pg, 'yahoo-sparkle-switch')), 'Yahoo: the search-bar sparkle (Ask Scout switch) is hidden');
+    ok(await visOn(pg, 'yahoo-searchbox') && await visOn(pg, 'yahoo-other-btn'), 'Yahoo: the search box and the form\'s other controls stay');
+    ok(!(await visOn(pg, 'yahoo-fab')) && !(await visOn(pg, 'scout-widget')), 'Yahoo: the floating sparkle button is hidden');
+    ok(!(await visOn(pg, 'yahoo-explore-live')), 'Yahoo: the live "Explore AI results with Yahoo Scout" panel (/scout/chat links) is hidden');
+    ok(await visOn(pg, 'yahoo-organic-1') && await visOn(pg, 'yahoo-organic-trap') && await visOn(pg, 'yahoo-organic-scout'), 'Yahoo: every organic result still shows after the new rules');
     await pg.close();
 
     const off = await run('https://search.yahoo.com/**', YAHOO_FIXTURE,
       'https://search.yahoo.com/search?p=test', { enabled: true, yahooMode: 'off' });
     ok(await visOn(off, 'yahoo-ai'), 'Yahoo: mode off leaves the AI Summary alone');
+    ok(await visOn(off, 'yahoo-takeaways') && await visOn(off, 'yahoo-sparkle-switch') && await visOn(off, 'yahoo-fab') && await visOn(off, 'yahoo-explore-live'),
+      'Yahoo: mode off leaves the takeaways, sparkle switch, floating sparkle and Explore panel alone');
     ok(await visOn(off, 'yahoo-scout-explore') && await visOn(off, 'yahoo-scout-nav') && await visOn(off, 'yahoo-also-try'),
       'Yahoo: mode off leaves Yahoo Scout alone too');
     await off.close();
@@ -2872,7 +2897,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
     const asked = (await pg.evaluate(() => window.__calls)).filter((c) => c[0] === 'tabs.sendMessage');
     const where = asked.filter((c) => c[2].type === 'where');
     ok(where.length === 1 && where[0][1] === 7 && JSON.stringify(where[0][2]) === '{"type":"where"}'
-      && asked.every((c) => c[1] === 7 && ['where', 'quell:hidden:list'].includes(c[2].type) && Object.keys(c[2]).length === 1),
+      && asked.every((c) => c[1] === 7 && ['where', 'quell:hidden:list', 'quell:links:status'].includes(c[2].type) && Object.keys(c[2]).length === 1),
       'the popup asked that tab which site it is on, once, and otherwise only what it hid: questions, nothing else');
     await pg.close();
     // A tab address the browser does show is used as it is; the page is not asked.
@@ -3669,6 +3694,429 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
     await sw.evaluate((r) => QuellSettings.set(r), reset);
   }
   await g.close();
+}
+
+// --- 0.7.4: consent walls found live (CNN, Corriere) and Ketch -------------------
+// Fixtures in tests/fixtures/ keep the markup measured on the live pages 2026-11-06.
+console.log('Consent walls (CNN, Corriere) and Ketch:');
+{
+  const FIXD = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
+  const cookieSrc = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/cookies.js'), 'utf8');
+  const stub = (extra = '') => `window.chrome={storage:{local:{get:async(d)=>({...d${extra}})}},runtime:{sendMessage(){}}};`;
+  const openWall = async (host, file, extra = '') => {
+    const pg = await ctx.newPage();
+    await pg.route(`http://${host}/**`, (r) => r.fulfill({ contentType: 'text/html', body: readFileSync(path.join(FIXD, file), 'utf8') }));
+    await pg.goto(`http://${host}/`);
+    await pg.addScriptTag({ content: stub(extra) + '\n' + cookieSrc });
+    await pg.waitForTimeout(600);
+    return pg;
+  };
+  // What a reader sees: nothing fixed and big and dim left, page scrolls, no gap where the wall was.
+  const clean = (pg, storyId) => pg.evaluate((sid) => {
+    const vw = innerWidth, vh = innerHeight; const bad = [];
+    for (const el of document.querySelectorAll('body *')) {
+      const cs = getComputedStyle(el);
+      if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') continue;
+      const r = el.getBoundingClientRect();
+      if (r.width * r.height >= 0.5 * vw * vh) bad.push(el.id || el.className);
+    }
+    const b = document.body, cs = getComputedStyle(b);
+    const before = scrollY; scrollTo(0, 500); const scrolled = scrollY > 0; scrollTo(0, before);
+    const s = document.getElementById(sid).getBoundingClientRect();
+    return { bad, locked: cs.overflowY === 'hidden' || cs.position === 'fixed', scrolled, storyH: Math.round(s.height) };
+  }, storyId);
+
+  const cnn = await openWall('edition.cnn.com', 'consent-cnn.html');
+  ok(await cnn.evaluate(() => getComputedStyle(document.getElementById('cnn-wall')).display) === 'none', 'CNN: the "Legal Terms and Privacy" wall is hidden');
+  let st = await clean(cnn, 'cnn-story');
+  ok(st.bad.length === 0, `CNN: no dim layer left (${st.bad.join() || 'none'})`);
+  ok(!st.locked && st.scrolled, 'CNN: the scroll lock (inline body styles) is released and the page scrolls');
+  ok(st.storyH === 2400, 'CNN: the story keeps its full height (no gap, nothing collapsed)');
+  ok(await cnn.evaluate(() => !document.getElementById('cnn-header').hasAttribute('inert') && getComputedStyle(document.getElementById('cnn-main')).display !== 'none'), 'CNN: the header is usable again and the page content is untouched');
+  ok(await cnn.evaluate(() => getComputedStyle(document.getElementById('cnn-signin')).display !== 'none'), 'CNN: the header Sign in link stays');
+  await cnn.close();
+  // A look-alike wall on another host is not Quell's to hide.
+  const other = await openWall('elsewhere.test', 'consent-cnn.html');
+  ok(await other.evaluate(() => getComputedStyle(document.getElementById('cnn-wall')).display) !== 'none', 'CNN rule is scoped to cnn.com: the same markup elsewhere stays');
+  await other.close();
+  // Switched off by the per-site pause: wall and lock come back.
+  const cnnPaused = await openWall('edition.cnn.com', 'consent-cnn.html', ',cookieAllowlist:["edition.cnn.com"]');
+  ok(await cnnPaused.evaluate(() => getComputedStyle(document.getElementById('cnn-wall')).display) !== 'none', 'CNN: a paused site keeps the site\'s own wall');
+  await cnnPaused.close();
+
+  const cor = await openWall('www.corriere.it', 'consent-corriere.html');
+  ok(await cor.evaluate(() => getComputedStyle(document.getElementById('corriere-wall')).display) === 'none', 'Corriere: div.privacy-cp-wall is hidden');
+  st = await clean(cor, 'rcs-story');
+  ok(st.bad.length === 0, `Corriere: no dim or blur layer left (${st.bad.join() || 'none'})`);
+  ok(!st.locked && st.scrolled, 'Corriere: body.noScroll is lifted and the page scrolls');
+  ok(st.storyH === 2400, 'Corriere: no blank gap where the wall was');
+  await cor.close();
+  const corOther = await openWall('elsewhere.test', 'consent-corriere.html');
+  ok(await corOther.evaluate(() => getComputedStyle(document.getElementById('corriere-wall')).display) !== 'none', 'Corriere rule is scoped to corriere.it');
+  await corOther.close();
+
+  const ket = await openWall('www.drift-fixture.test', 'consent-ketch.html');
+  ok(await ket.evaluate(() => getComputedStyle(document.getElementById('lanyard_root')).display) === 'none'
+    && await ket.evaluate(() => document.getElementById('ketch-banner').getClientRects().length === 0), 'Ketch: the whole consent root (banner and dim backdrop) is hidden');
+  st = await clean(ket, 'ketch-site-story');
+  ok(st.bad.length === 0 && st.storyH === 2000 && st.scrolled, 'Ketch: no dim layer, page intact and scrollable');
+  ok(await ket.evaluate(() => document.body.dataset.clicked !== '1'), 'Ketch: hide-only, its buttons are never clicked');
+  await ket.close();
+  // With reject-all on, Ketch is STILL not clicked (no vendor-wide reject control exists to name).
+  const ketR = await openWall('www.drift-fixture.test', 'consent-ketch.html', ',cookieReject:true');
+  ok(await ketR.evaluate(() => document.body.dataset.clicked !== '1'), 'Ketch: reject-all on still does not click Ketch\'s buttons');
+  await ketR.close();
+}
+
+// --- 0.7.4: WebMD header "Subscribe" is navigation, not a pop-up -------------------
+console.log('Pop-ups: in-flow header controls are kept (WebMD):');
+{
+  const FIXD = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
+  const popSrc = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/popups.js'), 'utf8');
+  const stub = `window.__state={popupsEnabled:true};window.__cbs=[];window.__sent=[];
+    window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
+      runtime:{sendMessage:async(m)=>{ if(m.type==='blocked'){window.__sent.push(m);return;} if(m.type==='popupRules') return {generic:[],site:['.newsletter-wrapper']}; }}};`;
+  const pg = await ctx.newPage();
+  await pg.route('http://www.webmd.test/**', (r) => r.fulfill({ contentType: 'text/html', body: readFileSync(path.join(FIXD, 'webmd-header.html'), 'utf8') }));
+  await pg.addInitScript({ content: stub + '\n' + popSrc });
+  await pg.goto('http://www.webmd.test/');
+  await pg.waitForTimeout(1000);
+  const shown = (id) => pg.evaluate((i) => { const e = document.getElementById(i); return !!e && e.getClientRects().length > 0; }, id);
+  ok(await shown('webmd-subscribe'), 'WebMD: the header "Subscribe" button (div.newsletter-wrapper.overlay.vn-subscribe) stays visible');
+  ok(await shown('webmd-signin') && await shown('webmd-main'), 'WebMD: header Log in link and the page content stay');
+  ok(!(await shown('webmd-real-modal')), 'WebMD: a real fixed newsletter box with the same class is still hidden');
+  ok(await pg.evaluate(() => document.querySelector('#webmd-subscribe button').getBoundingClientRect().width > 0), 'WebMD: the Subscribe button keeps its size (no collapse)');
+  await pg.close();
+}
+
+// --- 0.7.4: sign-up and log-in prompts (Pop-ups group) -----------------------------
+// Fixtures in tests/fixtures/ keep the shapes measured on live pages 2026-11-06.
+console.log('Sign-up and log-in prompts:');
+{
+  const FIXD = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
+  const promptSrc = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/signup-prompts.js'), 'utf8');
+  const stub = (st) => `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__sent=[];
+    window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
+      runtime:{sendMessage:async(m)=>{ if(m.type==='blocked') window.__sent.push(m); }}};
+    window.__set=(p)=>{Object.assign(window.__state,p);const ch={};for(const k in p)ch[k]={newValue:p[k]};window.__cbs.forEach(f=>f(ch,'local'));};`;
+  const open = async (host, file, state = { popupsEnabled: true }, pathAndQuery = '/') => {
+    const pg = await ctx.newPage();
+    await pg.route(`http://${host}/**`, (r) => r.fulfill({ contentType: 'text/html', body: readFileSync(path.join(FIXD, file), 'utf8') }));
+    await pg.addInitScript({ content: stub(state) + '\n' + promptSrc });
+    await pg.goto(`http://${host}${pathAndQuery}`);
+    await pg.waitForTimeout(1800);
+    return pg;
+  };
+  const shown = (pg, sel) => pg.evaluate((s) => { const e = document.querySelector(s); return !!e && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none'; }, sel);
+  const scrollable = (pg) => pg.evaluate(() => { const before = scrollY; scrollTo(0, 400); const moved = scrollY > 0; scrollTo(0, before); const cs = getComputedStyle(document.body); return moved && cs.overflowY !== 'hidden' && cs.position !== 'fixed'; });
+
+  // Generic: dialog + empty dim layer + body lock + blur + clipped article.
+  const g = await open('softwall.test', 'signup-article.html');
+  ok(!(await shown(g, '#wall')), 'prompt: the "Sign up to keep reading" dialog is hidden');
+  ok(!(await shown(g, '#scrim')), 'prompt: its empty dim layer is hidden with it');
+  ok(await scrollable(g), 'prompt: the scroll lock is released (body scrolls, not fixed)');
+  ok(await g.evaluate(() => getComputedStyle(document.getElementById('app')).filter === 'none'), 'prompt: the blur laid over the page is removed');
+  ok(await g.evaluate(() => { const s = document.getElementById('story'); return s.clientHeight >= s.scrollHeight - 2 && s.scrollHeight > 600; }), 'prompt: article text already in the page is let out of its clipped box (full text present, no gap)');
+  ok(await shown(g, '#hdr-login') && await shown(g, '#hdr-signup') && await shown(g, '#hdr-home'), 'prompt: the site\'s own header Log in / Sign up stay');
+  ok(await g.evaluate(() => { const b = document.getElementById('hdr-login').getBoundingClientRect(); const h = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return h === document.getElementById('hdr-login'); }), 'prompt: the header Log in button is clickable (nothing covers it)');
+  ok(await shown(g, '#main') && await shown(g, '#after-story'), 'prompt: article and page content untouched');
+  ok(await g.evaluate(() => window.__sent.some((m) => m.feature === 'popups' && m.count >= 1)), 'prompt: counted once as a pop-up hide');
+  // Registry: the popup lists it with a label of its own.
+  ok(await g.evaluate(() => QuellSettings.hidden.list().items.some((i) => i.label === 'Sign-up prompt')), 'prompt: listed as "Sign-up prompt" for the popup status line');
+  await g.close();
+
+  // A login form in the site's own header (Facebook) does not make the page a login page.
+  const hl = await open('softwall.test', 'signup-article.html', { popupsEnabled: true }, '/?hdrlogin');
+  ok(!(await shown(hl, '#wall')) && await shown(hl, '#hdr-pw'), 'prompt: a login form in the site\'s header does not stop the prompt over the page from closing (and the header form stays)');
+  await hl.close();
+
+  // Bottom bar (X-style "Don't miss what's happening").
+  const bar = await open('softwall.test', 'signup-article.html', { popupsEnabled: true }, '/?nodialog&bar');
+  ok(!(await shown(bar, '#bottom-bar')), 'prompt: a fixed bottom sign-up bar is closed too');
+  ok(await shown(bar, '#hdr-login'), 'prompt: ...and the header Log in stays');
+  await bar.close();
+
+  // A login the user asked for stays: a trusted click on the header Log in opens it.
+  const asked = await open('softwall.test', 'signup-article.html', { popupsEnabled: true }, '/?nodialog');
+  await asked.click('#hdr-login');
+  await asked.waitForTimeout(2200);
+  ok(await shown(asked, '#wall'), 'prompt: a login dialog the user opened with the header Log in button is left alone');
+  await asked.close();
+
+  // Off: the switch, the master, Pop-ups, a paused site.
+  for (const [name, st] of [['its own switch off', { popupsEnabled: true, hideSignupPrompts: false }], ['Pop-ups off', { popupsEnabled: false }],
+    ['Quell off', { popupsEnabled: true, enabled: false }], ['site paused', { popupsEnabled: true, popupAllowlist: ['softwall.test'] }]]) {
+    const o = await open('softwall.test', 'signup-article.html', st);
+    ok(await shown(o, '#wall') && await shown(o, '#scrim'), `prompt: ${name} → the page is as the site serves it`);
+    await o.close();
+  }
+  // Live toggle: off puts the prompt back, on hides it again.
+  const live = await open('softwall.test', 'signup-article.html');
+  await live.evaluate(() => window.__set({ hideSignupPrompts: false }));
+  await live.waitForTimeout(500);
+  ok(await shown(live, '#wall'), 'prompt: switching it off live brings the prompt back');
+  await live.evaluate(() => window.__set({ hideSignupPrompts: true }));
+  await live.waitForTimeout(1800);
+  ok(!(await shown(live, '#wall')), 'prompt: switching it on live hides it again');
+  await live.close();
+
+  // A login or account page the user navigated to is the page: never touched.
+  const lp = await open('softwall.test', 'signup-login-page.html', { popupsEnabled: true }, '/login');
+  ok(await shown(lp, '#login-box'), 'prompt: a /login page the user went to is left alone');
+  await lp.close();
+  // A page that is nothing but the prompt has no page behind it: kept.
+  const only = await open('softwall.test', 'signup-only-prompt.html', { popupsEnabled: true }, '/start');
+  ok(await shown(only, '#only'), 'prompt: with no page content behind it, the dialog is left alone');
+  await only.close();
+
+  // Per-site, markup read on the live sites.
+  const li = await open('www.linkedin.com', 'signup-linkedin.html', { popupsEnabled: true }, '/company/nasa/');
+  ok(!(await shown(li, '#base-contextual-sign-in-modal')), 'LinkedIn: #base-contextual-sign-in-modal (sign in to see who you know) is hidden');
+  ok(await scrollable(li), 'LinkedIn: body.overflow-hidden is released and the page scrolls');
+  ok(await shown(li, '#li-nav-signin') && await shown(li, '#li-main'), 'LinkedIn: the nav Sign in link and the page stay');
+  await li.close();
+  const pin = await open('www.pinterest.com', 'signup-pinterest.html', { popupsEnabled: true }, '/search/pins/?q=eggs');
+  ok(!(await shown(pin, '#pin-dialog')) && !(await shown(pin, '#pin-scrim')), 'Pinterest: the full-screen "Welcome to Pinterest" log-in modal and its dim layer are hidden');
+  ok(!(await shown(pin, '#pin-upsell')), 'Pinterest: the "You are signed out" card is hidden');
+  ok(await scrollable(pin), 'Pinterest: the page scrolls again');
+  ok(await shown(pin, '#pin-login') && await shown(pin, '#pin-signup') && await shown(pin, '#pin-main'), 'Pinterest: the header Log in / Sign up and the page stay');
+  await pin.close();
+  // The same markup on a host the rules do not name: the per-site card is not guessed at, the dialog still goes (generic).
+  const pinElse = await open('else.test', 'signup-pinterest.html', { popupsEnabled: true }, '/');
+  ok(await shown(pinElse, '#pin-upsell'), 'per-site rules are scoped to their host (Pinterest card stays elsewhere)');
+  await pinElse.close();
+}
+
+// --- 0.7.4: Links in a real browser (tracking redirects, page cleaner, affiliate notice) ------
+// A test copy of the extension holds <all_urls> and webNavigation as REQUIRED (the real build asks for
+// both as optional, which Playwright cannot accept); everything else is the shipped tree. A local server
+// stands in for the sites through host-resolver rules, so no live traffic is used.
+console.log('Links (real browser, local server):');
+{
+  const { createServer } = await import('node:http');
+  const { mkdtempSync, cpSync, writeFileSync } = await import('node:fs');
+  const os = await import('node:os');
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'quell-links-'));
+  const copy = path.join(tmp, 'ext');
+  cpSync(EXT, copy, { recursive: true });
+  const mf = JSON.parse(readFileSync(path.join(copy, 'manifest.json'), 'utf8'));
+  mf.host_permissions = ['<all_urls>'];
+  mf.permissions = [...mf.permissions, 'webNavigation'];
+  writeFileSync(path.join(copy, 'manifest.json'), JSON.stringify(mf));
+  const seen = [];
+  const server = createServer((req, res) => {
+    seen.push(req.headers.host + req.url);
+    const u = new URL(req.url, 'http://x');
+    if (u.pathname === '/redir') { res.writeHead(302, { Location: u.searchParams.get('to') }); res.end(); return; }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    if (u.pathname === '/links') {
+      res.end(`<!doctype html><body>
+        <a id="l1" href="/p?utm_source=a&id=1&tag=aff-20">tracked</a>
+        <a id="l2" href="/p?q=eggs&page=2">plain</a>
+        <a id="l3" href="/p?fbclid=abc&aff_id=77&ref=partner">mixed</a>
+        <a id="l4" href="https://www.google.com/url?q=https%3A%2F%2Fexample.com%2Fa%3Fb%3D1&amp;sa=U">google redirect</a>
+        <a id="l5" href="mailto:a@b.c?utm_source=x">mail</a></body>`);
+    } else res.end(`<!doctype html><title>${u.pathname}</title><body><h1>${u.pathname}</h1><p id="q">${u.search}</p><a id="more" href="/dp/B2?tag=blog-20">more</a></body>`);
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+  const lc = await chromium.launchPersistentContext('', {
+    headless: true, channel: 'chromium',
+    args: [`--disable-extensions-except=${copy}`, `--load-extension=${copy}`, '--host-resolver-rules=MAP *.amazon.com 127.0.0.1, MAP www.google.com 127.0.0.1, MAP shop.test 127.0.0.1'],
+  });
+  const lsw = lc.serviceWorkers()[0] || await lc.waitForEvent('serviceworker', { timeout: 15000 });
+  const set = (p) => lsw.evaluate((x) => QuellSettings.set(x), p);
+
+  // Browser limits for the shipped ruleset.
+  const lim = await lsw.evaluate(async () => {
+    const rules = await (await fetch(chrome.runtime.getURL('rules/links-clean.json'))).json();
+    const regexOk = [];
+    for (const r of rules) regexOk.push((await chrome.declarativeNetRequest.isRegexSupported({ regex: r.condition.regexFilter, isCaseSensitive: true })).isSupported);
+    return { n: rules.length, regexOk, unsafe: chrome.declarativeNetRequest.MAX_NUMBER_OF_UNSAFE_STATIC_RULES, avail: await chrome.declarativeNetRequest.getAvailableStaticRuleCount() };
+  });
+  ok(lim.regexOk.every(Boolean), 'Chrome accepts every regexFilter of the links ruleset (isRegexSupported)');
+  // Chrome documents 5000 unsafe (redirect / header) static rules; newer builds expose the constant.
+  const unsafeMax = lim.unsafe || 5000;
+  ok(lim.n <= unsafeMax && lim.avail > 0, `rule count ${lim.n} is within the unsafe static rule limit (${unsafeMax}), ${lim.avail} static rules still available`);
+
+  // Switch Links on the way the background does, then navigate.
+  await lsw.evaluate(async () => { await chrome.storage.local.set({ linksEnabled: true }); });
+  await new Promise((r) => setTimeout(r, 1500));
+  const enabled = await lsw.evaluate(async () => (await chrome.declarativeNetRequest.getEnabledRulesets()).includes('links_clean'));
+  ok(enabled, 'Links on: the links_clean ruleset is enabled by the background');
+  const goto = async (p, url) => { await p.goto(url).catch(() => {}); await p.waitForTimeout(300); return p.url(); };
+  const pg = await lc.newPage();
+  let u = await goto(pg, `http://shop.test:${port}/p?utm_source=news&id=1&tag=aff-20&fbclid=zz&utm_medium=email`);
+  ok(new URL(u).search === '?id=1&tag=aff-20', `navigation: tracking removed, id and the affiliate tag kept (${new URL(u).search})`);
+  u = await goto(pg, `http://shop.test:${port}/p?q=eggs&page=2&aff_id=77&ref=partner&affiliate=me`);
+  ok(new URL(u).search === '?q=eggs&page=2&aff_id=77&ref=partner&affiliate=me', 'navigation: search, page and every affiliate parameter untouched');
+  u = await goto(pg, `http://shop.test:${port}/p?id=9`);
+  ok(seen.filter((x) => x.endsWith('/p?id=9')).length === 1, 'a clean address is requested once (no redirect loop, no extra hop)');
+  u = await goto(pg, `http://www.google.com:${port}/url?sa=t&q=http://shop.test:${port}/landing&ved=1`);
+  ok(new URL(u).pathname === '/landing' && new URL(u).hostname === 'shop.test', 'Google result redirect (plain address): straight to the site');
+  u = await goto(pg, `http://shop.test:${port}/p?v=abc&si=keep`);
+  ok(new URL(u).search === '?v=abc&si=keep', '`si` is kept on an ordinary site');
+
+  // The page cleaner, in the page.
+  await pg.goto(`http://shop.test:${port}/links`);
+  await pg.waitForTimeout(1500);
+  // A cleaned link is written as an absolute address; compare path and query for the relative ones.
+  const hrefs = await pg.evaluate(() => Object.fromEntries([...document.querySelectorAll('a')].map((a) => { const h = a.getAttribute('href'); return [a.id, /^https?:\/\/shop\.test/.test(h) ? new URL(h).pathname + new URL(h).search : h]; })));
+  ok(hrefs.l1 === '/p?id=1&tag=aff-20', `links: tracking removed from a link, affiliate tag kept (${hrefs.l1})`);
+  ok(hrefs.l2 === '/p?q=eggs&page=2', 'links: a link with nothing to clean is not touched');
+  ok(hrefs.l3 === '/p?aff_id=77&ref=partner', `links: fbclid removed, aff_id and ref kept (${hrefs.l3})`);
+  ok(hrefs.l4 === 'https://example.com/a?b=1', `links: an escaped Google redirect goes straight to the site (${hrefs.l4})`);
+  ok(hrefs.l5 === 'mailto:a@b.c?utm_source=x', 'links: mailto: untouched');
+  const status = await lsw.evaluate(async () => { const [t] = await chrome.tabs.query({ url: '*://shop.test/*' }); return chrome.tabs.sendMessage(t.id, { type: 'quell:links:status' }).catch((e) => String(e)); });
+  ok(status && status.cleaned === 3, `the popup's count: 3 links cleaned here (${JSON.stringify(status)})`);
+  // Off: rules and script stand down.
+  await set({ linksEnabled: false });
+  await new Promise((r) => setTimeout(r, 1200));
+  u = await goto(pg, `http://shop.test:${port}/p?utm_source=news&id=1`);
+  ok(new URL(u).search === '?utm_source=news&id=1', 'Links off: the address is left exactly as typed');
+  await set({ linksEnabled: true });
+
+  // Affiliate-swap warning: needs both switches; two signals; shown once.
+  await set({ linksWarnAffiliate: true });
+  await new Promise((r) => setTimeout(r, 800));
+  const ap = await lc.newPage();
+  await ap.goto(`http://www.amazon.com:${port}/dp/B000?tag=blog-20`);
+  await ap.waitForTimeout(400);
+  await ap.evaluate((to) => { location.href = to; }, `/redir?to=${encodeURIComponent(`http://www.amazon.com:${port}/dp/B000?tag=thief-20`)}`);
+  await ap.waitForURL(/thief-20/);
+  await ap.waitForTimeout(1500);
+  ok(await ap.evaluate(() => !!document.getElementById('quell-affiliate-notice')), 'affiliate swap (tag changed by a redirect): the notice is in the page');
+  await ap.screenshot({ path: path.join(tmp, 'affiliate-notice.png') });
+  ok(/dp\/B000\?tag=thief-20$/.test(ap.url()), 'the address is exactly as the site sent it (Quell changed nothing)');
+  await ap.evaluate(() => document.getElementById('quell-affiliate-notice')?.remove());
+  // A plain click to another product with a different tag: no notice.
+  const bp = await lc.newPage();
+  await bp.goto(`http://www.amazon.com:${port}/dp/B000?tag=blog-20`);
+  await bp.goto(`http://www.amazon.com:${port}/dp/B111?tag=other-20`);
+  await bp.waitForTimeout(1200);
+  ok(await bp.evaluate(() => !document.getElementById('quell-affiliate-notice')), 'two product pages with different tags reached normally: no notice');
+  await set({ linksWarnAffiliate: false });
+  const cp = await lc.newPage();
+  await cp.goto(`http://www.amazon.com:${port}/dp/B000?tag=blog-20`);
+  await cp.waitForTimeout(300);
+  await cp.evaluate((to) => { location.href = to; }, `/redir?to=${encodeURIComponent(`http://www.amazon.com:${port}/dp/B000?tag=thief-20`)}`);
+  await cp.waitForURL(/thief-20/);
+  await cp.waitForTimeout(1200);
+  ok(await cp.evaluate(() => !document.getElementById('quell-affiliate-notice')), 'warning switch off: no notice even for a swap');
+  console.log(`  (affiliate notice screenshot: ${path.join(tmp, 'affiliate-notice.png')})`);
+  await lc.close();
+  server.close();
+}
+
+// --- 0.7.4: popup rows for sign-up prompts and Links (switches, status lines, permissions) ----
+console.log('Popup: sign-up prompts switch and the Links group:');
+{
+  const html = readFileSync(path.join(EXT, 'src/popup/popup.html'), 'utf8');
+  const js = readFileSync(path.join(EXT, 'src/popup/popup.js'), 'utf8');
+  const css = readFileSync(path.join(EXT, 'src/popup/popup.css'), 'utf8');
+  const fake = ({ local = {}, granted = [], allowGrant = true, prompts = 0, cleaned = null }) => `
+    window.__calls = [];
+    const st = window.__st = { granted: new Set(${JSON.stringify(granted)}), perms: new Set(), local: { firstRunDone: true, ...${JSON.stringify(local)} } };
+    const covers = (o) => st.granted.has(o) || st.granted.has('<all_urls>');
+    window.chrome = {
+      runtime: { id: 'fake', getManifest: () => ({ version: '0.7.4', content_scripts: [] }), getURL: (p) => 'chrome-extension://fake/' + p },
+      storage: { local: { get: async (d) => ({ ...d, ...st.local }), set: async (o) => { Object.assign(st.local, o); window.__calls.push(['storage.set', o]); } },
+                 session: { get: async (d) => ({ ...d, 'tab:7': 0 }) } },
+      permissions: {
+        contains: async (q) => q.permissions ? q.permissions.every((x) => st.perms.has(x)) : (q.origins || []).length > 0 && q.origins.every(covers),
+        request: async (q) => { window.__calls.push(['permissions.request', q]); if (!${allowGrant}) return false; for (const o of q.origins || []) st.granted.add(o); for (const x of q.permissions || []) st.perms.add(x); return true; },
+        remove: async (q) => { window.__calls.push(['permissions.remove', q]); for (const o of q.origins || []) st.granted.delete(o); for (const x of q.permissions || []) st.perms.delete(x); return true; },
+      },
+      tabs: { query: async () => [{ id: 7, url: 'https://news.test/a' }], create: async () => ({}),
+        sendMessage: async (id, msg) => {
+          if (msg.type === 'where') return { host: 'news.test' };
+          if (msg.type === 'quell:hidden:list') return { items: Array.from({ length: ${prompts} }, (_, i) => ({ id: 'popup:Sign-up prompt', kind: 'popup', label: 'Sign-up prompt', detail: 'Hidden', rejected: false, kept: false, peeking: false })).slice(0, ${prompts}), active: ['popup'] };
+          if (msg.type === 'quell:links:status') { ${cleaned === null ? "throw new Error('none');" : `return { active: true, cleaned: ${cleaned} };`} }
+          throw new Error('none');
+        } },
+    };`;
+  const open = async (o) => {
+    const pg = await ctx.newPage();
+    await pg.route('http://popup74.test/**', (r) => {
+      const u = new URL(r.request().url());
+      const f = (n, t) => r.fulfill({ contentType: t, body: readFileSync(path.join(EXT, n), 'utf8') });
+      if (u.pathname.endsWith('popup.js')) return r.fulfill({ contentType: 'text/javascript', body: js });
+      if (u.pathname.endsWith('popup.css')) return r.fulfill({ contentType: 'text/css', body: css });
+      for (const n of ['settings', 'report-host', 'config', 'browser']) if (u.pathname.endsWith(`/shared/${n}.js`)) return f(`src/shared/${n}.js`, 'text/javascript');
+      return r.fulfill({ contentType: 'text/html', body: html });
+    });
+    await pg.addInitScript({ content: fake(o) });
+    await pg.goto('http://popup74.test/popup.html');
+    await pg.waitForTimeout(400);
+    return pg;
+  };
+  const txt = (pg, id) => pg.evaluate((i) => document.getElementById(i).textContent, id);
+  const calls = (pg) => pg.evaluate(() => window.__calls);
+
+  const d = await open({});
+  ok(await d.evaluate(() => document.getElementById('pSignup').checked === true), 'popup: "Sign-up and log-in prompts" is on by default');
+  ok(await d.evaluate(() => document.querySelector('label[for="pSignup"]').textContent.includes('Sign-up and log-in prompts') && !!document.getElementById('popupBody').contains(document.getElementById('pSignup'))), 'popup: the switch sits under Pop-ups');
+  ok(await d.evaluate(() => document.getElementById('links').checked === false && document.getElementById('linkWarn').checked === false), 'popup: Links and the affiliate warning start off until the all-sites grant exists (the background turns Links on)');
+  ok(/Remove tracking from links/.test(await txt(d, 'gLinks')) && /Warn me if a site swaps an affiliate code/.test(await d.evaluate(() => document.querySelector('label[for="linkWarn"]').textContent)), 'popup: the Links group and the affiliate switch carry the requested labels');
+  ok(await d.evaluate(() => document.getElementById('linkBody').hidden === true), 'popup: the Links options are collapsed by default (the default popup keeps its height)');
+  await d.close();
+
+  const st1 = await open({ local: { popupsEnabled: true, linksEnabled: true }, granted: ['<all_urls>'], prompts: 1, cleaned: 3 });
+  ok(await txt(st1, 'pSignupD') === 'Closed 1 sign-up prompt', `popup status: "${await txt(st1, 'pSignupD')}"`);
+  ok(await txt(st1, 'linksD') === 'Cleaned 3 links here', `popup status: "${await txt(st1, 'linksD')}"`);
+  await st1.close();
+  const st2 = await open({ local: { popupsEnabled: true, linksEnabled: true }, granted: ['<all_urls>'], prompts: 2, cleaned: 1 });
+  ok(await txt(st2, 'pSignupD') === 'Closed 2 sign-up prompts' && await txt(st2, 'linksD') === 'Cleaned 1 link here', 'popup status: plural and singular read right');
+  await st2.close();
+  const st3 = await open({ local: { popupsEnabled: true, linksEnabled: true }, granted: ['<all_urls>'], prompts: 0, cleaned: 0 });
+  ok(await txt(st3, 'pSignupD') === '' && /Nothing to clean here/.test(await txt(st3, 'linksD')), 'popup status: nothing closed, nothing to clean reads calmly');
+  await st3.close();
+
+  // Links on: asks for all-sites access first, stores after the grant.
+  const on = await open({ allowGrant: true });
+  await on.click('#links');
+  await on.waitForTimeout(300);
+  const c1 = await calls(on);
+  const req = c1.findIndex(([n, a]) => n === 'permissions.request' && JSON.stringify(a.origins) === '["<all_urls>"]');
+  const set = c1.findIndex(([n, o]) => n === 'storage.set' && o.linksEnabled === true);
+  ok(req >= 0 && set > req, 'popup: Links on asks for all-sites access, then stores the switch (after the grant)');
+  await on.close();
+  const refused = await open({ allowGrant: false });
+  await refused.click('#links');
+  await refused.waitForTimeout(300);
+  ok(await refused.evaluate(() => !document.getElementById('links').checked) && !(await calls(refused)).some(([n, o]) => n === 'storage.set' && 'linksEnabled' in o), 'popup: a refused grant leaves Links off and stores nothing');
+  await refused.close();
+  // Links off, nothing else using the grant: access goes back. With cookies on, it stays.
+  const off = await open({ local: { linksEnabled: true }, granted: ['<all_urls>'] });
+  await off.click('#links');
+  await off.waitForTimeout(300);
+  ok((await calls(off)).some(([n, a]) => n === 'permissions.remove' && JSON.stringify(a.origins) === '["<all_urls>"]'), 'popup: Links off as the last user of all-sites access gives the access back');
+  await off.close();
+  const keep = await open({ local: { linksEnabled: true, cookieEnabled: true }, granted: ['<all_urls>'] });
+  await keep.click('#links');
+  await keep.waitForTimeout(300);
+  ok(!(await calls(keep)).some(([n]) => n === 'permissions.remove'), 'popup: Links off while Cookie banners still use the access keeps it');
+  await keep.close();
+
+  // The affiliate warning asks for webNavigation, on the click, and gives it back.
+  const w = await open({ local: { linksEnabled: true }, granted: ['<all_urls>'], allowGrant: true });
+  await w.click('#linkExpand');
+  await w.click('#linkWarn');
+  await w.waitForTimeout(300);
+  const c2 = await calls(w);
+  const wreq = c2.findIndex(([n, a]) => n === 'permissions.request' && JSON.stringify(a.permissions) === '["webNavigation"]');
+  ok(wreq >= 0 && c2.findIndex(([n, o]) => n === 'storage.set' && o.linksWarnAffiliate === true) > wreq, 'popup: the affiliate warning asks for webNavigation, then stores the switch');
+  await w.click('#linkWarn');
+  await w.waitForTimeout(300);
+  const c3 = await calls(w);
+  ok(c3.some(([n, a]) => n === 'permissions.remove' && JSON.stringify(a.permissions) === '["webNavigation"]') && c3.some(([n, o]) => n === 'storage.set' && o.linksWarnAffiliate === false), 'popup: switching the warning off stores it off and gives webNavigation back');
+  await w.close();
+  const wr = await open({ local: { linksEnabled: true }, granted: ['<all_urls>'], allowGrant: false });
+  await wr.click('#linkExpand');
+  await wr.click('#linkWarn');
+  await wr.waitForTimeout(300);
+  ok(await wr.evaluate(() => !document.getElementById('linkWarn').checked) && !(await calls(wr)).some(([n, o]) => n === 'storage.set' && 'linksWarnAffiliate' in o), 'popup: a refused webNavigation leaves the warning off and stores nothing');
+  await wr.close();
 }
 
 await ctx.close();

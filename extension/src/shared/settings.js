@@ -59,12 +59,15 @@
     aiWebSupport: false,    // support chats that use AI (opt-in: can remove a site's support chat)
     aiWebReplay: false,     // AI session recording (opt-in)
     aiWebAllowlist: [],     // hostnames where this group is paused
+    hideSignupPrompts: true, // 0.7.4: sign-up / log-in prompts (a row under Pop-ups)
   };
 
   const LOCAL_DEFAULTS = {
     enginesEnabled: false,  // intent for DuckDuckGo/Brave/Yahoo (grant-bound)
     cookieEnabled: false,   // grant-bound: <all_urls>
     popupsEnabled: false,   // grant-bound: <all_urls>; OFF by default
+    linksEnabled: false,    // grant-bound: <all_urls>; 0.7.4 "Remove tracking from links" (the background turns it on once, when the grant exists)
+    linksWarnAffiliate: false, // grant-bound: <all_urls> + the optional webNavigation permission; OFF by default
     totalBlocked: 0,
     // The page-level part of "AI on websites" runs on every site, so it needs the
     // all-sites grant like Cookie banners do; this is the user's ask for it.

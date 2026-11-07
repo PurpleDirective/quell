@@ -36,8 +36,41 @@
     '#cookieyes-banner', '.cky-consent-container', '.cky-overlay',
     '#cookie-law-info-bar', '#cookie-law-info-again',
     '#CookieConsent', '.cc-window.cc-banner', '.cookiecon-container',
-    '.cookie-consent-banner', '#cookieConsentContainer'
+    '.cookie-consent-banner', '#cookieConsentContainer',
+    // Ketch (live 2026-11-06, drift.com): the whole consent UI — banner, dim
+    // backdrop and preference centre — lives under this one root. The banner
+    // offers only "Open Preferences" on that site and Ketch's buttons carry no
+    // vendor-wide reject id, so Ketch is hidden, never clicked.
+    '#lanyard_root'
   ];
+
+  // Consent WALLS that are a site's own markup, not a consent platform's:
+  // each entry names the host, how to find the wall, and what it locked.
+  // Found on live pages 2026-11-06 (see the 0.7.4 verification). A wall is
+  // hidden only while the host matches, so a look-alike class elsewhere is
+  // never touched. `lockClasses` are classes the site put on <html>/<body> to
+  // stop scrolling; `inert` selectors are page parts the wall made unusable.
+  const WALLS = [
+    // CNN: an unnamed full-viewport div (inline style, z-index 999999,
+    // aria-hidden) holding a role=dialog titled "Legal Terms and Privacy".
+    // It also sets position:fixed, a fixed height and overflow:hidden on
+    // <body> and `inert` on the header.
+    { host: /(^|\.)cnn\.com$/,
+      find: () => [...document.querySelectorAll('body > div[aria-hidden="true"]')].filter((d) =>
+        d.querySelector(':scope > [role="dialog"][aria-modal="true"]') &&
+        /Legal Terms and Privacy|collection and use of your information by cookies/i.test(d.textContent || '')),
+      inert: ['header[inert]'] },
+    // Corriere della Sera: div.privacy-cp-wall ("Accetta e continua" /
+    // "Rifiuta e abbonati" — the second is a paid-subscription route, not a
+    // reject). body.noScroll makes the page position:fixed.
+    { host: /(^|\.)corriere\.it$/,
+      find: () => [...document.querySelectorAll('.privacy-cp-wall')],
+      lockClasses: ['noScroll'] },
+  ];
+  const wallsHere = WALLS.filter((w) => w.host.test(location.hostname));
+  const WALL_MARK = 'data-quell-wall';
+  // Inline body properties a wall may set to freeze the page.
+  const BODY_LOCK_PROPS = ['position', 'overflow', 'overflow-y', 'height', 'max-height', 'width', 'max-width', 'top'];
 
   // Read through src/shared/settings.js (registered alongside this file):
   // cookieEnabled is a per-device switch in storage.local, the rest are the
@@ -389,6 +422,9 @@
   let observer = null;
   let scheduled = false;
   let cmpSeen = false;
+  let wallSeen = false;
+  let liftedBody = null;   // body's inline lock, as the wall set it
+  const liftedInert = [];
   let rejectOn = false;
 
   // The switch for layer 1. Must stay identical to GENERIC_GATE in
@@ -421,12 +457,40 @@
         el.style.setProperty('overflow', 'auto', 'important');
       }
     }
+    // A site-own wall freezes the page with inline body styles, a class and
+    // `inert`. Take exactly those off while the wall is hidden (relock() puts
+    // them back), so the page scrolls and its header works as it does after
+    // the visitor has answered.
+    if (wallSeen) {
+      for (const w of wallsHere) {
+        for (const c of w.lockClasses || []) {
+          for (const el of [document.documentElement, document.body]) {
+            if (el && el.classList.contains(c) && lockLifts < 20) {
+              lockLifts++;
+              el.classList.remove(c);
+              if (!liftedLocks.some((l) => l.el === el && l.c === c)) liftedLocks.push({ el, c });
+            }
+          }
+        }
+        for (const sel of w.inert || []) {
+          for (const el of document.querySelectorAll(sel)) {
+            if (!liftedInert.includes(el)) liftedInert.push(el);
+            el.removeAttribute('inert');
+          }
+        }
+      }
+      const b = document.body;
+      if (b && b.style.position === 'fixed') {
+        if (!liftedBody) { liftedBody = {}; for (const p of BODY_LOCK_PROPS) liftedBody[p] = [b.style.getPropertyValue(p), b.style.getPropertyPriority(p)]; }
+        for (const p of BODY_LOCK_PROPS) b.style.removeProperty(p);
+      }
+    }
     // The class can arrive after the banner did; a class change on <html> or
     // <body> is not a child-list mutation, so watch those two attributes.
     if (!lockObserver && document.body) {
       lockObserver = new MutationObserver(schedule);
       for (const el of [document.documentElement, document.body]) {
-        lockObserver.observe(el, { attributes: true, attributeFilter: ['class'] });
+        lockObserver.observe(el, { attributes: true, attributeFilter: wallsHere.length ? ['class', 'style'] : ['class'] });
       }
     }
   };
@@ -440,7 +504,13 @@
     priorOverflow.clear();
     // Put a lifted lock class back only while its message is still on the page.
     const open = document.querySelector('[id^="sp_message_container"]');
-    for (const { el, c } of liftedLocks) if (open) el.classList.add(c);
+    for (const { el, c } of liftedLocks) if (open || wallsHere.some((w) => (w.lockClasses || []).includes(c))) el.classList.add(c);
+    // A wall's own lock comes back with the wall (Quell off, site paused).
+    if (liftedBody && document.body) {
+      for (const [p, [v, pr]] of Object.entries(liftedBody)) if (v) document.body.style.setProperty(p, v, pr);
+    }
+    liftedBody = null;
+    for (const el of liftedInert.splice(0)) el.setAttribute('inert', '');
     liftedLocks.length = 0;
     lockLifts = 0;
   };
@@ -458,6 +528,17 @@
           el.dataset.quellSeen = '1';
           n++;
         }
+      }
+    }
+    // Site-own consent walls (WALLS): marked, hidden by the stylesheet, counted
+    // once, and their page lock released with the rest in unlock().
+    for (const w of wallsHere) {
+      let found = [];
+      try { found = w.find(); } catch (_) { /* markup changed: leave it */ }
+      for (const el of found) {
+        present = true;
+        wallSeen = true;
+        if (el.getAttribute(WALL_MARK) !== '1') { el.setAttribute(WALL_MARK, '1'); n++; }
       }
     }
     // A banner counted on an earlier pass still gates the unlock: switching
@@ -504,7 +585,8 @@
       'html.didomi-popup-open,body.didomi-popup-open,' +
       'html.sp-message-open,body.sp-message-open,' +
       'html.cky-overlay-open,body.cky-modal-open' +
-      '{overflow:auto!important;}');
+      '{overflow:auto!important;}' +
+      `[${WALL_MARK}="1"]{display:none!important;}`);
 
     // Domain-specific selectors for THIS host (tiny, host-sliced response).
     try {
@@ -546,7 +628,9 @@
     dropStyle('quell-cookies-site');
     genericSheet(false);
     relock();
+    for (const el of document.querySelectorAll(`[${WALL_MARK}]`)) el.removeAttribute(WALL_MARK);
     cmpSeen = false;
+    wallSeen = false;
   }
 
   const applyState = (s) => {

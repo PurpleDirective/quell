@@ -211,6 +211,27 @@
             <label class="olabel" for="pApp">“Open in app” banners</label>
             <label class="sw"><input type="checkbox" role="switch" id="pApp" /><span class="knob"></span></label>
           </div>
+          <div class="orow">
+            <label class="olabel" for="pSignup">Sign-up and log-in prompts<small id="pSignupD"></small></label>
+            <label class="sw"><input type="checkbox" role="switch" id="pSignup" aria-describedby="pSignupD" /><span class="knob"></span></label>
+          </div>
+        </div>
+
+        <!-- LINKS (0.7.4) -->
+        <div class="frow">
+          <label class="rs" for="links">
+            <input type="checkbox" role="switch" class="rsin" id="links" aria-describedby="linksD" />
+            <svg class="gly" width="18" height="18" viewBox="26 20 80 88" aria-hidden="true"><path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" stroke-width="6" stroke-linejoin="round"/></svg>
+            <span class="rt"><b id="gLinks">Remove tracking from links</b><small id="linksD">Asks your browser for access to all sites</small></span>
+            <span class="fstate" aria-hidden="true"></span>
+          </label>
+          <button type="button" class="xp" id="linkExpand" aria-expanded="false" aria-controls="linkBody" aria-label="Link options"><svg class="chev" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+        <div class="opts" id="linkBody" hidden>
+          <div class="orow">
+            <label class="olabel" for="linkWarn">Warn me if a site swaps an affiliate code<small id="linkWarnD">Only warns. Quell never changes an affiliate code</small></label>
+            <label class="sw"><input type="checkbox" role="switch" id="linkWarn" aria-describedby="linkWarnD" /><span class="knob"></span></label>
+          </div>
         </div>
 
         <!-- AI ON WEBSITES -->
