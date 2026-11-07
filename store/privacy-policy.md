@@ -1,14 +1,32 @@
 # Quell Privacy Policy
 
-Version 3.0.0 · Effective October 19, 2026
+Version 3.1.0 · Effective November 6, 2026
 
 This policy explains how Purple Directive ("we", "us") collects, uses and shares information when you use Quell and its related websites, communications and services (the "Services"). The information we collect depends on how you use the Services and on the choices you make.
 
 ## About Quell
 
-Quell is a browser extension that hides content you did not ask for on the pages you visit, such as AI answers in search results, cookie banners and pop-ups. It asks for access to the sites where it works so it can hide the page elements you choose. Some features act on a page for you, such as declining a cookie banner; the site and its tools handle that choice under their own policies. The extension itself does not collect analytics, and you do not need an account to use it. The rest of this policy covers our websites and any information you choose to send us.
+Quell is a browser extension that hides content you did not ask for on the pages you visit, such as AI answers in search results, cookie banners and pop-ups. It asks for access to the sites where it works so it can hide the page elements you choose. Some features act on a page for you, such as declining a cookie banner; the site and its tools handle that choice under their own policies. You do not need an account to use it. The extension sends us nothing unless you choose to: a problem report you send, or, if you leave the first-run box ticked, the anonymous usage counts described in "Quell usage counts and the uninstall page" below. The rest of this policy covers our websites and any information you choose to send us.
 
 Your Quell settings are stored in your browser, and your browser may sync them across your devices under its own terms. If you choose to report a problem, we receive the information needed to look into it, such as the site's address and the version of Quell you are using. Sending a report is optional. If a feature sends information to us, we handle it as this policy describes. Our website, purpledirective.com, has its own privacy policy (https://purpledirective.com/privacy/).
+
+## Quell usage counts and the uninstall page
+
+When you first open Quell, it asks whether you will let it send anonymous usage counts. The box is ticked by default. Nothing is sent until you have answered, and if you untick it or answer no, nothing is ever sent.
+
+**What we collect if you say yes.** A random install identifier that Quell makes on your device, which is not linked to your name, email address, browser account or device. For each day (in UTC): how many times you opened Quell's popup and used its controls (peek, undo, pause, the report dialog, and your answer on the first-run card); how many items Quell hid for each feature (AI answers, cookie banners, pop-ups); whether each of Quell's own switches is on or off; the Quell version; the browser (Chrome, Firefox or Opera); and error messages from Quell, with the name of the Quell file they came from and any web address removed.
+
+**What we never collect this way.** The addresses or domains of the pages you visit, your search terms, page content, or your browsing history. Our server does not store your IP address or browser details for these counts.
+
+**Why.** To count how many people use Quell, to see which features are used, and to find and fix errors. We do not use these counts for advertising, we do not sell them, and we do not share them with anyone outside the service providers that host them for us. The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements.
+
+**How it is sent.** At most once a day, as one small request to purpledirective.com. In Firefox, only while Firefox also reports that you have allowed Quell's data collection permission for technical and interaction data.
+
+**How long we keep it.** Records that carry the install identifier are deleted after 90 days. Daily totals that carry no identifier are deleted after 180 days.
+
+**Turning it off.** You can turn usage counts off at any time in Quell's settings. Quell then stops sending at once and deletes the queued counts and the install identifier from your device. Removing Quell stops everything.
+
+**The uninstall page.** When you remove Quell, your browser opens a short page on purpledirective.com asking why. The address carries the Quell version and your browser. If usage counts were on, it also carries the install identifier, so that your answer can be matched to those counts; if they were off, it carries no identifier. Answering is optional. You can pick a reason, add up to 500 characters of text, and give an email address if you would like a reply. We store the reason, the text, the email address if you gave one, the version, the browser, the identifier if it was in the address, and the date. We do not store your IP address or browser details. We delete answers after two years, and sooner if you ask us to at support@purpledirective.com.
 
 ## Information we collect
 

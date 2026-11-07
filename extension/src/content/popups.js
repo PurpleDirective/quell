@@ -282,7 +282,7 @@
     }
     unlock();
     if (n > 0) {
-      try { chrome.runtime.sendMessage({ type: 'blocked', count: n }); } catch (_) { /* sw asleep */ }
+      try { chrome.runtime.sendMessage({ type: 'blocked', count: n, feature: 'popups' }); } catch (_) { /* sw asleep */ }
     }
   };
 
@@ -363,6 +363,21 @@
     if (s.enabled && s.popupsEnabled && anyCat && !paused) return apply(s);
     teardown();
   };
+
+  // Listed by the popup, Peek and Undo (see QuellSettings.hidden): what this
+  // layer hid on the page and has not put back as content.
+  try {
+    globalThis.QuellSettings.hidden.register('popup', () => {
+      if (!active) return [];
+      const out = [];
+      for (const el of document.querySelectorAll('[data-quell-popup-seen="1"]')) {
+        const chat = CHAT_RE.test(attrText(el)) || [...el.querySelectorAll('iframe')].some((f) => CHAT_RE.test(attrText(f)));
+        out.push({ el, label: chat ? 'Chat widget' : 'Pop-up', detail: 'Hidden' });
+      }
+      return out;
+    }, () => active);
+    globalThis.QuellSettings.hidden.listen();
+  } catch (_) { /* test context */ }
 
   try {
     globalThis.QuellSettings.onChange(

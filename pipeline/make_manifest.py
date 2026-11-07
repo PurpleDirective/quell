@@ -23,8 +23,9 @@ the engines.
 
 Firefox differences, and why:
   background            Firefox MV3 runs an event page, not a service worker:
-                        background.scripts, with settings.js listed first
-                        (Chrome loads it via importScripts instead).
+                        background.scripts, with settings.js, config.js,
+                        browser.js and analytics.js listed first (Chrome loads
+                        them via importScripts instead).
   name                  AMO caps names at 45 characters; the Chrome name is 50.
   minimum_chrome_version  Chrome-only key; dropped.
   browser_specific_settings.gecko
@@ -36,10 +37,13 @@ Firefox differences, and why:
                         storage.session (115), CSS :has() (121).
     data_collection_permissions
                         required ["none"]: Quell collects nothing to run.
-                        optional: the breakage report the user may choose to
-                        send — a site's domain (browsingActivity) and the
-                        Quell version (technicalAndInteraction). Firefox asks
-                        the user the first time they send one.
+                        optional: technicalAndInteraction — the anonymous daily
+                        usage counts (src/shared/analytics.js), which are sent
+                        only if the user ticked the first-run box AND Firefox
+                        reports this permission as granted — and the breakage
+                        report the user may choose to send: a site's domain
+                        (browsingActivity) and the Quell version. Firefox asks
+                        the user the first time.
   browser_specific_settings.gecko_android
     strict_min_version  142.0 — data_collection_permissions on Android.
 """
@@ -58,7 +62,10 @@ FIREFOX_NAME = SHORT_NAME
 def firefox(m):
     m = copy.deepcopy(m)
     m["name"] = FIREFOX_NAME
-    m["background"] = {"scripts": ["src/shared/settings.js", "src/background.js"]}
+    m["background"] = {"scripts": [
+        "src/shared/settings.js", "src/shared/config.js", "src/shared/browser.js",
+        "src/shared/analytics.js", "src/background.js",
+    ]}
     m.pop("minimum_chrome_version", None)
     m["browser_specific_settings"] = {
         "gecko": {

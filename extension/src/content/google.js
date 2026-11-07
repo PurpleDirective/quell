@@ -293,6 +293,26 @@
     applyHide();
   }
 
+  // What the popup can list, Peek and Undo: only blocks Quell itself is hiding
+  // (its own selectors and the label pass), so nothing organic can ever be in
+  // the list. See QuellSettings.hidden in shared/settings.js.
+  const hiddenNow = () => {
+    if (!hideActive) return [];
+    const out = [];
+    const sel = blockSelectors().join(',');
+    const nameOf = (el) => {
+      const sf = el.dataset.quellSurface;
+      if (sf === 'aiMode') return 'AI Mode';
+      if (sf === 'paa') return 'People also ask answer';
+      return 'AI Overview';
+    };
+    if (sel) for (const el of document.querySelectorAll(sel)) out.push({ el, label: nameOf(el), detail: 'Google · hidden' });
+    for (const el of document.querySelectorAll('[data-quell-hidden="1"]')) out.push({ el, label: nameOf(el), detail: 'Google · hidden' });
+    if (surfaces.gemini) for (const el of document.querySelectorAll(GEMINI_SEL.join(','))) out.push({ el, label: 'Gemini promo', detail: 'Google · hidden' });
+    return out;
+  };
+  window.QuellSettings.hidden.register('search', hiddenNow, () => hideActive);
+
   // Subscribe BEFORE the first async read: a toggle landing during that read
   // would otherwise be missed entirely (the read returns the new value, the
   // listener isn't attached yet) and the page would sit stale until reload.

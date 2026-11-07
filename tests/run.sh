@@ -19,6 +19,9 @@ ln -sfn "$PW" node_modules/playwright
 rc=0
 node background.mjs || rc=1
 echo
+# Usage counts: consent gate, queue clearing, payload scrubbing, Firefox gate.
+node analytics.mjs || rc=1
+echo
 node smoke.mjs || rc=1
 echo
 node compat.mjs || rc=1

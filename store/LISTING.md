@@ -1,4 +1,4 @@
-# Quell — store listings (v0.7.2)
+# Quell — store listings (v0.7.3)
 
 Build with `pipeline/package.sh`:
 
@@ -68,10 +68,12 @@ click.
 
 WHY QUELL?
 • Free forever. No account, no paywall, no "pro" upsell on the blocking core.
-• Private. No analytics, no telemetry. Your settings sync through your own
-  browser account like bookmarks do — never to us. The only thing Quell ever
-  sends us is a "this site looks broken" report you choose to send: the
-  site's domain and Quell's version, shown to you before it goes.
+• Private. Your settings sync through your own browser account like bookmarks
+  do — never to us. Quell sends us nothing until you answer one question on
+  first run: may it send anonymous usage counts (which features get used,
+  never a page, a domain or a search). Say no and it sends nothing, ever.
+  A "this site looks broken" report is sent only when you press Send, with
+  the site's domain and Quell's version shown to you first.
 • Asks before AI comes back — switching an AI surface back on needs a
   confirmation, so a stray click doesn't undo your choice.
 • Honest. Quell doesn't claim to "delete your data from AI servers" — no
@@ -96,7 +98,8 @@ and app banners — in the user's browser.
 **Permission justifications:**
 - `storage` — saves the user's settings (in `storage.sync`, so the browser can
   sync them to the user's own browser account) and, locally, the per-device
-  feature switches and the hidden-items counter. Nothing is sent to us.
+  feature switches, the hidden-items counter, your usage-counts answer and,
+  only if you said yes, the queued counts. Settings are never sent to us.
 - `declarativeNetRequest` — blocks known cookie-consent-platform scripts by
   URL rule, without Quell ever reading the user's traffic.
 - `scripting` — registers and unregisters content scripts at runtime as the user
@@ -122,13 +125,28 @@ and app banners — in the user's browser.
   the breakage report; and, if the user additionally switches on "Say reject
   all for me" (off by default), to click the consent platform's own Reject-all
   control.
-- No new permission is needed for the breakage report: it is a plain CORS
-  request from the popup to purpledirective.com.
+- No new permission is needed for the breakage report or the usage counts:
+  both are plain CORS requests to purpledirective.com. The daily send is
+  attempted when the worker starts and on the first count of a new day, so
+  the `alarms` permission is not requested.
+- Uninstall survey: `runtime.setUninstallURL` (no permission) opens
+  https://purpledirective.com/quell/goodbye?v=<version>&b=<browser> when Quell
+  is removed; `&i=<install id>` is added only while usage counts are on.
 
-**Data usage — the dashboard's answers for 0.6.0:**
+**Data usage — the dashboard's answers for 0.7.3:**
 
 *What user data do you plan to collect from users now or in the future?*
-Tick **Web history** — and nothing else.
+Tick **Web history** (the breakage report) and **User activity** (the usage
+counts, asked once on first run, ticked by default) — and nothing else.
+
+> User activity: only after the user ticks the first-run box (ticked by
+> default; nothing is sent until they answer). Per UTC day: counts of popup
+> actions and of items hidden per feature, which Quell switches are on, the
+> Quell version and browser, a random install id, and error text with web
+> addresses removed. No page address, domain, search term, page content or
+> browsing history. At most one request a day. Used only to see which
+> features are used and to fix errors. The user can turn it off at any time,
+> which stops sending and deletes the queue and id.
 
 > Web history: only the hostname of a site the user chooses to report with
 > "This site looks broken" (for example `shop.example.com`), sent with the
@@ -140,7 +158,7 @@ Tick **Web history** — and nothing else.
 Leave every other category unticked — Quell collects none of them:
 personally identifiable information, health information, financial and
 payment information, authentication information, personal communications,
-location, user activity, website content.
+location, website content.
 
 *Certifications* — tick all three:
 - I do not sell or transfer user data to third parties, outside of the
@@ -150,41 +168,43 @@ location, user activity, website content.
 - I do not use or transfer user data to determine creditworthiness or for
   lending purposes.
 
-The same answer, in words, for any free-text field: *Quell does not collect
-data to work. The only data it ever sends is a report the user chooses to
-send — the hostname of the site they report, and Quell's version — used only
-for fixing site breakage. It is not sold, not shared, and not used for any
-unrelated purpose or to determine creditworthiness or for lending.*
+The same answer, in words, for any free-text field: *Quell collects nothing
+to work. It sends data in two cases only: a report the user chooses to send
+(the hostname of the site they report, and Quell's version), and anonymous
+daily usage counts if the user answers yes on the first-run card (feature
+counts, switch states, version, browser, a random install id, scrubbed error
+text; never a page address, domain, search term or page content). Used only
+to fix site breakage and to see which features are used. Not sold, not
+shared, not used for any unrelated purpose or to determine creditworthiness
+or for lending. The use of information received from Google APIs will adhere
+to the Chrome Web Store User Data Policy, including the Limited Use
+requirements.*
 
 **Privacy policy URL:** https://purpledirective.com/quell/privacy/
 (LIVE since 2026-07-14 — trailing slash matters: the bare path 308-redirects,
 the slash URL serves 200 directly. Verified serving the actual policy, not the
 homepage. The v0.4.0 rejection — "Purple Nickel", User Data Privacy — was this
 URL 200-serving the homepage via the CF Pages SPA fallback before the page and
-a real 404.html existed.) **Publish the current policy (v3.0.0,
-effective 2026-10-19; store/privacy-policy.md) to that URL before submitting 0.6.0** — the listing
-now describes the breakage report and sync, and the live policy must match.
+a real 404.html existed.) **Publish the current policy (v3.1.0,
+effective 2026-11-06; store/privacy-policy.md) to that URL before submitting 0.7.3** — the listing
+now describes the usage counts and the uninstall page, and the live policy must match.
 
 ## Assets (store/assets/)
 
-Regenerated 2026-09-25 from real renders of the 0.6.0 popup and welcome page
-(`node store/make-assets.mjs`; captions are the only thing drawn on top, plus a
-highlight ring placed from the rendered row's own box):
+Regenerated for 0.7.3 from real renders (`node store/make-assets.mjs`): the popup
+and welcome page are screenshotted from the loaded extension, and the lead image
+loads the local fixture `tests/fixtures/google-results.html` once with Quell off
+and once with it on. Captions, labels and framing are the only things drawn.
 
-- `screenshot-1-1280x800.png` — "Hide the AI you didn't ask for." + the popup
-  in its first-run state
-- `screenshot-2-1280x800.png` — "Keep the answers you open." + close-up of the
-  Search group, the People-also-ask row ringed
-- `screenshot-3-1280x800.png` — "Quiet, on your terms." + the welcome page
-  (Cookie banners / Pop-ups off until asked; access given back)
+- `screenshot-1-1280x800.png` — "Hide the AI answer. Keep the results." the
+  same results page without and with Quell, and the popup ("Hid 2 things on this page.")
+- `screenshot-2-1280x800.png` — "See what Quell hid. Bring it back in one click."
+  the popup with Peek and Undo, and the paused-on-this-site state
+- `screenshot-3-1280x800.png` — "Cookie banners and pop-ups, quietly gone."
+  the welcome page: the three features and the one-time ask
 - `tile-small-440x280.png` — small promo tile
 - `marquee-1400x560.png` — marquee promo tile (optional upload)
 - Icon: `extension/icons/icon128.png` (uploaded from the zip automatically)
-
-No before/after Google screenshot: every Google load in the 2026-09-25 live
-run hit Google's `/sorry/` bot wall. make-assets.mjs
-builds a fourth screenshot from any real before/after pair via
-`QUELL_BEFORE` / `QUELL_AFTER` once a clean one exists.
 
 ## Submission runbook (one-time)
 
@@ -214,7 +234,7 @@ Quell — Block AI Overviews & Cookie Popups
 **Summary** (≤250 chars):
 Quiet the web. Hide AI answers on Google, Bing, DuckDuckGo, Brave and Yahoo —
 never a real result — and block cookie banners and pop-ups. Free, open source,
-no tracking.
+no ads, no profiling.
 
 **Description:** use the Chrome description above, with these edits:
 - DuckDuckGo, Brave & Yahoo: "your browser asks once" → "Firefox asks once, on a Quell
@@ -239,8 +259,11 @@ Firefox at install and on the AMO listing):**
 - `optional: ["browsingActivity", "technicalAndInteraction"]` — the breakage
   report: the hostname of the site the user chooses to report
   (browsingActivity — AMO's counterpart of Chrome's "Web history") and
-  Quell's version (technicalAndInteraction). Firefox asks the user the first
-  time they send one; declining sends nothing.
+  Quell's version (technicalAndInteraction); and the daily usage counts, asked once on first run
+  (technicalAndInteraction): feature counts, switch states, version, browser,
+  random install id, scrubbed error text. Quell sends the counts only while
+  `browser.permissions.contains({data_collection: ["technicalAndInteraction"]})`
+  is true. Firefox asks the user; declining sends nothing.
 - Use, for the listing's privacy notes and any reviewer question: only for
   fixing site breakage; not sold, not shared, not used for unrelated purposes
   or to determine creditworthiness — the same answer as the Chrome Web Store.
@@ -252,9 +275,13 @@ Firefox at install and on the AMO listing):**
 > generated from EasyList by pipeline/build_rules.py (source in the public
 > repo). Optional host permissions: DuckDuckGo/Brave/Yahoo (engine switch)
 > and <all_urls> (Cookie banners / Pop-ups switches). The only network request
-> the extension makes is the user-initiated breakage report
+> the extension makes are the user-initiated breakage report
 > (POST https://purpledirective.com/api/quell/report, body
-> {"host","version"}), gated on the optional data-collection permission.
+> {"host","version"}) and, only after the user answers yes on the first-run
+> card AND the optional technicalAndInteraction permission is granted, one
+> anonymous usage-counts POST a day (https://purpledirective.com/api/quell/events;
+> payload documented in src/shared/analytics.js). Both are gated on the optional
+> data-collection permission.
 > Test: search Google for "what is photosynthesis" — the AI Overview is
 > hidden, the results are not.
 

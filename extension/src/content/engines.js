@@ -263,6 +263,15 @@
   if (window.__quellEngines) return;
   window.__quellEngines = true;
 
+  // Listed by the popup, Peek and Undo (see QuellSettings.hidden). The organic
+  // guard applies here too: nothing inside the organic container is listed.
+  const engineName = host.endsWith('duckduckgo.com') ? 'DuckDuckGo' : host.endsWith('brave.com') ? 'Brave' : 'Yahoo';
+  window.QuellSettings.hidden.register('search', () => {
+    if (!active) return [];
+    const els = new Set([...document.querySelectorAll(cfg.css.join(',')), ...document.querySelectorAll('[data-quell-hidden="1"]')]);
+    return [...els].filter((el) => !isOrganic(el))
+      .map((el) => ({ el, label: 'AI answer', detail: engineName + ' · hidden' }));
+  }, () => active);
   window.Quell.onSettingsChange(['enabled', 'aiEnabled', 'aiAllowlist', cfg.key], (next) => applyState(next, true));
   // Cut off from the extension: stop hiding (see onGone in settings.js).
   window.Quell.onGone(teardown);

@@ -468,7 +468,7 @@
     if (rejectOn) tryReject();
     unlock();
     if (n > 0) {
-      try { chrome.runtime.sendMessage({ type: 'blocked', count: n }); } catch (_) { /* sw asleep */ }
+      try { chrome.runtime.sendMessage({ type: 'blocked', count: n, feature: 'cookies' }); } catch (_) { /* sw asleep */ }
     }
   };
 
@@ -565,6 +565,22 @@
   // but the FIRST run's listener keeps applying state, so live-apply survives.
   if (window.__quellCookies) return;
   window.__quellCookies = true;
+
+  // Listed by the popup, Peek and Undo (see QuellSettings.hidden): the consent
+  // containers this script found and hid on this page.
+  try {
+    globalThis.QuellSettings.hidden.register('cookie', () => {
+      if (!active) return [];
+      const out = [];
+      for (const sel of SEED) {
+        for (const el of document.querySelectorAll(sel)) {
+          out.push({ el, label: 'Cookie banner', detail: rejected && rejectOn ? 'Rejected for you' : 'Hidden', rejected: rejected && rejectOn });
+        }
+      }
+      return out;
+    }, () => active);
+    globalThis.QuellSettings.hidden.listen();
+  } catch (_) { /* test context */ }
 
   // Subscribe before the first async read — a toggle landing during that read
   // would otherwise be missed and the page would sit stale until reload.

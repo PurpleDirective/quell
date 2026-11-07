@@ -1,4 +1,4 @@
-# quell-report — the "This site looks broken" endpoint
+# quell-report — the "This site looks broken" and usage-counts endpoint
 
 A dependency-free Cloudflare Worker. It receives the one thing Quell ever
 sends to Purple Directive: a report the user clicks, whose body is exactly
@@ -29,6 +29,39 @@ The host rule (public DNS names only) is shared with the extension's
 |---|---|---|---|
 | `/api/quell/report` | POST | extension Origin (CORS, text/plain body) | record a report |
 | `/api/quell/reports?days=7` | GET | `Authorization: Bearer $READ_TOKEN` | aggregated rows for the weekly rules work |
+| `/api/quell/events` | POST | extension Origin (CORS, text/plain body) | record one install's daily usage counts (0.7.3) |
+| `/api/quell/stats?days=14` | GET | `Authorization: Bearer $READ_TOKEN` | active installs, switch adoption, hides, events, errors |
+
+## Usage counts (`/api/quell/events`)
+
+Sent by the extension at most once a day, and only after the user answered yes on the
+first-run card (and, on Firefox, only with the `technicalAndInteraction` permission). The
+body is validated strictly; any extra key, unknown event or feature name, non-integer
+count, bad date or malformed id is a 400 and nothing is stored:
+
+```json
+{"v":1,"id":"<uuid v4>","version":"0.7.3","browser":"chrome",
+ "days":[{"day":"2026-11-05",
+          "switches":{"enabled":true,"ai":true,"cookies":false,"popups":false,"engines":false,"reject":false},
+          "events":{"popup_open":3,"peek":1},
+          "hides":{"ai":12,"cookies":0,"popups":0},
+          "errors":[{"m":"message with no URL","f":"background.js","n":2}]}]}
+```
+
+Up to 7 days per request (catch-up after being offline), body at most 6 KB. Event names:
+`popup_open peek undo pause report_open firstrun_turn_on firstrun_skip`. Error messages
+are scrubbed of URLs and host names in the extension and again here.
+
+Stored (`schema.sql`): `quell_install_days` (one row per install id and UTC day; this is
+what makes "active installs" countable and a replayed day a no-op; purged after 90 days),
+and aggregates without the id, `quell_daily`, `quell_events`, `quell_errors` (purged after
+180 days). No IP, user-agent or finer timestamp is stored; the rate limiter uses the same
+salted hash and limits as `/report`. The privacy policy (`store/privacy-policy.md`) states
+these retention periods: change both together.
+
+`/stats` returns `active_installs_per_day`, `weekly_active_installs` (distinct ids over 7
+days), `by_browser`, `by_version`, `adoption_and_hides_per_day` (installs and how many had
+each switch on, plus hide counts), `events` and the top `errors`.
 
 Limits: 5 reports/minute per client, 300/minute overall, 512-byte bodies;
 rows older than 180 days are purged daily by the cron trigger.
@@ -44,6 +77,12 @@ D1-shaped adapter. Also run by `tests/run.sh`.
 
 ## Deploy (operator — not done by the PR that added this)
 
+**Deploy order for a release that changes the schema or endpoints (e.g. 0.7.3):**
+1. schema (`./deploy.sh d1 execute quell-reports --remote --file schema.sql`),
+2. this Worker, 3. the site (privacy page), 4. only then upload the store packages.
+An old Worker answers 4xx to new endpoints, and the extension drops days a server
+refuses, so publishing the extension first loses its first days of counts.
+
 From `server/report-worker/`:
 
 0. Supply the account and database ids from the environment, never the repo:
@@ -56,6 +95,8 @@ From `server/report-worker/`:
 1. First time only: `npx wrangler d1 create quell-reports` (needs no database id)
    and keep the returned `database_id` as `QUELL_D1_DATABASE_ID`.
 2. `./deploy.sh d1 execute quell-reports --remote --file schema.sql`
+   (idempotent: `CREATE TABLE IF NOT EXISTS`. Re-run it for 0.7.3 to add the four
+   `quell_*` usage-count tables to the existing database.)
 3. `openssl rand -hex 32 | ./deploy.sh secret put READ_TOKEN`
 4. `openssl rand -hex 32 | ./deploy.sh secret put RATE_SALT`
 5. Check the two `ratelimits` `namespace_id` values (4201, 4202) are not
@@ -70,6 +111,13 @@ From `server/report-worker/`:
      -H 'Content-Type: text/plain' -d '{"host":"example.com","version":"0.6.0"}'   # 403 (no Origin)
    curl -s -H "Authorization: Bearer $READ_TOKEN" \
      'https://purpledirective.com/api/quell/reports?days=1'                          # the row
+   ```
+   Usage-counts smoke (use a throwaway uuid, then remove its rows):
+   ```sh
+   curl -si -X POST https://purpledirective.com/api/quell/events \
+     -H 'Origin: chrome-extension://hipifmmjmbnkhfajkbmcjkajlfjiehho' -H 'Content-Type: text/plain' \
+     -d '{"v":1,"id":"3b241101-e2bb-4255-8caf-4136c566a962","version":"0.7.3","browser":"chrome","days":[{"day":"'$(date -u -v-1d +%F)'","switches":{"enabled":true,"ai":true,"cookies":false,"popups":false,"engines":false,"reject":false},"events":{},"hides":{},"errors":[]}]}'   # 204
+   curl -s -H "Authorization: Bearer $READ_TOKEN" 'https://purpledirective.com/api/quell/stats?days=2'
    ```
    Then delete the smoke row:
    `./deploy.sh d1 execute quell-reports --remote --command "DELETE FROM reports WHERE host='example.com'"`

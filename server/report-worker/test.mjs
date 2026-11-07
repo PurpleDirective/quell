@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import vm from 'node:vm';
-import worker, { validHost, purgeOld, utcDay, allowedOrigin } from './src/index.js';
+import worker, { validHost, purgeOld, utcDay, allowedOrigin, validateEvents, scrubMessage } from './src/index.js';
 
 const DIR = path.dirname(fileURLToPath(import.meta.url));
 let passed = 0, failed = 0;
@@ -27,7 +27,7 @@ function d1() {
       let args = [];
       const st = {
         bind: (...a) => { args = a; return st; },
-        run: async () => { db.prepare(sql).run(...args); return { success: true }; },
+        run: async () => { const r = db.prepare(sql).run(...args); return { success: true, meta: { changes: Number(r.changes) } }; },
         all: async () => ({ results: db.prepare(sql).all(...args).map((r) => ({ ...r })) }),
       };
       return st;
@@ -206,6 +206,120 @@ console.log('Report Worker — read endpoint for the weekly rules work:');
   const cutoff = await purgeOld(e);
   ok(rows(e).every((x) => x.day >= cutoff) && !rows(e).some((x) => x.host === 'old.example.com'),
     `the scheduled purge drops rows older than 180 days (cutoff ${cutoff})`);
+}
+
+console.log('Events — usage counts (POST /api/quell/events):');
+{
+  const ID = '3b241101-e2bb-4255-8caf-4136c566a962';
+  const D1 = utcDay(new Date(Date.now() - 86400000)), D2 = utcDay(new Date(Date.now() - 2 * 86400000));
+  const sw = (o = {}) => ({ enabled: true, ai: true, cookies: false, popups: false, engines: false, reject: false, ...o });
+  const day = (d, o = {}) => ({ day: d, switches: sw(), events: { popup_open: 2, undo: 1 }, hides: { ai: 7, cookies: 2 }, errors: [{ m: 'boom', f: 'background.js', n: 3 }], ...o });
+  const payload = (o = {}) => ({ v: 1, id: ID, version: '0.7.3', browser: 'chrome', days: [day(D1)], ...o });
+  const evPost = (body, headers = {}) => new Request('https://purpledirective.com/api/quell/events', {
+    method: 'POST', headers: { 'Content-Type': 'text/plain', 'CF-Connecting-IP': IP, 'User-Agent': 'UA-probe/1.0', Origin: CHROME_ORIGIN, ...headers },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
+  const count = (e, t) => e.DB.raw.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n;
+
+  const e = env();
+  const r = await worker.fetch(evPost(payload()), e);
+  ok(r.status === 204 && r.headers.get('Access-Control-Allow-Origin') === CHROME_ORIGIN, `a valid payload is accepted (${r.status})`);
+  const row = e.DB.raw.prepare('SELECT * FROM quell_install_days').get();
+  ok(row.install_id === ID && row.day === D1 && row.hides_ai === 7 && row.sw_enabled === 1 && row.sw_cookies === 0, 'one row per install-day');
+  const agg = e.DB.raw.prepare('SELECT * FROM quell_daily').get();
+  ok(agg.installs === 1 && agg.sw_ai === 1 && agg.hides_ai === 7 && agg.hides_cookies === 2 && agg.browser === 'chrome' && agg.version === '0.7.3', 'aggregate per day/version/browser');
+  ok(e.DB.raw.prepare("SELECT count FROM quell_events WHERE name='popup_open'").get().count === 2, 'event aggregate');
+  ok(e.DB.raw.prepare('SELECT count FROM quell_errors').get().count === 3, 'error aggregate');
+  await worker.fetch(evPost(payload()), e);
+  ok(e.DB.raw.prepare('SELECT installs FROM quell_daily').get().installs === 1 && count(e, 'quell_install_days') === 1, 'a replayed day changes nothing (idempotent)');
+  await worker.fetch(evPost(payload({ id: '3b241101-e2bb-4255-8caf-4136c566a963', days: [day(D1), day(D2)] })), e);
+  ok(e.DB.raw.prepare('SELECT installs FROM quell_daily WHERE day=?').get(D1).installs === 2 && count(e, 'quell_install_days') === 3, 'a second install adds to the aggregate; multi-day payloads store each day');
+
+  const dump = JSON.stringify(['quell_install_days', 'quell_daily', 'quell_events', 'quell_errors'].map((t) => e.DB.raw.prepare(`SELECT * FROM ${t}`).all()));
+  ok(!dump.includes(IP) && !dump.includes('UA-probe'), 'no IP address and no user-agent are stored');
+  const cols = ['quell_install_days', 'quell_daily', 'quell_events', 'quell_errors']
+    .flatMap((t) => e.DB.raw.prepare(`SELECT name FROM pragma_table_info('${t}')`).all().map((c) => c.name));
+  ok(!cols.some((c) => /ip|agent|url|host|domain|query|search|page|ts|time/i.test(c.replace(/^(sw|hides)_/, '')) && c !== 'sw_popups' && c !== 'hides_popups' && c !== 'events_json' && c !== 'installs'),
+    `no column could hold a URL, domain, search or finer timestamp (${cols.join(',')})`);
+
+  for (const [name, body, want] of [
+    ['an extra top-level field', payload({ url: 'https://a.com' }), 400],
+    ['an extra field in a day', payload({ days: [day(D1, { host: 'a.com' })] }), 400],
+    ['a missing field', (() => { const p = payload(); delete p.browser; return p; })(), 400],
+    ['an unknown browser', payload({ browser: 'edge' }), 400],
+    ['v 2', payload({ v: 2 }), 400],
+    ['a non-uuid id', payload({ id: 'user@example.com' }), 400],
+    ['a bad version', payload({ version: '0.7.3; drop' }), 400],
+    ['no days', payload({ days: [] }), 400],
+    ['eight days', payload({ days: Array.from({ length: 8 }, (_, i) => day(utcDay(new Date(Date.now() - (i + 1) * 86400000)))) }), 400],
+    ['a duplicate day', payload({ days: [day(D1), day(D1)] }), 400],
+    ['a future day', payload({ days: [day(utcDay(new Date(Date.now() + 5 * 86400000)))] }), 400],
+    ['an old day', payload({ days: [day('2020-01-01')] }), 400],
+    ['an impossible date', payload({ days: [day('2026-02-30')] }), 400],
+    ['an unknown event name', payload({ days: [day(D1, { events: { visited_site: 1 } })] }), 400],
+    ['a negative count', payload({ days: [day(D1, { events: { undo: -1 } })] }), 400],
+    ['a fractional count', payload({ days: [day(D1, { hides: { ai: 1.5 } })] }), 400],
+    ['an unknown hide feature', payload({ days: [day(D1, { hides: { 'example.com': 1 } })] }), 400],
+    ['a non-boolean switch', payload({ days: [day(D1, { switches: sw({ ai: 'yes' }) })] }), 400],
+    ['an extra switch', payload({ days: [day(D1, { switches: { ...sw(), vpn: true } })] }), 400],
+    ['an error file with a path', payload({ days: [day(D1, { errors: [{ m: 'x', f: 'https://a.com/x.js', n: 1 }] })] }), 400],
+    ['an over-long error message', payload({ days: [day(D1, { errors: [{ m: 'x'.repeat(161), f: 'a.js', n: 1 }] })] }), 400],
+    ['eleven errors', payload({ days: [day(D1, { errors: Array.from({ length: 11 }, (_, i) => ({ m: 'e' + i, f: 'a.js', n: 1 })) })] }), 400],
+    ['an array', [], 400],
+    ['not JSON', 'id=1', 400],
+    ['an oversize body', JSON.stringify(payload({ pad: 'x'.repeat(7000) })), 413],
+  ]) {
+    const x = env();
+    const rr = await worker.fetch(evPost(body), x);
+    ok(rr.status === want && count(x, 'quell_install_days') === 0 && count(x, 'quell_daily') === 0, `${name} → ${want}, nothing stored (${rr.status})`);
+  }
+
+  // A URL that slipped past the client is scrubbed before it is stored.
+  const x = env();
+  await worker.fetch(evPost(payload({ days: [day(D1, { errors: [{ m: 'fail https://shop.example.com/cart?q=secret at www.foo.org', f: 'a.js', n: 1 }] })] })), x);
+  const stored = x.DB.raw.prepare('SELECT message FROM quell_errors').get().message;
+  ok(!/example|secret|foo|:\/\//.test(stored), `a URL or host in an error message is scrubbed server-side (${stored})`);
+  ok(scrubMessage('in popup.js line 3') === 'in popup.js line 3', 'file names survive the scrub');
+  ok(scrubMessage('fetch to 192.168.1.5:8080/admin failed; localhost:3000 refused; [::1]:9/x') === 'fetch to <ip> failed; <host> refused; <ip>', 'IP literals and localhost are scrubbed server-side');
+
+  // Same gate as /report.
+  const bad = env();
+  for (const [name, origin, want] of [['a web page', 'https://evil.example.com', 403], ['no Origin', '', 403], ['Firefox', 'moz-extension://0c7e7a3e-1b2c-4d5e-8f90-123456789abc', 204]]) {
+    const q = evPost(payload(), { Origin: origin }); if (!origin) q.headers.delete('Origin');
+    const rr = await worker.fetch(q, bad);
+    ok(rr.status === want, `${name} → ${want} (${rr.status})`);
+  }
+  const lim = env({ CLIENT_LIMITER: limiter(1) });
+  const c1 = (await worker.fetch(evPost(payload()), lim)).status, c2 = (await worker.fetch(evPost(payload({ id: '3b241101-e2bb-4255-8caf-4136c566a964' })), lim)).status;
+  ok(c1 === 204 && c2 === 429, `rate limited like /report (${c1},${c2})`);
+  const g = await worker.fetch(new Request('https://purpledirective.com/api/quell/events'), e);
+  ok(g.status === 405, 'GET on events → 405');
+  const o = await worker.fetch(new Request('https://purpledirective.com/api/quell/events', { method: 'OPTIONS', headers: { Origin: CHROME_ORIGIN } }), e);
+  ok(o.status === 204, 'OPTIONS preflight answered');
+  ok(validateEvents(payload()).value.days[0].hides.popups === 0, 'validated payload fills missing hide features with 0');
+
+  console.log('Events — stats endpoint:');
+  const noAuth = await worker.fetch(new Request('https://purpledirective.com/api/quell/stats'), e);
+  ok(noAuth.status === 401, 'no token → 401');
+  const st = await worker.fetch(new Request('https://purpledirective.com/api/quell/stats?days=7', { headers: { Authorization: 'Bearer secret-token-123' } }), e);
+  const j = await st.json();
+  const d1 = j.active_installs_per_day.find((a) => a.day === D1);
+  ok(st.status === 200 && d1 && d1.installs === 2, `active installs per day (${JSON.stringify(j.active_installs_per_day)})`);
+  ok(j.weekly_active_installs === 2, `weekly active installs counts distinct ids (${j.weekly_active_installs})`);
+  const ad = j.adoption_and_hides_per_day.find((a) => a.day === D1);
+  ok(ad.ai === 2 && ad.cookies === 0 && ad.hides_ai === 14, `switch adoption and hide counts (${JSON.stringify(ad)})`);
+  ok(j.events[0].name === 'popup_open' && j.events[0].count === 6, `events ranked (${JSON.stringify(j.events[0])})`);
+  ok(j.errors[0].source === 'background.js' && j.errors[0].count >= 3 && j.by_browser[0].browser === 'chrome' && j.by_version[0].version === '0.7.3', 'errors, browser and version summaries');
+
+  e.DB.raw.prepare("INSERT INTO quell_install_days VALUES ('old','2020-01-01','0.7.3','chrome',1,1,0,0,0,0,0,0,0,'{}','[]')").run();
+  e.DB.raw.prepare("INSERT INTO quell_daily (day,version,browser) VALUES ('2020-01-01','0.7.3','chrome')").run();
+  const mid = utcDay(new Date(Date.now() - 120 * 86400000));
+  e.DB.raw.prepare(`INSERT INTO quell_install_days VALUES ('mid','${mid}','0.7.3','chrome',1,1,0,0,0,0,0,0,0,'{}','[]')`).run();
+  e.DB.raw.prepare(`INSERT INTO quell_daily (day,version,browser) VALUES ('${mid}','0.7.3','chrome')`).run();
+  await purgeOld(e);
+  ok(!e.DB.raw.prepare("SELECT 1 FROM quell_install_days WHERE install_id IN ('old','mid')").get() && !e.DB.raw.prepare("SELECT 1 FROM quell_daily WHERE day='2020-01-01'").get(),
+    'purge: install-id rows after 90 days, aggregates after 180');
+  ok(!!e.DB.raw.prepare(`SELECT 1 FROM quell_daily WHERE day='${mid}'`).get(), 'aggregates between 90 and 180 days are kept');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
