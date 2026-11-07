@@ -650,13 +650,30 @@
    "hosts": [
     "www.amazon.com"
    ],
-   "selectors": [],
+   "selectors": [
+    "#dpx-nice-widget-container"
+   ],
    "text": {
     "sel": "h2, h3, h4, h5, h6, span.a-size-base-plus",
     "re": "^Ask (Alexa|Rufus)$"
    },
    "hide": "element",
-   "what": "\"Ask Alexa\" heading"
+   "what": "\"Ask Alexa\" heading and its question pills"
+  },
+  {
+   "id": "x-grok-promo",
+   "group": "buttons",
+   "hosts": [
+    "x.com",
+    "twitter.com"
+   ],
+   "selectors": [],
+   "text": {
+    "sel": "a[href*=\"/i/jf/\"], a[href*=\"/i/grok\"]",
+    "re": "grok"
+   },
+   "hide": "element",
+   "what": "Promotions that mention Grok"
   },
   {
    "id": "x-grok-links",

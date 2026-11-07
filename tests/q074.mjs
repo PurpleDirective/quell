@@ -356,8 +356,8 @@ console.log('AI on websites: YouTube, Amazon and X (fixtures reduced from live-r
   ok(JSON.stringify(hostsOf(/^youtube-/)) === '["www.youtube.com"]' && JSON.stringify(hostsOf(/^amazon-/)) === '["www.amazon.com"]'
     && JSON.stringify(hostsOf(/^x-/).sort()) === '["twitter.com","x.com"]', 'the new rules are scoped to youtube.com, amazon.com and x.com / twitter.com');
   ok(!COSMETIC.some((r) => /how-this-was-made|auto-dub/i.test(r.id + r.what + r.sel.join())), 'the "How this was made / Auto-dubbed" disclosure is not hidden (it is information)');
-  ok(COSMETIC.filter((r) => r.id.startsWith('youtube-')).length === 6 && COSMETIC.filter((r) => r.id.startsWith('amazon-')).length === 9 && COSMETIC.filter((r) => r.id.startsWith('x-')).length === 7,
-    'YouTube 6 rules, Amazon 9, X 7');
+  ok(COSMETIC.filter((r) => r.id.startsWith('youtube-')).length === 6 && COSMETIC.filter((r) => r.id.startsWith('amazon-')).length === 9 && COSMETIC.filter((r) => r.id.startsWith('x-')).length === 8,
+    'YouTube 6 rules, Amazon 9, X 8');
 }
 
 // ------------------------------------------------ F. live-retest fixes (0.7.4) ----------
@@ -586,6 +586,16 @@ console.log('Safety net, blank bands, app bars, sign-in callouts, Bing timing, c
     const off = await open('recipes.test', html, POPUPS, { popupsEnabled: true, hideAppBanners: false }, 1500, "if(m.type==='popupRules') return {generic:[],site:[]};");
     ok(await vis(off, 'appbar'), 'with "Open in app" banners off, the bar shows');
     await off.close();
+    await pg.close();
+  }
+
+  // 3b. Target: a coachmark tooltip in the header ("Sign in for the best experience"), one button "Sign in or create account".
+  {
+    const html = `<!doctype html><html><body><nav id="hdr" style="position:relative;height:80px"><a id="hdr-signin" href="/signin">Sign in</a>
+      <div id="coach" role="tooltip" style="position:absolute;left:200px;top:70px;width:360px;height:240px;background:#fff"><div><h2>Sign in for the best experience</h2><div><span>See past orders and manage returns</span><span>Check out faster</span></div><button type="button" id="coach-btn">Sign in or create account</button></div><button aria-label="close" id="coach-close"></button></div></nav>
+      <main id="main"><h1>Home</h1><p>${LONG}</p></main></body></html>`;
+    const pg = await open('target.test', html, PROMPTS, { popupsEnabled: true });
+    ok(!(await vis(pg, 'coach')) && await vis(pg, 'hdr-signin') && await vis(pg, 'main'), 'target-like: the sign-in coachmark in the header is hidden; the header link and page stay');
     await pg.close();
   }
 

@@ -299,7 +299,7 @@
       if (el.hasAttribute(MARK) || el.closest('[' + MARK + ']') || kept.has(el) || el.hasAttribute(KEEP)) continue;
       const t = el.textContent || '';
       if (t.length > 300 || !/create (an )?account|new customer/i.test(t)) continue;
-      if (![...el.querySelectorAll('a, button')].some((b) => /^\s*sign in\s*$/i.test(b.textContent || ''))) continue;
+      if (![...el.querySelectorAll('a, button')].some((b) => /^\s*sign in( or create( an)? account)?\s*$/i.test(b.textContent || ''))) continue;
       const hasClose = !!el.querySelector('[aria-label*="close" i], [aria-label*="dismiss" i], [class*="close" i], [class*="dismiss" i]')
         || [...el.querySelectorAll('button, [role="button"]')].some((b) => /^[×✕✖xX]$/.test((b.textContent || '').trim()));
       if (!hasClose) continue;
