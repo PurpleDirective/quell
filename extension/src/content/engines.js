@@ -92,10 +92,10 @@
         // footer keeps its place.
         'ol.searchCenterFooter .dd[class*="AlsoTry"]:has(> .compTitle a[href*="scout.yahoo.com"]):not(ol.searchCenterMiddle *)',
         'ol.searchCenterFooter .dd[class*="AlsoTry"]:has(> .compTitle a[href*="/scout/chat"]):not(ol.searchCenterMiddle *)',
-        // The sparkle in the search bar (live 2026-11-06): one <button
-        // role=switch aria-label="Ask Scout"> that is both the Search pill and
-        // the AI toggle. It is a control of the search form, never a result.
-        'form[role="search"] button[role="switch"][aria-label="Ask Scout"]:not(ol.searchCenterMiddle *)',
+        // The sparkle in the search bar (live 2026-11-06) is the same <button
+        // role=switch aria-label="Ask Scout"> as the Search pill. The button is
+        // NOT hidden: only the sparkle part inside it goes (see hideSparkle
+        // below), so Search stays visible and clickable.
         // The floating round sparkle at the bottom right, and its chat panel.
         '#scout-widget:not(ol.searchCenterMiddle *)',
         'button.scout-widget__fab:not(ol.searchCenterMiddle *)',
@@ -111,6 +111,7 @@
       label: 'ai summary',
       block: '.grp-genAISum, ol.searchCenterTop > li, .dd.genAiDD',
       organic: 'ol.searchCenterMiddle',
+      sparkleSwitch: 'form[role="search"] button[role="switch"][aria-label="Ask Scout"]',
       // "AI Summary" is a phrase Yahoo also renders in knowledge panels and
       // in organic titles, so the label alone may not hide anything — the
       // block must carry Yahoo's own AI-summary markup too, the same guard
@@ -170,6 +171,40 @@
   const isOrganic = (el) => !!(cfg.organic && el.closest(cfg.organic))
     && !(cfg.allowInOrganic && el.matches(cfg.allowInOrganic));
 
+  // Yahoo renders the Search pill and its AI sparkle as ONE button. Hide only
+  // the icon part that sits to the right of the button's text (the sparkle), as
+  // its highest wrapper that holds no text of its own; the magnifier beside
+  // the word "Search" and the word itself stay. A button with nothing to split
+  // is left exactly as it is.
+  function hideSparkle() {
+    let n = 0;
+    for (const btn of document.querySelectorAll(cfg.sparkleSwitch)) {
+      if (isOrganic(btn)) continue;
+      const range = document.createRange();
+      let textRight = -1;
+      const tw = document.createTreeWalker(btn, NodeFilter.SHOW_TEXT);
+      for (let t = tw.nextNode(); t; t = tw.nextNode()) {
+        if (!t.nodeValue.trim()) continue;
+        range.selectNodeContents(t);
+        const r = range.getBoundingClientRect();
+        if (r.width > 0) textRight = Math.max(textRight, r.right);
+      }
+      if (textRight < 0) continue; // no visible word to anchor on: leave it
+      for (const icon of btn.querySelectorAll('svg, img')) {
+        if (icon.closest('[data-quell-hidden="1"]')) continue;
+        const r = icon.getBoundingClientRect();
+        if (!(r.width > 0 && r.left >= textRight - 1)) continue;
+        let top = icon;
+        while (top.parentElement && top.parentElement !== btn && !top.parentElement.textContent.trim()) top = top.parentElement;
+        top.style.setProperty('display', 'none', 'important');
+        top.dataset.quellHidden = '1';
+        top.dataset.quellLabel = 'Search-bar sparkle';
+        if (!alreadyCounted(top)) { top.dataset.quellCounted = '1'; n++; }
+      }
+    }
+    return n;
+  }
+
   function sweep() {
     let hidden = 0;
     for (const el of document.querySelectorAll(cfg.css.join(','))) {
@@ -203,6 +238,7 @@
         if (!alreadyCounted(block)) { block.dataset.quellCounted = '1'; hidden++; }
       }
     }
+    if (cfg.sparkleSwitch) hidden += hideSparkle();
     if (cfg.askTab) {
       for (const a of document.querySelectorAll(cfg.askTab)) {
         if (isOrganic(a) || a.dataset.quellHidden === '1') continue;

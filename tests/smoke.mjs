@@ -267,7 +267,7 @@ const YAHOO_FIXTURE = `<!doctype html><html><body>
      its /scout/chat links, and "AI Takeaways" as the head of the Top Stories module INSIDE
      ol.searchCenterMiddle. -->
 <form id="search_p" role="search"><input type="text" name="p" value="test" id="yahoo-searchbox">
-  <button type="button" role="switch" aria-checked="false" aria-label="Ask Scout" id="yahoo-sparkle-switch"><span aria-hidden="true">Search</span></button>
+  <button type="button" role="switch" aria-checked="false" aria-label="Ask Scout" id="yahoo-sparkle-switch" style="display:inline-flex;gap:8px;align-items:center" onclick="document.body.dataset.yswitch='1'"><span id="yahoo-search-pill" style="display:inline-flex;gap:4px;align-items:center"><svg id="yahoo-magnifier" width="12" height="12" viewBox="0 0 12 12"><circle cx="5" cy="5" r="4"/></svg><span aria-hidden="true">Search</span></span><span id="yahoo-sparkle-wrap" style="display:inline-flex"><svg id="yahoo-sparkle" width="14" height="14" viewBox="0 0 14 14"><path d="M7 0l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/></svg></span></button>
   <button type="submit" id="yahoo-other-btn" aria-label="Clear">x</button></form>
 <div id="scout-widget" class="scout-widget"><button class="scout-widget__fab fixed" id="yahoo-fab" type="button" aria-label="Ask Yahoo Scout">*</button></div>
 
@@ -1537,7 +1537,10 @@ console.log('Engines (DuckDuckGo / Brave / Yahoo):');
       'Yahoo: Top Stories and its stories stay under the hidden AI Takeaways');
     ok(await pg.evaluate(() => { const r = document.getElementById('yahoo-takeaways').parentElement; const b = r.getBoundingClientRect(); return b.height === 0 && getComputedStyle(r).display === 'none'; }),
       'Yahoo: the AI Takeaways wrapper is hidden with it (no empty box left)');
-    ok(!(await visOn(pg, 'yahoo-sparkle-switch')), 'Yahoo: the search-bar sparkle (Ask Scout switch) is hidden');
+    ok(!(await visOn(pg, 'yahoo-sparkle')) && !(await visOn(pg, 'yahoo-sparkle-wrap')), 'Yahoo: the search-bar sparkle (the icon inside the Ask Scout switch) is hidden');
+    ok(await visOn(pg, 'yahoo-sparkle-switch') && await visOn(pg, 'yahoo-search-pill') && await visOn(pg, 'yahoo-magnifier'), 'Yahoo: the Search pill and its magnifier stay visible');
+    await pg.click('#yahoo-search-pill');
+    ok(await pg.evaluate(() => document.body.dataset.yswitch === '1'), 'Yahoo: the Search pill is still clickable');
     ok(await visOn(pg, 'yahoo-searchbox') && await visOn(pg, 'yahoo-other-btn'), 'Yahoo: the search box and the form\'s other controls stay');
     ok(!(await visOn(pg, 'yahoo-fab')) && !(await visOn(pg, 'scout-widget')), 'Yahoo: the floating sparkle button is hidden');
     ok(!(await visOn(pg, 'yahoo-explore-live')), 'Yahoo: the live "Explore AI results with Yahoo Scout" panel (/scout/chat links) is hidden');
@@ -1547,7 +1550,7 @@ console.log('Engines (DuckDuckGo / Brave / Yahoo):');
     const off = await run('https://search.yahoo.com/**', YAHOO_FIXTURE,
       'https://search.yahoo.com/search?p=test', { enabled: true, yahooMode: 'off' });
     ok(await visOn(off, 'yahoo-ai'), 'Yahoo: mode off leaves the AI Summary alone');
-    ok(await visOn(off, 'yahoo-takeaways') && await visOn(off, 'yahoo-sparkle-switch') && await visOn(off, 'yahoo-fab') && await visOn(off, 'yahoo-explore-live'),
+    ok(await visOn(off, 'yahoo-takeaways') && await visOn(off, 'yahoo-sparkle-switch') && await visOn(off, 'yahoo-sparkle') && await visOn(off, 'yahoo-fab') && await visOn(off, 'yahoo-explore-live'),
       'Yahoo: mode off leaves the takeaways, sparkle switch, floating sparkle and Explore panel alone');
     ok(await visOn(off, 'yahoo-scout-explore') && await visOn(off, 'yahoo-scout-nav') && await visOn(off, 'yahoo-also-try'),
       'Yahoo: mode off leaves Yahoo Scout alone too');
