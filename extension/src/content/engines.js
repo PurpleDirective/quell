@@ -80,11 +80,31 @@
         '.dd.scoutNav:not(ol.searchCenterMiddle *)',
         '#scoutPromoTooltip:not(ol.searchCenterMiddle *)',
         '#right .dd:has(> .compTitle a[href*="scout.yahoo.com"]):not(ol.searchCenterMiddle *)',
+        // Live 2026-11-06 the panel's links moved to search.yahoo.com/scout/chat
+        // and the block's class became AlsoTry_E; same guards, both link shapes.
+        '#right .dd:has(> .compTitle a[href*="/scout/chat"]):not(ol.searchCenterMiddle *)',
         // The footer "Also try" block, titled "Explore AI results with Yahoo
         // Scout" on live markup 2026-09-25: every link opens a Scout chat.
         // Only when its own title links into Scout; a plain related-searches
         // footer keeps its place.
-        'ol.searchCenterFooter .dd.AlsoTry:has(> .compTitle a[href*="scout.yahoo.com"]):not(ol.searchCenterMiddle *)'],
+        'ol.searchCenterFooter .dd[class*="AlsoTry"]:has(> .compTitle a[href*="scout.yahoo.com"]):not(ol.searchCenterMiddle *)',
+        'ol.searchCenterFooter .dd[class*="AlsoTry"]:has(> .compTitle a[href*="/scout/chat"]):not(ol.searchCenterMiddle *)',
+        // The sparkle in the search bar (live 2026-11-06): one <button
+        // role=switch aria-label="Ask Scout"> that is both the Search pill and
+        // the AI toggle. It is a control of the search form, never a result.
+        'form[role="search"] button[role="switch"][aria-label="Ask Scout"]:not(ol.searchCenterMiddle *)',
+        // The floating round sparkle at the bottom right, and its chat panel.
+        '#scout-widget:not(ol.searchCenterMiddle *)',
+        'button.scout-widget__fab:not(ol.searchCenterMiddle *)',
+        // "AI Takeaways" (live 2026-11-06): Yahoo's AI summary of the news
+        // carousel. It is rendered INSIDE ol.searchCenterMiddle, as the head of
+        // the "Top Stories" module, so it carries no :not(ol.searchCenterMiddle
+        // *) guard; allowInOrganic below tells the sweep it is not organic.
+        // Matched by Yahoo's own class names; the stories under it stay.
+        '.news-ai-overview-host',
+        'div[id^="l-root-"]:has(> .news-ai-overview-host)'],
+      // The only things allowed to be hidden inside the organic container.
+      allowInOrganic: '.news-ai-overview-host, div[id^="l-root-"]:has(> .news-ai-overview-host)',
       label: 'ai summary',
       block: '.grp-genAISum, ol.searchCenterTop > li, .dd.genAiDD',
       organic: 'ol.searchCenterMiddle',
@@ -144,7 +164,8 @@
   // Never hide anything that sits inside the organic-results container. This is
   // the one invariant that must hold on every engine: Quell erasing a real
   // result is worse than any AI block it fails to hide.
-  const isOrganic = (el) => !!(cfg.organic && el.closest(cfg.organic));
+  const isOrganic = (el) => !!(cfg.organic && el.closest(cfg.organic))
+    && !(cfg.allowInOrganic && el.matches(cfg.allowInOrganic));
 
   function sweep() {
     let hidden = 0;

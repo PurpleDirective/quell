@@ -262,11 +262,21 @@ const YAHOO_FIXTURE = `<!doctype html><html><body>
 <div id="sticky-hd"><div id="hd"><div id="scoutPromoTooltip" class="scout-promo-tooltip">
   <div class="scout-promo-tooltip-card"><h3 class="scout-promo-tooltip-title">Try Yahoo Scout</h3></div>
 </div></div></div>
+<!-- Live 2026-11-06 additions (search.yahoo.com, "how long to boil an egg", real UA, logged out):
+     the search bar's sparkle switch, the floating sparkle, the "Explore AI results" panel with
+     its /scout/chat links, and "AI Takeaways" as the head of the Top Stories module INSIDE
+     ol.searchCenterMiddle. -->
+<form id="search_p" role="search"><input type="text" name="p" value="test" id="yahoo-searchbox">
+  <button type="button" role="switch" aria-checked="false" aria-label="Ask Scout" id="yahoo-sparkle-switch"><span aria-hidden="true">Search</span></button>
+  <button type="submit" id="yahoo-other-btn" aria-label="Clear">x</button></form>
+<div id="scout-widget" class="scout-widget"><button class="scout-widget__fab fixed" id="yahoo-fab" type="button" aria-label="Ask Yahoo Scout">*</button></div>
+
 <div id="horizontal-bar"><ol class="reg searchLeftTop">
   <li class="first"><div class="dd scoutNav" id="yahoo-scout-nav"><div class="compText"><p><a href="https://scout.yahoo.com/chat?q=test">Yahoo Scout</a></p></div></div></li>
   <li><div class="dd" id="yahoo-nav-news"><a href="https://news.search.yahoo.com/search?p=test">News</a></div></li>
 </ol></div>
-<div id="right"><ol class="reg searchRightBottom">
+<div id="right"><ol class="reg searchRightBottom"><li class="first last"><div class="dd p-0 bd-0 AlsoTry_E" id="yahoo-explore-live"><div class="compTitle pt-12"><div class="title at-title"><a class="at-icon" href="https://search.yahoo.com/scout/chat;_ylt=x?p=test" aria-label="Yahoo Scout"></a>Explore AI results with Yahoo Scout</div></div>
+  <table class="compTable"><tr><td><a href="https://search.yahoo.com/scout/chat?q=test+minutes">test minutes</a></td></tr></table></div></li></ol><ol class="reg searchRightBottom">
   <li class="first"><div class="dd kp" id="yahoo-right-kp"><div class="compTitle"><a href="https://en.wikipedia.org/wiki/Test">Test — knowledge panel</a></div><p>Not AI.</p></div></li>
   <li class="last"><div class="dd p-0 bd-0" id="yahoo-scout-explore">
     <div class="compTitle"><div class="title at-title"><a href="https://scout.yahoo.com/chat?q=test">Explore AI results with Yahoo Scout</a></div></div>
@@ -280,6 +290,11 @@ const YAHOO_FIXTURE = `<!doctype html><html><body>
   </div></div>
 </li></ol>
 <ol class="reg searchCenterMiddle">
+  <li class="first"><div class="dd tn-carousel" id="yahoo-topstories">
+    <div id="l-root-abc" class="uds"><div class="fabric uds news-ai-overview-host" id="yahoo-takeaways"><div class="news-ai-overview" data-state="collapsed"><span>AI Takeaways</span><h2>Latest on test</h2><button type="button">Show more</button></div></div></div>
+    <div class="compTitle moduleTitle"><h3 class="title" id="yahoo-topstories-title">Top Stories</h3></div>
+    <div id="yahoo-story-1"><a href="https://news.example.com/story">A real news story</a></div>
+  </div></li>
   <li class="first"><div class="dd algo algo-sr" id="yahoo-organic-1"><a href="https://example.com/c">A real result</a></div></li>
   <!-- TRAP: the REAL Britannica organic result. A bare domain-substring
        selector would hit the citation chip above and this together. -->
@@ -300,9 +315,9 @@ const YAHOO_FIXTURE = `<!doctype html><html><body>
 
 // Playwright's bundled Chromium (NOT stable Chrome — it dropped --load-extension).
 async function getContext() {
-  for (const headless of [true, false]) {
+  for (const headless of (process.env.QUELL_HEADLESS_ONLY ? [true] : [true, false])) {
     const c = await chromium.launchPersistentContext('', {
-      headless,
+      headless, ...(process.env.QUELL_HEADLESS_ONLY ? { channel: 'chromium' } : {}),
       args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
     }).catch(() => null);
     if (!c) continue;
@@ -1516,11 +1531,24 @@ console.log('Engines (DuckDuckGo / Brave / Yahoo):');
     ok(!(await visOn(pg, 'yahoo-also-try')), 'Yahoo: the footer "Explore AI results with Yahoo Scout" Also-try block is hidden');
     ok(await visOn(pg, 'yahoo-also-try-plain'), 'Yahoo: a plain "Also try" footer with no Scout title survives');
     ok(await visOn(pg, 'yahoo-nav-news'), 'Yahoo: the other vertical tabs survive');
+    // Live 2026-11-06 additions.
+    ok(!(await visOn(pg, 'yahoo-takeaways')), 'Yahoo: the "AI Takeaways" block (inside the Top Stories module) is hidden');
+    ok(await visOn(pg, 'yahoo-topstories-title') && await visOn(pg, 'yahoo-story-1') && await visOn(pg, 'yahoo-topstories'),
+      'Yahoo: Top Stories and its stories stay under the hidden AI Takeaways');
+    ok(await pg.evaluate(() => { const r = document.getElementById('yahoo-takeaways').parentElement; const b = r.getBoundingClientRect(); return b.height === 0 && getComputedStyle(r).display === 'none'; }),
+      'Yahoo: the AI Takeaways wrapper is hidden with it (no empty box left)');
+    ok(!(await visOn(pg, 'yahoo-sparkle-switch')), 'Yahoo: the search-bar sparkle (Ask Scout switch) is hidden');
+    ok(await visOn(pg, 'yahoo-searchbox') && await visOn(pg, 'yahoo-other-btn'), 'Yahoo: the search box and the form\'s other controls stay');
+    ok(!(await visOn(pg, 'yahoo-fab')) && !(await visOn(pg, 'scout-widget')), 'Yahoo: the floating sparkle button is hidden');
+    ok(!(await visOn(pg, 'yahoo-explore-live')), 'Yahoo: the live "Explore AI results with Yahoo Scout" panel (/scout/chat links) is hidden');
+    ok(await visOn(pg, 'yahoo-organic-1') && await visOn(pg, 'yahoo-organic-trap') && await visOn(pg, 'yahoo-organic-scout'), 'Yahoo: every organic result still shows after the new rules');
     await pg.close();
 
     const off = await run('https://search.yahoo.com/**', YAHOO_FIXTURE,
       'https://search.yahoo.com/search?p=test', { enabled: true, yahooMode: 'off' });
     ok(await visOn(off, 'yahoo-ai'), 'Yahoo: mode off leaves the AI Summary alone');
+    ok(await visOn(off, 'yahoo-takeaways') && await visOn(off, 'yahoo-sparkle-switch') && await visOn(off, 'yahoo-fab') && await visOn(off, 'yahoo-explore-live'),
+      'Yahoo: mode off leaves the takeaways, sparkle switch, floating sparkle and Explore panel alone');
     ok(await visOn(off, 'yahoo-scout-explore') && await visOn(off, 'yahoo-scout-nav') && await visOn(off, 'yahoo-also-try'),
       'Yahoo: mode off leaves Yahoo Scout alone too');
     await off.close();
