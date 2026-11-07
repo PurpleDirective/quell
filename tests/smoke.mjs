@@ -3789,6 +3789,99 @@ console.log('Pop-ups: in-flow header controls are kept (WebMD):');
   await pg.close();
 }
 
+// --- 0.7.4: sign-up and log-in prompts (Pop-ups group) -----------------------------
+// Fixtures in tests/fixtures/ keep the shapes measured on live pages 2026-11-06.
+console.log('Sign-up and log-in prompts:');
+{
+  const FIXD = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
+  const promptSrc = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/signup-prompts.js'), 'utf8');
+  const stub = (st) => `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__sent=[];
+    window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
+      runtime:{sendMessage:async(m)=>{ if(m.type==='blocked') window.__sent.push(m); }}};
+    window.__set=(p)=>{Object.assign(window.__state,p);const ch={};for(const k in p)ch[k]={newValue:p[k]};window.__cbs.forEach(f=>f(ch,'local'));};`;
+  const open = async (host, file, state = { popupsEnabled: true }, pathAndQuery = '/') => {
+    const pg = await ctx.newPage();
+    await pg.route(`http://${host}/**`, (r) => r.fulfill({ contentType: 'text/html', body: readFileSync(path.join(FIXD, file), 'utf8') }));
+    await pg.addInitScript({ content: stub(state) + '\n' + promptSrc });
+    await pg.goto(`http://${host}${pathAndQuery}`);
+    await pg.waitForTimeout(1800);
+    return pg;
+  };
+  const shown = (pg, sel) => pg.evaluate((s) => { const e = document.querySelector(s); return !!e && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none'; }, sel);
+  const scrollable = (pg) => pg.evaluate(() => { const before = scrollY; scrollTo(0, 400); const moved = scrollY > 0; scrollTo(0, before); const cs = getComputedStyle(document.body); return moved && cs.overflowY !== 'hidden' && cs.position !== 'fixed'; });
+
+  // Generic: dialog + empty dim layer + body lock + blur + clipped article.
+  const g = await open('softwall.test', 'signup-article.html');
+  ok(!(await shown(g, '#wall')), 'prompt: the "Sign up to keep reading" dialog is hidden');
+  ok(!(await shown(g, '#scrim')), 'prompt: its empty dim layer is hidden with it');
+  ok(await scrollable(g), 'prompt: the scroll lock is released (body scrolls, not fixed)');
+  ok(await g.evaluate(() => getComputedStyle(document.getElementById('app')).filter === 'none'), 'prompt: the blur laid over the page is removed');
+  ok(await g.evaluate(() => { const s = document.getElementById('story'); return s.clientHeight >= s.scrollHeight - 2 && s.scrollHeight > 600; }), 'prompt: article text already in the page is let out of its clipped box (full text present, no gap)');
+  ok(await shown(g, '#hdr-login') && await shown(g, '#hdr-signup') && await shown(g, '#hdr-home'), 'prompt: the site\'s own header Log in / Sign up stay');
+  ok(await g.evaluate(() => { const b = document.getElementById('hdr-login').getBoundingClientRect(); const h = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return h === document.getElementById('hdr-login'); }), 'prompt: the header Log in button is clickable (nothing covers it)');
+  ok(await shown(g, '#main') && await shown(g, '#after-story'), 'prompt: article and page content untouched');
+  ok(await g.evaluate(() => window.__sent.some((m) => m.feature === 'popups' && m.count >= 1)), 'prompt: counted once as a pop-up hide');
+  // Registry: the popup lists it with a label of its own.
+  ok(await g.evaluate(() => QuellSettings.hidden.list().items.some((i) => i.label === 'Sign-up prompt')), 'prompt: listed as "Sign-up prompt" for the popup status line');
+  await g.close();
+
+  // Bottom bar (X-style "Don't miss what's happening").
+  const bar = await open('softwall.test', 'signup-article.html', { popupsEnabled: true }, '/?nodialog&bar');
+  ok(!(await shown(bar, '#bottom-bar')), 'prompt: a fixed bottom sign-up bar is closed too');
+  ok(await shown(bar, '#hdr-login'), 'prompt: ...and the header Log in stays');
+  await bar.close();
+
+  // A login the user asked for stays: a trusted click on the header Log in opens it.
+  const asked = await open('softwall.test', 'signup-article.html', { popupsEnabled: true }, '/?nodialog');
+  await asked.click('#hdr-login');
+  await asked.waitForTimeout(2200);
+  ok(await shown(asked, '#wall'), 'prompt: a login dialog the user opened with the header Log in button is left alone');
+  await asked.close();
+
+  // Off: the switch, the master, Pop-ups, a paused site.
+  for (const [name, st] of [['its own switch off', { popupsEnabled: true, hideSignupPrompts: false }], ['Pop-ups off', { popupsEnabled: false }],
+    ['Quell off', { popupsEnabled: true, enabled: false }], ['site paused', { popupsEnabled: true, popupAllowlist: ['softwall.test'] }]]) {
+    const o = await open('softwall.test', 'signup-article.html', st);
+    ok(await shown(o, '#wall') && await shown(o, '#scrim'), `prompt: ${name} → the page is as the site serves it`);
+    await o.close();
+  }
+  // Live toggle: off puts the prompt back, on hides it again.
+  const live = await open('softwall.test', 'signup-article.html');
+  await live.evaluate(() => window.__set({ hideSignupPrompts: false }));
+  await live.waitForTimeout(500);
+  ok(await shown(live, '#wall'), 'prompt: switching it off live brings the prompt back');
+  await live.evaluate(() => window.__set({ hideSignupPrompts: true }));
+  await live.waitForTimeout(1800);
+  ok(!(await shown(live, '#wall')), 'prompt: switching it on live hides it again');
+  await live.close();
+
+  // A login or account page the user navigated to is the page: never touched.
+  const lp = await open('softwall.test', 'signup-login-page.html', { popupsEnabled: true }, '/login');
+  ok(await shown(lp, '#login-box'), 'prompt: a /login page the user went to is left alone');
+  await lp.close();
+  // A page that is nothing but the prompt has no page behind it: kept.
+  const only = await open('softwall.test', 'signup-only-prompt.html', { popupsEnabled: true }, '/start');
+  ok(await shown(only, '#only'), 'prompt: with no page content behind it, the dialog is left alone');
+  await only.close();
+
+  // Per-site, markup read on the live sites.
+  const li = await open('www.linkedin.com', 'signup-linkedin.html', { popupsEnabled: true }, '/company/nasa/');
+  ok(!(await shown(li, '#base-contextual-sign-in-modal')), 'LinkedIn: #base-contextual-sign-in-modal (sign in to see who you know) is hidden');
+  ok(await scrollable(li), 'LinkedIn: body.overflow-hidden is released and the page scrolls');
+  ok(await shown(li, '#li-nav-signin') && await shown(li, '#li-main'), 'LinkedIn: the nav Sign in link and the page stay');
+  await li.close();
+  const pin = await open('www.pinterest.com', 'signup-pinterest.html', { popupsEnabled: true }, '/search/pins/?q=eggs');
+  ok(!(await shown(pin, '#pin-dialog')) && !(await shown(pin, '#pin-scrim')), 'Pinterest: the full-screen "Welcome to Pinterest" log-in modal and its dim layer are hidden');
+  ok(!(await shown(pin, '#pin-upsell')), 'Pinterest: the "You are signed out" card is hidden');
+  ok(await scrollable(pin), 'Pinterest: the page scrolls again');
+  ok(await shown(pin, '#pin-login') && await shown(pin, '#pin-signup') && await shown(pin, '#pin-main'), 'Pinterest: the header Log in / Sign up and the page stay');
+  await pin.close();
+  // The same markup on a host the rules do not name: the per-site card is not guessed at, the dialog still goes (generic).
+  const pinElse = await open('else.test', 'signup-pinterest.html', { popupsEnabled: true }, '/');
+  ok(await shown(pinElse, '#pin-upsell'), 'per-site rules are scoped to their host (Pinterest card stays elsewhere)');
+  await pinElse.close();
+}
+
 await ctx.close();
 console.log(`\n${passed} passed, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}`);
 process.exit(failed ? 1 : 0);

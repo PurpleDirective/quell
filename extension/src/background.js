@@ -45,7 +45,7 @@ const ENGINE_SCRIPT_ID = 'quell-engines';
 const POPUP_SCRIPT_ID = 'quell-popups';
 const COOKIE_FILES = ['src/shared/settings.js', 'src/content/cookies.js'];
 const ENGINE_FILES = ['src/shared/settings.js', 'src/content/common.js', 'src/content/engines.js'];
-const POPUP_FILES = ['src/shared/settings.js', 'src/content/popups.js'];
+const POPUP_FILES = ['src/shared/settings.js', 'src/content/popups.js', 'src/content/signup-prompts.js'];
 
 // DuckDuckGo / Brave / Yahoo are OPTIONAL hosts, requested from the popup and
 // registered here once granted. They are deliberately not in the manifest's

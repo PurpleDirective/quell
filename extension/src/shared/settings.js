@@ -52,6 +52,7 @@
     hideChat: true,
     hideAppBanners: true,
     popupAllowlist: [],     // hostnames where the pop-ups layer is paused
+    hideSignupPrompts: true, // 0.7.4: sign-up / log-in prompts (a row under Pop-ups)
   };
 
   const LOCAL_DEFAULTS = {

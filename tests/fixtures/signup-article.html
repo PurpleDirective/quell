@@ -1,0 +1,34 @@
+<!doctype html><html><head><title>Soft-wall article</title>
+<style>
+body{margin:0;font-family:sans-serif;overflow:hidden}
+#hdr{position:fixed;top:0;left:0;right:0;height:56px;background:#fff;z-index:10;border-bottom:1px solid #ddd}
+header#site-header{height:56px}
+#app{padding-top:70px}
+#app.blurred{filter:blur(6px)}
+#story{max-height:300px;width:600px;overflow:hidden}
+#scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:900}
+#wall{position:fixed;left:25%;right:25%;top:20%;background:#fff;padding:24px;z-index:901}
+#bottom-bar{position:fixed;left:0;right:0;bottom:0;height:90px;background:#fff;z-index:800}
+</style></head>
+<!-- Soft wall, shaped on the live ones measured 2026-11-06 (Pinterest, Facebook, Instagram, LinkedIn): a dialog and an
+     empty dim layer over a page whose text is already in the document; body is frozen; the page is blurred; the
+     article is clipped by max-height + overflow hidden, with all of its text present. -->
+<body>
+<header id="site-header"><div id="hdr"><a href="/" id="hdr-home">Home</a> <button id="hdr-login" type="button">Log in</button> <a id="hdr-signup" href="/join">Sign up</a></div></header>
+<div id="app" class="blurred"><main id="main"><article><h1>A long read</h1>
+<div id="story"><p>Sentence number 1 of the article that the server really sent in full. Sentence number 2 of the article that the server really sent in full. Sentence number 3 of the article that the server really sent in full. Sentence number 4 of the article that the server really sent in full. Sentence number 5 of the article that the server really sent in full. Sentence number 6 of the article that the server really sent in full. Sentence number 7 of the article that the server really sent in full. Sentence number 8 of the article that the server really sent in full. Sentence number 9 of the article that the server really sent in full. Sentence number 10 of the article that the server really sent in full. Sentence number 11 of the article that the server really sent in full. Sentence number 12 of the article that the server really sent in full. Sentence number 13 of the article that the server really sent in full. Sentence number 14 of the article that the server really sent in full. Sentence number 15 of the article that the server really sent in full. Sentence number 16 of the article that the server really sent in full. Sentence number 17 of the article that the server really sent in full. Sentence number 18 of the article that the server really sent in full. Sentence number 19 of the article that the server really sent in full. Sentence number 20 of the article that the server really sent in full. Sentence number 21 of the article that the server really sent in full. Sentence number 22 of the article that the server really sent in full. Sentence number 23 of the article that the server really sent in full. Sentence number 24 of the article that the server really sent in full. Sentence number 25 of the article that the server really sent in full. Sentence number 26 of the article that the server really sent in full. Sentence number 27 of the article that the server really sent in full. Sentence number 28 of the article that the server really sent in full. Sentence number 29 of the article that the server really sent in full. Sentence number 30 of the article that the server really sent in full. Sentence number 31 of the article that the server really sent in full. Sentence number 32 of the article that the server really sent in full. Sentence number 33 of the article that the server really sent in full. Sentence number 34 of the article that the server really sent in full. Sentence number 35 of the article that the server really sent in full. Sentence number 36 of the article that the server really sent in full. Sentence number 37 of the article that the server really sent in full. Sentence number 38 of the article that the server really sent in full. Sentence number 39 of the article that the server really sent in full. Sentence number 40 of the article that the server really sent in full. Sentence number 41 of the article that the server really sent in full. Sentence number 42 of the article that the server really sent in full. Sentence number 43 of the article that the server really sent in full. Sentence number 44 of the article that the server really sent in full. Sentence number 45 of the article that the server really sent in full. Sentence number 46 of the article that the server really sent in full. Sentence number 47 of the article that the server really sent in full. Sentence number 48 of the article that the server really sent in full. Sentence number 49 of the article that the server really sent in full. Sentence number 50 of the article that the server really sent in full. Sentence number 51 of the article that the server really sent in full. Sentence number 52 of the article that the server really sent in full. Sentence number 53 of the article that the server really sent in full. Sentence number 54 of the article that the server really sent in full. Sentence number 55 of the article that the server really sent in full. Sentence number 56 of the article that the server really sent in full. Sentence number 57 of the article that the server really sent in full. Sentence number 58 of the article that the server really sent in full. Sentence number 59 of the article that the server really sent in full. Sentence number 60 of the article that the server really sent in full.</p></div>
+<p id="after-story">After the story.</p></article></main>
+<aside><a href="/a">One</a> <a href="/b">Two</a> <a href="/c">Three</a></aside></div>
+<script>
+const q = location.search;
+function addWall() {
+  if (document.getElementById('wall')) return;
+  const s = document.createElement('div'); s.id = 'scrim'; document.body.appendChild(s);
+  const d = document.createElement('div'); d.id = 'wall'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true');
+  d.innerHTML = '<h2>Sign up to keep reading</h2><p>Create an account or log in to continue.</p><button id="wall-google">Continue with Google</button> <a href="/join" id="wall-signup">Sign up</a> <a href="/login" id="wall-login">Log in</a>';
+  document.body.appendChild(d);
+}
+if (!q.includes('nodialog')) addWall();
+if (q.includes('bar')) { const b = document.createElement('div'); b.id = 'bottom-bar'; b.innerHTML = '<p>Don\u2019t miss what\u2019s happening. People on the site are the first to know.</p><a href="/login">Log in</a> <a href="/join">Sign up</a>'; document.body.appendChild(b); }
+document.getElementById('hdr-login').addEventListener('click', () => addWall());
+</script></body></html>
