@@ -502,9 +502,25 @@
     // overlay holds (a fixed or sticky layer, a dialog, a consent tool) is not
     // counted, so a sheet that hides only a banner can never look like a
     // blanked page, however much of a sparse page's text the banner holds.
-    const OVERLAY = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], dialog, #onetrust-consent-sdk, #onetrust-banner-sdk, '
+    // An overlay is a CMP or dialog (by its markup), or a fixed / sticky layer
+    // that is a consent tool by name, or one that is not the page itself: it
+    // neither is nor holds the page's landmarks and does not fill the window.
+    // A fixed <main>, a sticky <article>, a full-window app shell, or a page
+    // that merely has "cookie" or "consent" in a class (a policy page) are the
+    // page, never an overlay.
+    const LANDMARK = 'main, article, [role="main"], #root, #app, #__next, #__nuxt, #app-root';
+    const CMP = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], dialog, #onetrust-consent-sdk, #onetrust-banner-sdk, '
       + '#CybotCookiebotDialog, #didomi-host, .didomi-popup-container, [id^="sp_message_container"], #usercentrics-root, #cmpwrapper, '
-      + '#qc-cmp2-container, .cc-window, [id*="cookie" i], [id*="consent" i], [class*="cookie-banner" i], [class*="consent" i]';
+      + '#qc-cmp2-container, .cc-window';
+    const NAMED = '[id*="cookie" i], [id*="consent" i], [class*="cookie-banner" i], [class*="consent" i]';
+    const layer = (el, cs) => {
+      if (el.matches(CMP)) return true;
+      if (cs.position !== 'fixed' && cs.position !== 'sticky') return false;
+      if (el.matches(NAMED)) return true;
+      if (el.matches(LANDMARK) || el.querySelector(LANDMARK)) return false;
+      const r = el.getBoundingClientRect();
+      return !(r.width >= innerWidth * 0.98 && r.height >= innerHeight * 0.98);
+    };
     const flowText = () => {
       let n = 0, seen = 0;
       const walk = (el) => {
@@ -514,7 +530,7 @@
           if (/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(c.tagName)) continue;
           const cs = getComputedStyle(c);
           if (cs.display === 'none' || cs.visibility === 'hidden') continue;
-          if (cs.position === 'fixed' || cs.position === 'sticky' || c.matches(OVERLAY)) continue;
+          if (layer(c, cs)) continue;
           walk(c);
         }
       };
@@ -524,7 +540,7 @@
     const isOverlay = (el) => {
       for (let a = el; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
         const cs = getComputedStyle(a);
-        if (cs.position === 'fixed' || cs.position === 'sticky' || a.matches(OVERLAY)) return true;
+        if (layer(a, cs)) return true;
       }
       return false;
     };

@@ -808,6 +808,49 @@ console.log('Review fixes: safety net, user gestures, columns, login pages, What
     await pg.close();
   }
 
+  // 1f. Pages whose real content sits inside a fixed, sticky or "cookie"/"consent"-named container are still the page.
+  {
+    const LONGX = 'Placeholder paragraph with plenty of words so that the page clearly has content of its own. '.repeat(20);
+    const CASES = [
+      ['A1 fixed <main>', `<main style="position:fixed;inset:0;overflow:auto"><div id="t"><h1>Title</h1><p>${LONGX}</p></div></main>`, '#t'],
+      ['A2 sticky <article>', `<header>Site</header><article id="t" style="position:sticky;top:0"><p>${LONGX}</p></article>`, '#t'],
+      ['A3 fixed #root shell', `<div id="root" style="position:fixed;inset:0;display:flex"><div id="t" style="overflow:auto"><p>${LONGX}</p></div></div>`, '#t'],
+      ['A4 fixed .app shell', `<div class="app" style="position:fixed;inset:0"><div id="t"><p>${LONGX}</p></div></div>`, '#t'],
+      ['A5 cookie-policy page', `<div id="cookie-policy"><section id="t"><h1>Cookie policy</h1><p>${LONGX}</p></section></div>`, '#t'],
+      ['A6 consent-settings page', `<div class="consent-settings-page"><section id="t"><p>${LONGX}</p></section></div>`, '#t'],
+    ];
+    for (const [name, body, sel] of CASES) {
+      const html = `<!doctype html><html><body>${body}</body></html>`;
+      let pg = await openAt('attack.test', '/', html, SETTINGS_SRC, {}, 300);
+      const r = await pg.evaluate((s) => {
+        const G = QuellSettings.guard; const el = document.querySelector(s);
+        const prot = G.protects(el); G.measure();
+        el.style.setProperty('display', 'none', 'important'); G.acted();
+        return { prot, tripped: G.check() };
+      }, sel);
+      ok(r.prot && r.tripped, `${name}: the page is protected from a hide of its content, and a sweep that hides it trips the net`);
+      await pg.close();
+      pg = await openAt('attack.test', '/', html, SETTINGS_SRC, {}, 300);
+      const pr = await pg.evaluate((s) => {
+        const st = document.createElement('style'); st.id = 'qs'; st.textContent = s + '{display:none!important}'; document.head.appendChild(st);
+        return QuellSettings.guard.probe(['qs']);
+      }, sel);
+      ok(pr, `${name}: a stylesheet that hides it trips the net`);
+      await pg.close();
+    }
+    // A generic fixed banner on a 63-character page: hidden, no trip.
+    const banner = `<!doctype html><html><body><p>${'x'.repeat(63)}</p><div id="gb" style="position:fixed;bottom:0;left:0;width:60%;background:#fff"><p>${'We use storage on your device to improve this site for you. '.repeat(25)}</p></div></body></html>`;
+    const pg = await openAt('attack2.test', '/', banner, SETTINGS_SRC, {}, 300);
+    const r = await pg.evaluate(() => {
+      const G = QuellSettings.guard; const el = document.getElementById('gb');
+      const prot = G.protects(el); G.measure();
+      el.style.setProperty('display', 'none', 'important'); G.acted();
+      return { prot, tripped: G.check() };
+    });
+    ok(!r.prot && !r.tripped, 'a generic fixed banner on a 63-character page: not protected, hiding it does not trip');
+    await pg.close();
+  }
+
   // 2. A login dialog that appears some seconds after the user's own click is theirs; one with no click behind it is hidden.
   {
     const mk = (delay) => `<!doctype html><html><body><main><h1>Story</h1><p>${LONGP}</p><button id="follow">Follow</button></main>
