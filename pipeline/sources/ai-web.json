@@ -370,6 +370,253 @@
    ],
    "hide": "element",
    "what": "Inkeep Ask AI floating button"
+  },
+  {
+   "id": "youtube-masthead-ask",
+   "group": "buttons",
+   "hosts": [
+    "www.youtube.com"
+   ],
+   "selectors": [
+    "yt-searchbox button-view-model:has(> button[aria-label=\"Ask YouTube\"])"
+   ],
+   "hide": "element",
+   "what": "\"Ask YouTube\" button in the search box"
+  },
+  {
+   "id": "youtube-ask-chip",
+   "group": "buttons",
+   "hosts": [
+    "www.youtube.com"
+   ],
+   "selectors": [
+    "yt-chip-cloud-chip-renderer[chip-style=\"STYLE_AI_MODE_CHIP\"]"
+   ],
+   "hide": "element",
+   "what": "\"Ask YouTube\" chip in the search filters"
+  },
+  {
+   "id": "youtube-summary",
+   "group": "buttons",
+   "hosts": [
+    "www.youtube.com"
+   ],
+   "selectors": [
+    "ytd-expandable-metadata-renderer[has-video-summary]",
+    "#video-summary:has(> ytd-expandable-metadata-renderer[has-video-summary])"
+   ],
+   "hide": "element",
+   "what": "AI video summary row"
+  },
+  {
+   "id": "youtube-actions-ask",
+   "group": "buttons",
+   "hosts": [
+    "www.youtube.com"
+   ],
+   "selectors": [
+    "ytd-watch-metadata yt-button-view-model:has(> button-view-model > button[aria-label=\"Ask\"])"
+   ],
+   "hide": "element",
+   "what": "\"Ask\" button next to like and share"
+  },
+  {
+   "id": "youtube-ask-questions",
+   "group": "buttons",
+   "hosts": [
+    "www.youtube.com"
+   ],
+   "selectors": [
+    "yt-video-description-youchat-section-view-model"
+   ],
+   "hide": "element",
+   "what": "\"Ask questions\" section in the description"
+  },
+  {
+   "id": "youtube-player-ask",
+   "group": "buttons",
+   "hosts": [
+    "www.youtube.com"
+   ],
+   "selectors": [
+    "#movie_player yt-player-quick-action-buttons button-view-model:has(> button[aria-label=\"Ask\"])"
+   ],
+   "hide": "element",
+   "what": "\"Ask\" button on the player"
+  },
+  {
+   "id": "amazon-rufus-launcher",
+   "group": "buttons",
+   "hosts": [
+    "www.amazon.com"
+   ],
+   "selectors": [
+    "#nav-rufus-disco",
+    "button[data-csa-c-content-id='rufus-dsk-disco-content']",
+    "button[aria-label='Open Alexa panel']"
+   ],
+   "hide": "element",
+   "what": "Rufus (\"Alexa for shopping\") button in the top bar"
+  },
+  {
+   "id": "amazon-rufus-panel",
+   "group": "buttons",
+   "hosts": [
+    "www.amazon.com"
+   ],
+   "selectors": [
+    "#nav-flyout-rufus",
+    "div.rufus-panel-container"
+   ],
+   "hide": "element",
+   "what": "Rufus (\"Alexa for shopping\") side panel"
+  },
+  {
+   "id": "amazon-search-pills",
+   "group": "buttons",
+   "hosts": [
+    "www.amazon.com"
+   ],
+   "selectors": [
+    "#nile-ingress-pills-container",
+    "[data-csa-c-content-id^='rufus-partner-sp-dsk-tw-bottom-pill-content']"
+   ],
+   "hide": "element",
+   "what": "AI suggested-question pills in search results"
+  },
+  {
+   "id": "amazon-top-highlights",
+   "group": "buttons",
+   "hosts": [
+    "www.amazon.com"
+   ],
+   "selectors": [
+    "#nile-inline-insights_feature_div",
+    "#dpx-insights-desktop"
+   ],
+   "hide": "element",
+   "what": "\"Top highlights\" AI summary"
+  },
+  {
+   "id": "amazon-looking-for",
+   "group": "buttons",
+   "hosts": [
+    "www.amazon.com"
+   ],
+   "selectors": [
+    "#nile-inline-btf_feature_div",
+    "#nile-inline-btf_feature_div [data-csa-c-content-id='nile-inline-btf']"
+   ],
+   "hide": "element",
+   "what": "\"Looking for specific info?\" AI box"
+  },
+  {
+   "id": "amazon-customers-say",
+   "group": "buttons",
+   "hosts": [
+    "www.amazon.com"
+   ],
+   "selectors": [
+    "[data-cel-widget='cr-product-insights-detail-page']",
+    "[data-cel-widget='cr-reviews-ai-pills']"
+   ],
+   "hide": "element",
+   "what": "\"Customers say\" AI review summary and its Summarize pills"
+  },
+  {
+   "id": "amazon-price-history",
+   "group": "buttons",
+   "hosts": [
+    "www.amazon.com"
+   ],
+   "selectors": [
+    "#rufus-price-ingress-bb",
+    "[data-csa-c-content-id='rufus-price-ingress-desktop']",
+    "[data-csa-c-nile-action-id*='price_history']"
+   ],
+   "hide": "element",
+   "what": "AI \"Price history\" pill"
+  },
+  {
+   "id": "amazon-search-page",
+   "group": "buttons",
+   "hosts": [
+    "www.amazon.com"
+   ],
+   "selectors": [
+    "#ask_feature_div"
+   ],
+   "hide": "element",
+   "what": "\"Search this page\" link to the AI box"
+  },
+  {
+   "id": "x-grok-nav",
+   "group": "buttons",
+   "hosts": [
+    "x.com",
+    "twitter.com"
+   ],
+   "selectors": [
+    "nav[aria-label=\"Primary\"] a[href=\"/i/grok\"]",
+    "a[href=\"/i/grok\"][role=\"link\"]"
+   ],
+   "hide": "element",
+   "what": "Grok in the left menu"
+  },
+  {
+   "id": "x-grok-actions",
+   "group": "buttons",
+   "hosts": [
+    "x.com",
+    "twitter.com"
+   ],
+   "selectors": [
+    "article button[aria-label=\"Grok actions\"]",
+    "button[aria-label=\"Grok actions\"]"
+   ],
+   "hide": "element",
+   "what": "Grok button on a post"
+  },
+  {
+   "id": "x-grok-drawer",
+   "group": "buttons",
+   "hosts": [
+    "x.com",
+    "twitter.com"
+   ],
+   "selectors": [
+    "[data-testid=\"GrokDrawer\"]",
+    "[data-testid=\"GrokDrawerHeader\"]"
+   ],
+   "hide": "element",
+   "what": "Grok drawer at the bottom of the page"
+  },
+  {
+   "id": "x-grok-image",
+   "group": "buttons",
+   "hosts": [
+    "x.com",
+    "twitter.com"
+   ],
+   "selectors": [
+    "[data-testid=\"grokImgGen\"]",
+    "button[aria-label=\"Generate image\"]"
+   ],
+   "hide": "element",
+   "what": "Grok image button in the post box"
+  },
+  {
+   "id": "x-todays-news",
+   "group": "buttons",
+   "hosts": [
+    "x.com",
+    "twitter.com"
+   ],
+   "selectors": [
+    "div:has(> div > [data-testid^=\"news_sidebar_article_QWlUcmVuZDo\"])"
+   ],
+   "hide": "element",
+   "what": "\"Today's News\" AI-generated headlines"
   }
  ],
  "network": [

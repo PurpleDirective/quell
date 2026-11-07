@@ -376,7 +376,7 @@ function aiWebStatus(s, paused) {
 function renderLinkRows(s, paused) {
   const prompts = tab.items.filter((i) => i.kind === 'popup' && i.label === 'Sign-up prompt' && !i.kept).length;
   $('pSignupD').textContent = prompts ? `Closed ${prompts} sign-up ${prompts === 1 ? 'prompt' : 'prompts'}` : '';
-  let line = 'Needs access to all sites';
+  let line = 'Asks your browser for all-sites access';
   if (!s.enabled) line = 'Quell is off';
   else if (s.linksEnabled) {
     if (!host || tab.links === null) line = 'On for other pages';

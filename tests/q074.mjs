@@ -297,6 +297,69 @@ console.log('Popup: AI on websites group:');
 }
 
 
+// ------------------------------------------------ E. YouTube, Amazon, X (live-mapped) ---
+console.log('AI on websites: YouTube, Amazon and X (fixtures reduced from live-recorded markup):');
+{
+  const fx = (n) => readFileSync(path.join(HERE, 'fixtures', n), 'utf8');
+  const st = { enabled: true, aiWebOn: true, aiWebAccess: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebAllowlist: [] };
+  const rulesFor = (host, state) => COSMETIC.filter((r) => ({ buttons: state.aiWebButtons, chat: state.aiWebChat, support: state.aiWebSupport })[r.g]
+    && r.h.some((h) => h === '*' || host === h || host.endsWith('.' + h))).map((r) => ({ sel: r.sel, what: r.what }));
+  const stub = (host, state) => `window.__state=${JSON.stringify(state)};window.__cbs=[];window.__ml=[];
+    window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
+      runtime:{id:'quell',onMessage:{addListener:(f)=>window.__ml.push(f)},
+        sendMessage:async(m)=>{ if(m.type==='aiWebRules') return {rules:${JSON.stringify(rulesFor(host, state))}}; }}};
+    window.__ask=(msg)=>{let got;for(const f of window.__ml)f(msg,{id:'quell'},(r)=>{got=r;});return got;};`;
+  const SITES = [
+    ['www.youtube.com', 'youtube search results', 'aiweb-youtube-results.html'],
+    ['www.youtube.com', 'youtube watch page', 'aiweb-youtube-watch.html'],
+    ['www.amazon.com', 'amazon search results', 'aiweb-amazon-search.html'],
+    ['www.amazon.com', 'amazon product page', 'aiweb-amazon-product.html'],
+    ['x.com', 'x home', 'aiweb-x-home.html'],
+  ];
+  const ids = (html, re) => [...html.matchAll(re)].map((m) => m[1]);
+  for (const [host, name, file] of SITES) {
+    const html = fx(file);
+    const keep = ids(html, /id="(keep-[a-z0-9-]+)"/g);
+    let ai = [];
+    const run = async (state) => {
+      const pg = await ctx.newPage();
+      await pg.route(`https://${host}/**`, (r) => r.fulfill({ contentType: 'text/html', body: html }));
+      await pg.addInitScript({ content: stub(host, state) + '\n' + SETTINGS_SRC + '\n' + AIWEB_SRC });
+      await pg.goto(`https://${host}/x`);
+      await pg.waitForTimeout(700);
+      return pg;
+    };
+    const vis = (pg, i) => pg.evaluate((x) => { const e = document.getElementById(x); return !!e && e.getClientRects().length > 0; }, i);
+    const pOff = await run({ ...st, aiWebButtons: false });
+    ai = await pOff.evaluate(() => [...document.querySelectorAll('[id^="ai-"],[data-ai]')].map((e) => e.id).filter(Boolean));
+    ok((await Promise.all(ai.map((i) => vis(pOff, i)))).every(Boolean), `${name}: with AI buttons and panels off, all ${ai.length} AI elements show`);
+    await pOff.close();
+    const pg = await run(st);
+    const shown = (await Promise.all(ai.map(async (i) => [i, await vis(pg, i)]))).filter(([, v]) => v).map(([i]) => i);
+    ok(shown.length === 0 && ai.length >= 2, `${name}: every AI element is hidden (${ai.length} of them${shown.length ? '; still showing ' + shown.join(', ') : ''})`);
+    ok(await pg.evaluate(() => [...document.querySelectorAll('[data-probe]')].every((e) => e.getClientRects().length === 0)), `${name}: no empty box is left behind`);
+    const gone = (await Promise.all(keep.map(async (i) => [i, await vis(pg, i)]))).filter(([, v]) => !v).map(([i]) => i);
+    ok(gone.length === 0 && keep.length >= 4, `${name}: the page's own controls all stay (${keep.length} checked${gone.length ? '; missing ' + gone.join(', ') : ''})`);
+    // The recorded protected controls, named: players, like/subscribe, price, buy, replies.
+    const must = { 'youtube watch page': ['keep-player', 'keep-like', 'keep-subscribe', 'keep-description'], 'amazon product page': ['keep-price', 'keep-add-to-cart', 'keep-buy-now', 'keep-reviews', 'keep-cart', 'keep-search'],
+      'x home': ['keep-reply', 'keep-repost', 'keep-like', 'keep-bookmark', 'keep-nav-home', 'keep-nav-explore', 'keep-nav-notifications'], 'amazon search results': ['keep-search', 'keep-cart'], 'youtube search results': ['keep-search', 'keep-result-1'] }[name];
+    ok((await Promise.all(must.map((i) => vis(pg, i)))).every(Boolean), `${name}: ${must.map((m) => m.replace('keep-', '')).join(', ')} still show`);
+    const list = await pg.evaluate(() => QuellSettings.hidden.list());
+    ok(list.items.length >= 1 && list.items.every((i) => i.kind === 'ai-web'), `${name}: listed for the popup (${list.items.map((i) => i.label).join(' | ')})`);
+    const id = list.items[0].id;
+    await pg.evaluate((i) => window.__ask({ type: 'quell:hidden:keep', id: i, on: true }), id);
+    ok((await Promise.all(ai.map((i) => vis(pg, i)))).some(Boolean), `${name}: Undo shows it again`);
+    await pg.close();
+  }
+  // the rules exist and are scoped to their hosts
+  const hostsOf = (re) => [...new Set(COSMETIC.filter((r) => re.test(r.id)).flatMap((r) => r.h))];
+  ok(JSON.stringify(hostsOf(/^youtube-/)) === '["www.youtube.com"]' && JSON.stringify(hostsOf(/^amazon-/)) === '["www.amazon.com"]'
+    && JSON.stringify(hostsOf(/^x-/).sort()) === '["twitter.com","x.com"]', 'the new rules are scoped to youtube.com, amazon.com and x.com / twitter.com');
+  ok(!COSMETIC.some((r) => /how-this-was-made|auto-dub/i.test(r.id + r.what + r.sel.join())), 'the "How this was made / Auto-dubbed" disclosure is not hidden (it is information)');
+  ok(COSMETIC.filter((r) => r.id.startsWith('youtube-')).length === 6 && COSMETIC.filter((r) => r.id.startsWith('amazon-')).length === 8 && COSMETIC.filter((r) => r.id.startsWith('x-')).length === 5,
+    'YouTube 6 rules, Amazon 8, X 5');
+}
+
 // ------------------------------------------------ D. Brave: the Ask tab -------------
 console.log('Brave Search: the "Ask" tab goes with the AI answer:');
 {
