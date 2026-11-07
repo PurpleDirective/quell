@@ -7,7 +7,7 @@ and Opera packages. The repository root is the product. Start with [README.md](R
 ## Truth map
 Code and tests are the truth; docs record intent — verify against the tree.
 `extension/` (manifest, `src/`, generated `rules/`) · `pipeline/` (rules build, packaging,
-version bump) · `server/report-worker/` (the breakage-report Cloudflare Worker) · `store/`
+version bump) · `server/report-worker/` (the breakage-report and usage-counts Cloudflare Worker) · `store/`
 (listings, privacy policy, assets) · `tests/` (Playwright suite) · `docs/RUNTIME-RULES-POLICY.md`
 (what the stores allow for rule delivery) · `tools/` (compliant-claims linter).
 Internal research, live-site evidence and strategy are kept outside this repository.
@@ -15,8 +15,13 @@ Internal research, live-site evidence and strategy are kept outside this reposit
 ## Standing product rules
 - Organic results are never hidden: every surface keeps its organic-result guard and a
   regression test in `tests/smoke.mjs`. A change that weakens a guard needs a test first.
-- Privacy surface is a promise: no analytics, no telemetry, no identifiers. The only thing ever
-  sent is the user-initiated breakage report (`{"host", "version"}`). `<all_urls>` stays an
+- Privacy surface is a promise: nothing is sent without the user's say. Two flows exist, both
+  documented in `store/privacy-policy.md` and enforced by tests: the user-initiated breakage
+  report (`{"host", "version"}`), and anonymous daily usage counts that start only after the
+  user has answered the first-run box with yes (`analytics` = `'on'`; never URLs, domains,
+  search terms or page content; Firefox also needs its data-collection permission). Any new
+  field in either payload needs the policy, the Worker schema and a test changed in the same
+  commit. `<all_urls>` stays an
   OPTIONAL permission (CI checks this); required hosts stay frozen at Google and Bing, every
   later engine is an optional permission.
 - Rules are generated: change `pipeline/build_rules.py`, never hand-edit `extension/rules/*.json`

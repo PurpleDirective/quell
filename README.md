@@ -9,14 +9,14 @@ want — newsletter pop-ups, chat widgets and "open in app" banners.
 
 Chrome (and the other browsers that install from the Chrome Web Store) and Firefox (desktop and
 Android), from one source tree.
-Free. No account. No tracking. Made by Purple Directive.
+Free. No account. No ads, no profiling; anonymous usage counts only if you say yes. Made by Purple Directive.
 
 ## Why
 
 Only ~30% of people find new AI features in their apps useful; 40%+ call them an
 annoyance or hype (Prophet 2026; Stanford HAI 2026). Existing "AI blockers" are
 either paywalled with dark patterns or fragile single-site hacks. Quell is the
-honest one: the blocking core is **free forever**, it collects **nothing** to run,
+honest one: the blocking core is **free forever**, it collects **nothing** to run (anonymous usage counts are opt-in, asked once),
 it **never hides a real search result** (every surface has an organic-result guard
 with a regression test), and its blocklist is kept fresh by an automated pipeline
 so it doesn't rot when sites change.
@@ -229,15 +229,23 @@ playwright install (`npm i -g playwright` + `playwright install chromium`).
 
 ## Privacy & permissions
 
-No analytics, no telemetry, no account. Your choices are kept in the browser's
+No account. Anonymous usage counts exist but start only if you answer yes on the first-run
+card (the box is ticked by default; nothing is sent until you answer, and turning it off stops
+sending and deletes the queue at once): a random install id, per-day counts of popup actions and
+of items hidden per feature, which Quell switches are on, the Quell version and browser, and
+error text with web addresses removed. Never a URL, domain, search term or page content.
+Sent at most once a day to `server/report-worker` (`POST /api/quell/events`); Firefox also
+requires its `technicalAndInteraction` data-collection permission. The uninstall page
+(`/quell/goodbye?v=&b=`, plus `&i=<install id>` only while counts are on) asks why. Policy:
+`store/privacy-policy.md`. Your choices are kept in the browser's
 extension **sync** storage, so the browser syncs them to **your own** browser
 account (Google / Mozilla) when you are signed in with sync on —
 Purple Directive never receives them. Firefox for Android and Opera do not sync
 extension settings, so there they stay on the device. Three grant-bound switches (other engines,
 cookie banners, pop-ups) and the hidden-items counter stay on each device.
 Settings from 0.5.x move from `storage.local` to `storage.sync` on update without
-loss. The only thing sent to Purple Directive is a breakage report you choose
-to send.
+loss. Besides the opt-in usage counts above, the only thing sent to Purple Directive is a
+breakage report you choose to send.
 
 The base install requests only `storage`, `declarativeNetRequest` (rule-based
 blocking Quell can't read your traffic through), and `scripting`. The broad

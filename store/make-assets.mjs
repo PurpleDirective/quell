@@ -235,7 +235,7 @@ await render('marquee-1400x560.png', 1400, 560, `<!doctype html><html><head><met
     <div class="brand">${CRESCENT(58)}<b>Quell</b></div>
     <h1>Hide the AI you didn’t ask for.</h1>
     <h1>Keep the answers you open.</h1>
-    <p class="sub">Free, open source, no tracking. Chrome, Edge and Firefox.</p>
+    <p class="sub">Free, open source. Chrome, Opera and Firefox.</p>
   </div>
   <div class="right">${shotCard(popDefault, 360)}</div>
 </body></html>`);
