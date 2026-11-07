@@ -31,7 +31,7 @@
   if (g.QuellAnalytics) return;
 
   const KEY = 'quellAnalytics';          // storage.local: { id, lastFlushAt, days }
-  const EVENTS = ['popup_open', 'peek', 'undo', 'pause', 'report_open', 'firstrun_turn_on', 'firstrun_skip'];
+  const EVENTS = ['popup_open', 'peek', 'undo', 'pause', 'report_open', 'firstrun_turn_on', 'firstrun_skip', 'firstrun_done'];
   const FEATURES = ['ai', 'cookies', 'popups'];
   const SWITCHES = ['enabled', 'ai', 'cookies', 'popups', 'engines', 'reject'];
   const KEEP_DAYS = 7;                   // unsent days older than this are dropped
