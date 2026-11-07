@@ -3923,9 +3923,18 @@ console.log('Links (real browser, local server):');
   });
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const port = server.address().port;
+  // The same pages over https for the Amazon cases (self-signed, made here; openssl is on
+  // macOS and the CI runners). The browser below is told to accept it.
+  const { execFileSync } = await import('node:child_process');
+  const https = await import('node:https');
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=www.amazon.com',
+    '-keyout', path.join(tmp, 'k.pem'), '-out', path.join(tmp, 'c.pem')], { stdio: 'ignore' });
+  const sserver = https.createServer({ key: readFileSync(path.join(tmp, 'k.pem')), cert: readFileSync(path.join(tmp, 'c.pem')) }, server.listeners('request')[0]);
+  await new Promise((r) => sserver.listen(0, '127.0.0.1', r));
+  const sport = sserver.address().port;
   const lc = await chromium.launchPersistentContext('', {
     headless: true, channel: 'chromium',
-    args: [`--disable-extensions-except=${copy}`, `--load-extension=${copy}`, '--host-resolver-rules=MAP *.amazon.com 127.0.0.1, MAP www.google.com 127.0.0.1, MAP shop.test 127.0.0.1'],
+    args: [`--disable-extensions-except=${copy}`, `--load-extension=${copy}`, '--host-resolver-rules=MAP *.amazon.com 127.0.0.1, MAP www.google.com 127.0.0.1, MAP shop.test 127.0.0.1', '--ignore-certificate-errors'],
   });
   const lsw = lc.serviceWorkers()[0] || await lc.waitForEvent('serviceworker', { timeout: 15000 });
   const set = (p) => lsw.evaluate((x) => QuellSettings.set(x), p);
@@ -3980,12 +3989,15 @@ console.log('Links (real browser, local server):');
   await set({ linksEnabled: true });
 
   // Affiliate-swap warning: needs both switches; two signals; shown once.
+  // amazon.com is on the HSTS preload list in some Chromium builds (CI's), so plain
+  // http://www.amazon.com:port is upgraded to https and fails. The Amazon pages are served
+  // over https by a local server with a throwaway self-signed certificate (see setup).
   await set({ linksWarnAffiliate: true });
   await new Promise((r) => setTimeout(r, 800));
   const ap = await lc.newPage();
-  await ap.goto(`http://www.amazon.com:${port}/dp/B000?tag=blog-20`);
+  await ap.goto(`https://www.amazon.com:${sport}/dp/B000?tag=blog-20`);
   await ap.waitForTimeout(400);
-  await ap.evaluate((to) => { location.href = to; }, `/redir?to=${encodeURIComponent(`http://www.amazon.com:${port}/dp/B000?tag=thief-20`)}`);
+  await ap.evaluate((to) => { location.href = to; }, `/redir?to=${encodeURIComponent(`https://www.amazon.com:${sport}/dp/B000?tag=thief-20`)}`);
   await ap.waitForURL(/thief-20/);
   await ap.waitForTimeout(1500);
   ok(await ap.evaluate(() => !!document.getElementById('quell-affiliate-notice')), 'affiliate swap (tag changed by a redirect): the notice is in the page');
@@ -3994,21 +4006,22 @@ console.log('Links (real browser, local server):');
   await ap.evaluate(() => document.getElementById('quell-affiliate-notice')?.remove());
   // A plain click to another product with a different tag: no notice.
   const bp = await lc.newPage();
-  await bp.goto(`http://www.amazon.com:${port}/dp/B000?tag=blog-20`);
-  await bp.goto(`http://www.amazon.com:${port}/dp/B111?tag=other-20`);
+  await bp.goto(`https://www.amazon.com:${sport}/dp/B000?tag=blog-20`);
+  await bp.goto(`https://www.amazon.com:${sport}/dp/B111?tag=other-20`);
   await bp.waitForTimeout(1200);
   ok(await bp.evaluate(() => !document.getElementById('quell-affiliate-notice')), 'two product pages with different tags reached normally: no notice');
   await set({ linksWarnAffiliate: false });
   const cp = await lc.newPage();
-  await cp.goto(`http://www.amazon.com:${port}/dp/B000?tag=blog-20`);
+  await cp.goto(`https://www.amazon.com:${sport}/dp/B000?tag=blog-20`);
   await cp.waitForTimeout(300);
-  await cp.evaluate((to) => { location.href = to; }, `/redir?to=${encodeURIComponent(`http://www.amazon.com:${port}/dp/B000?tag=thief-20`)}`);
+  await cp.evaluate((to) => { location.href = to; }, `/redir?to=${encodeURIComponent(`https://www.amazon.com:${sport}/dp/B000?tag=thief-20`)}`);
   await cp.waitForURL(/thief-20/);
   await cp.waitForTimeout(1200);
   ok(await cp.evaluate(() => !document.getElementById('quell-affiliate-notice')), 'warning switch off: no notice even for a swap');
   console.log(`  (affiliate notice screenshot: ${path.join(tmp, 'affiliate-notice.png')})`);
   await lc.close();
   server.close();
+  sserver.close();
 }
 
 // --- 0.7.4: popup rows for sign-up prompts and Links (switches, status lines, permissions) ----
