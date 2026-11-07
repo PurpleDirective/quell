@@ -78,19 +78,7 @@ window.Quell = window.Quell || {
   },
 };
 
-// The popup asks which site this tab is on. Quell's access to Google and Bing
-// is content-script access only, and Chrome does not show the popup a tab's
-// address on that kind of access — so without this the popup said "Quell
-// doesn't run on this page" on the very pages it runs on, and the This-site
-// card never appeared there. The answer is the hostname and nothing else, and
-// it goes to Quell's own popup only (a page cannot send this message).
-if (!window.__quellWhere) {
-  window.__quellWhere = true;
-  try {
-    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-      if (msg?.type === 'where' && sender.id === chrome.runtime.id && !sender.tab) {
-        sendResponse({ host: location.hostname });
-      }
-    });
-  } catch (_) { /* not an extension context (tests inject this file into a plain page) */ }
-}
+// The popup's questions (which site this tab is on; what Quell hid here; Peek
+// and Undo) are answered by the one listener in src/shared/settings.js. It
+// answers Quell's own popup only, never a page, a tab or another extension.
+globalThis.QuellSettings.hidden.listen();

@@ -934,6 +934,7 @@ console.log('Hidden-tab sweep:');
 
 // --- Popup renders with defaults (real extension page) ---
 console.log('Popup:');
+await sw.evaluate(() => QuellSettings.set({ firstRunDone: true }));
 {
   const page = await ctx.newPage();
   await page.goto(`chrome-extension://${extId}/src/popup/popup.html`);
@@ -953,8 +954,8 @@ console.log('Popup:');
     .filter((el) => !(el.labels && [...el.labels].some((l) => l.textContent.trim())) && !el.getAttribute('aria-label'))
     .map((el) => el.id));
   ok(unnamed.length === 0, `every switch and select has a text label (${unnamed.join(',') || 'none unnamed'})`);
-  ok(await page.evaluate(() => [...document.querySelectorAll('input[type=checkbox]')].every((x) => x.getAttribute('role') === 'switch')),
-    'every checkbox is exposed as role=switch');
+  ok(await page.evaluate(() => [...document.querySelectorAll('input[type=checkbox]:not([data-fr])')].every((x) => x.getAttribute('role') === 'switch')),
+    'every switch is exposed as role=switch (the first-run consent box is a plain checkbox)');
 
   // The engine selects must reflect stored settings, not just render. Every
   // value asserted here is deliberately NOT that select's first <option>.
@@ -1701,6 +1702,11 @@ console.log('Cookie reject-all (opt-in):');
 // Playwright, so the real-extension popup tests above can only see the
 // "hosts not granted" state; here permissions.request answers whatever the
 // case says, and every storage/permissions call is recorded in order.
+// The long-tail switches live behind the three chevrons (collapsed by default).
+// Tests that drive a sub-switch open them first; the page's own state flags
+// are global lexical bindings, reachable from evaluate().
+const expandAll = (pg) => pg.evaluate(() => { expanded.search = expanded.cookie = expanded.popup = true; return render(); });
+
 console.log('Popup — engines switch (intent path / off path):');
 {
   const popupDir = path.join(EXT, 'src/popup');
@@ -1718,7 +1724,7 @@ console.log('Popup — engines switch (intent path / off path):');
   // only when the case allows the grant, remove() flips it back.
   const fakeChrome = ({ storage, granted, allowGrant }) => `
     window.__calls = [];
-    window.__state = { granted: ${granted}, local: ${JSON.stringify(storage)} };
+    window.__state = { granted: ${granted}, local: { firstRunDone: true, ...${JSON.stringify(storage)} } };
     window.chrome = {
       runtime: { id: 'fake' },
       storage: { local: {
@@ -1756,6 +1762,7 @@ console.log('Popup — engines switch (intent path / off path):');
     await pg.addInitScript({ content: fakeChrome(opts) });
     await pg.goto('http://popup.test/popup.html');
     await pg.waitForTimeout(300);
+    await expandAll(pg);
     return pg;
   };
   const calls = (pg) => pg.evaluate(() => window.__calls);
@@ -1838,7 +1845,7 @@ console.log('Popup — all-sites access is given back when Cookie banners and Po
   const fake = ({ local, granted, soft = [], allowGrant = true }) => `
     window.__calls = [];
     const st = window.__st = { granted: new Set(${JSON.stringify(granted)}), soft: new Set(${JSON.stringify(soft)}),
-      local: ${JSON.stringify(local)}, session: {} };
+      local: { firstRunDone: true, ...${JSON.stringify(local)} }, session: {} };
     const covers = (o) => st.granted.has(o) || st.granted.has('<all_urls>');
     window.chrome = {
       runtime: { id: 'fake' },
@@ -1887,6 +1894,7 @@ console.log('Popup — all-sites access is given back when Cookie banners and Po
     await pg.addInitScript({ content: fake(opts) });
     await pg.goto('http://popup.test/popup.html');
     await pg.waitForTimeout(300);
+    await expandAll(pg);
     return pg;
   };
   const calls = (pg) => pg.evaluate(() => window.__calls);
@@ -2696,7 +2704,7 @@ console.log('Welcome page:');
   const pg = await ctx.newPage();
   await pg.goto(`chrome-extension://${extId}/src/welcome/welcome.html`);
   await pg.waitForTimeout(200);
-  const text = await pg.evaluate(() => document.body.innerText);
+  const text = await pg.evaluate(() => document.body.textContent);
   ok(/Search/.test(text) && /Cookie banners/.test(text) && /Pop-ups/.test(text), 'names the three groups');
   ok(/never/i.test(text) && /real search result/i.test(text), 'says what Quell will never do');
   ok(await pg.evaluate(() => document.getElementById('privacy').href) === 'https://purpledirective.com/quell/privacy/',
@@ -2718,7 +2726,7 @@ console.log('Welcome page:');
   await pg.addInitScript({ content: `Object.defineProperty(navigator, 'userAgent', { get: () => ${JSON.stringify(OPERA_UA)} });` });
   await pg.goto(`chrome-extension://${extId}/src/welcome/welcome.html`);
   await pg.waitForTimeout(200);
-  const text = await pg.evaluate(() => document.body.innerText);
+  const text = await pg.evaluate(() => document.body.textContent);
   ok(await pg.evaluate(() => navigator.userAgent.includes('OPR/')), 'precondition: the page sees an Opera user agent');
   ok(!/\bsync/i.test(text), `on Opera, the welcome page makes no sync claim`);
   ok(/saved in this browser/.test(text), 'on Opera, says settings are saved in this browser');
@@ -2740,7 +2748,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
   // asks which site it is on (null: no Quell script in the tab).
   const fake = (local, tabUrl, where = null, firefox = false) => `
     window.__calls = [];
-    window.__state = { local: ${JSON.stringify(local)}, session: { 'tab:7': 4 } };
+    window.__state = { local: { firstRunDone: true, ...${JSON.stringify(local)} }, session: { 'tab:7': 4 } };
     window.chrome = {
       runtime: { id: 'fake', getManifest: () => ({ version: '0.6.0', content_scripts: [] }),
         getURL: (p) => ${JSON.stringify(firefox ? 'moz-extension://fake/' : 'chrome-extension://fake/')} + p },
@@ -2782,6 +2790,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
     await pg.addInitScript({ content: fake(local, tabUrl, where, firefox) });
     await pg.goto('http://popup.test/popup.html');
     await pg.waitForTimeout(300);
+    await expandAll(pg);
     return pg;
   };
   const stored = (pg) => pg.evaluate(() => window.__state.local);
@@ -2837,11 +2846,11 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
     ok(await op3.evaluate(() => globalThis.QuellBrowser.edge === false), 'Opera is not mistaken for Edge');
     await op3.close();
   }
-  // The total reads right in the singular: "1 thing", not "1 things".
-  for (const [n, word] of [[0, 'things'], [1, 'thing'], [2, 'things'], [1234, 'things']]) {
+  // The lifetime total sits in the line under the headline, in words.
+  for (const [n, txt] of [[0, 'Quell is on · 0 hidden since you installed it'], [1, 'Quell is on · 1 hidden since you installed it'], [1234, `Quell is on · ${(1234).toLocaleString()} hidden since you installed it`]]) {
     const t = await openPopup({ totalBlocked: n });
-    const line = await t.evaluate(() => document.querySelector('.counter').textContent.replace(/\s+/g, ' ').trim());
-    ok(line === `${n.toLocaleString()} ${word} quelled so far`, `the counter says "${n.toLocaleString()} ${word} quelled so far" (read: ${line})`);
+    const line = await t.evaluate(() => document.getElementById('subLine').textContent.replace(/\s+/g, ' ').trim());
+    ok(line === txt, `the line under the headline says "${txt}" (read: ${line})`);
     await t.close();
   }
   // Chrome does not show the popup the address of a Google or Bing tab (Quell
@@ -2858,13 +2867,15 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
     ok(await pg.evaluate(() => !document.getElementById('siteAiRow').hidden), '...with "Keep AI on this site"');
     ok(await pg.evaluate(() => !document.getElementById('reportBtn').hidden), '...and "This site looks broken"');
     const asked = (await pg.evaluate(() => window.__calls)).filter((c) => c[0] === 'tabs.sendMessage');
-    ok(asked.length === 1 && asked[0][1] === 7 && JSON.stringify(asked[0][2]) === '{"type":"where"}',
-      'the popup asked that tab, once, and sent nothing but the question');
+    const where = asked.filter((c) => c[2].type === 'where');
+    ok(where.length === 1 && where[0][1] === 7 && JSON.stringify(where[0][2]) === '{"type":"where"}'
+      && asked.every((c) => c[1] === 7 && ['where', 'quell:hidden:list'].includes(c[2].type) && Object.keys(c[2]).length === 1),
+      'the popup asked that tab which site it is on, once, and otherwise only what it hid: questions, nothing else');
     await pg.close();
     // A tab address the browser does show is used as it is; the page is not asked.
     const shown = await openPopup({}, 'https://www.google.com/search?q=widgets', { where: 'elsewhere.example' });
     ok(await shown.evaluate(() => document.getElementById('siteHost').textContent) === 'www.google.com', 'a tab address the browser shows wins');
-    ok(!(await shown.evaluate(() => window.__calls)).some((c) => c[0] === 'tabs.sendMessage'), '...and the page is not asked');
+    ok(!(await shown.evaluate(() => window.__calls)).some((c) => c[0] === 'tabs.sendMessage' && c[2].type === 'where'), '...and the page is not asked which site it is');
     await shown.close();
     // No address and nothing of Quell's in the tab: Quell really is not running there.
     const none = await openPopup({}, null);
@@ -2879,20 +2890,19 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
       await j.close();
     }
   }
-  // The footer fits the popup: four links on Chrome, three where Rate is hidden.
-  // (Before 0.7.1 it was one line 415px wide in a 340px popup.)
+  // The popup is exactly 360 wide and the footer links fit it, on every browser.
   for (const [name, ua] of [['Chrome', undefined], ['Opera', OPERA_UA], ['Edge', EDGE_UA]]) {
-    const pg = await openPopup({}, undefined, { ua, width: 340 });
+    const pg = await openPopup({}, undefined, { ua, width: 360 });
     const m = await pg.evaluate(() => ({ doc: document.documentElement.scrollWidth,
       right: Math.max(...[...document.querySelectorAll('footer a')].filter((a) => a.offsetParent).map((a) => a.getBoundingClientRect().right)) }));
-    ok(m.doc <= 340 && m.right <= 340 - 16 + 0.5, `the footer fits a 340px popup on ${name} (page ${m.doc}px, last link ends at ${Math.round(m.right)}px)`);
+    ok(m.doc <= 360 && m.right <= 360 - 8 + 0.5, `the footer fits a 360px popup on ${name} (page ${m.doc}px, last link ends at ${Math.round(m.right)}px)`);
     await pg.close();
   }
   // Two of the four Google surfaces are more than one thing: the question says "them".
   {
     const pg = await openPopup({});
     for (const [id, word] of [['sGemini', 'them'], ['sOverview', 'it'], ['sAiMode', 'it']]) {
-      await pg.click(`label.switch:has(#${id})`);
+      await pg.click(`label.sw:has(#${id})`);
       await pg.waitForTimeout(120);
       const body = await pg.evaluate(() => document.getElementById('confirmB').textContent);
       ok(new RegExp(`will show ${word} as usual\\. You can hide ${word} again`).test(body), `the question for ${id} says "${word}" ("${body}")`);
@@ -2958,6 +2968,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
   // Keep AI on this site: confirm, then the host goes into aiAllowlist.
   {
     const pg = await openPopup({});
+    await pg.click('#siteMore'); // per-feature allows sit behind "Choose per feature"
     await pg.click('#siteAi');
     await pg.waitForTimeout(150);
     ok(await dlgOpen(pg, 'confirmDlg'), '"Keep AI on this site" asks first');
@@ -2973,6 +2984,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
   {
     const full = Array.from({ length: 400 }, (_, i) => `site-${i}.example.com`);
     const pg = await openPopup({ cookieEnabled: true, cookieAllowlist: full }, 'https://news.example.org/');
+    await pg.click('#siteMore');
     await pg.click('#siteAllow');
     await pg.waitForTimeout(200);
     ok(await pg.evaluate(() => !document.getElementById('saveError').hidden && /full/i.test(document.getElementById('saveError').textContent)),
@@ -3358,6 +3370,253 @@ console.log('Quell off — Google and Bing tabs left open across an update:');
     ok(!(await shown(g, 'ai-block')), 'the next load of that tab runs the current Quell, which hides again');
   }
   await c2.close();
+}
+
+// --- 0.7.3: the Moonlit popup and welcome page, on the real extension ----------
+// The popup is opened as a tab (an extension page), with chrome.tabs.query told
+// to answer with the Google fixture tab, exactly as the toolbar popup would see
+// it. Everything else is real: the content scripts answer the popup's
+// questions, Peek and Undo act on the live page.
+console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, analytics, pause:');
+{
+  const reset = { enabled: true, aiEnabled: true, googleMode: 'hide', hideOverview: true, hideAiMode: true, hidePaa: false,
+    hideGemini: true, bingEnabled: true, firstRunDone: true, analytics: 'on', aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [],
+    sitePauses: {}, cookieEnabled: false, popupsEnabled: false };
+  await sw.evaluate((r) => QuellSettings.set(r), reset);
+  const g = await ctx.newPage();
+  await g.route('https://www.google.com/search**', (r) => r.fulfill({ contentType: 'text/html', body: GOOGLE_FIXTURE }));
+  await g.goto('https://www.google.com/search?q=test');
+  await g.waitForFunction(() => getComputedStyle(document.getElementById('ai-block')).display === 'none').catch(() => {});
+  const shownG = (id) => g.evaluate((x) => getComputedStyle(document.getElementById(x)).display !== 'none', id);
+  const organicAll = async () => (await Promise.all(['organic-ai-title', 'organic-gemini', 'organic-normal'].map(shownG))).every(Boolean);
+
+  const openReal = async ({ scheme = 'dark', page = 'src/popup/popup.html', tabbed = true } = {}) => {
+    const p = await ctx.newPage();
+    await p.setViewportSize({ width: 360, height: 600 });
+    await p.emulateMedia({ colorScheme: scheme });
+    await p.addInitScript((tabbedIn) => {
+      window.__tracked = [];
+      const send = chrome.runtime.sendMessage.bind(chrome.runtime);
+      chrome.runtime.sendMessage = (m, ...r) => { window.__tracked.push(m); return send(m, ...r); };
+      if (!tabbedIn) return;
+      const orig = chrome.tabs.query.bind(chrome.tabs);
+      chrome.tabs.query = async (q) => {
+        if (!q || !q.active) return orig(q);
+        const own = (await chrome.tabs.getCurrent())?.id;
+        for (const t of await orig({})) {
+          if (t.id === own) continue;
+          try { await chrome.tabs.sendMessage(t.id, { type: 'where' }); return [t]; } catch (_) { /* not a Quell tab */ }
+        }
+        return [];
+      };
+    }, tabbed);
+    await p.goto(`chrome-extension://${extId}/${page}`);
+    await p.waitForFunction(() => document.getElementById('pageStatus')?.textContent.length > 0 || document.querySelector('h1'), null, { timeout: 15000 }).catch(() => {});
+    await p.waitForTimeout(600);
+    return p;
+  };
+  const fits = (p) => p.evaluate(() => {
+    const m = document.getElementById('main');
+    return { w: document.documentElement.scrollWidth, h: document.documentElement.scrollHeight, bodyH: Math.round(document.body.getBoundingClientRect().height),
+      bodyW: Math.round(document.body.getBoundingClientRect().width), mainOver: m.scrollHeight - m.clientHeight };
+  });
+
+  // Size: at most 360 x 560, and the default state never scrolls.
+  for (const scheme of ['dark', 'light']) {
+    const p = await openReal({ scheme });
+    ok(/Hid 2 things on this page\./.test(await p.evaluate(() => document.getElementById('pageStatus').textContent)),
+      `${scheme}: the headline counts what was hidden on this page`);
+    const f = await fits(p);
+    ok(f.bodyW === 360 && f.bodyH <= 560 && f.w <= 360 && f.mainOver <= 0,
+      `${scheme}: the default popup is 360 x ${f.bodyH} (max 560), nothing scrolls (page ${f.w}x${f.h}, main overflow ${f.mainOver})`);
+    ok(await p.evaluate(() => matchMedia('(prefers-color-scheme: light)').matches) === (scheme === 'light'),
+      `precondition: the page really renders in the ${scheme} scheme`);
+    const lum = await p.evaluate(() => {
+      const c = getComputedStyle(document.body).backgroundColor.match(/\d+/g).map(Number);
+      return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+    });
+    ok(scheme === 'dark' ? lum < 0.25 : lum > 0.8, `${scheme}: the surface is ${scheme} (luminance ${lum.toFixed(2)})`);
+    ok(await p.evaluate(() => !!document.querySelector('.moonsvg') && document.querySelectorAll('.item').length === 2
+      && getComputedStyle(document.querySelector('.moon')).display !== 'none'), `${scheme}: the moon and both hidden items render`);
+    await p.close();
+  }
+  {
+    const p = await openReal();
+    await sw.evaluate(() => QuellSettings.set({ firstRunDone: false, analytics: 'unset' }));
+    await p.reload(); await p.waitForTimeout(600);
+    const f = await fits(p);
+    ok(f.bodyH <= 560 && f.mainOver <= 0, `the first-run popup also fits without scrolling (${f.bodyH}px, overflow ${f.mainOver})`);
+    await sw.evaluate(() => QuellSettings.set({ firstRunDone: true, analytics: 'on' }));
+    await p.close();
+  }
+
+  // The hidden list: a kind and a short label, never page text; never an organic result.
+  {
+    const p = await openReal();
+    const list = await p.evaluate(async () => {
+      for (const t of await chrome.tabs.query({})) {
+        try { const r = await chrome.tabs.sendMessage(t.id, { type: 'quell:hidden:list' }); if (r && r.items.length) return r; } catch (_) { /* next */ }
+      }
+      return null;
+    });
+    const labels = (list?.items || []).map((i) => i.label).sort();
+    ok(JSON.stringify(labels) === '["AI Overview","Gemini promo"]', `the tab lists exactly what Quell hid: AI Overview (both blocks as one) and the Gemini promo (${JSON.stringify(labels)})`);
+    ok(!JSON.stringify(list).includes('Generated answer') && !JSON.stringify(list).includes('Regular result'), 'the list carries no page text');
+    ok((list?.items || []).every((i) => ['kind', 'id', 'label', 'detail', 'rejected', 'kept', 'peeking'].every((k) => k in i) && i.kind === 'search'),
+      'each item is kind + label (+ state), nothing else');
+    ok(await p.evaluate(() => document.getElementById('gSearchD').textContent) === 'Hid 2 here', 'the Search row says what it hid here');
+
+    // Peek: shown on the page for a moment, the popup shows the excerpt, organic results untouched.
+    const row = p.locator('.item', { hasText: 'AI Overview' });
+    await row.locator('[data-peek]').click();
+    await p.waitForTimeout(300);
+    ok(await shownG('ai-block') && await shownG('ai-block-css'), 'Peek shows the hidden AI Overview on the page');
+    ok(/Generated answer|Matches BLOCK_CSS/.test(await row.locator('.ex').innerText()), 'Peek shows the excerpt in the popup only');
+    ok(await organicAll(), 'organic results are all still present during Peek');
+    await row.locator('[data-peek]').click();
+    await p.waitForTimeout(300);
+    ok(!(await shownG('ai-block')) && !(await shownG('ai-block-css')), 'Peek again puts it back');
+    // ...and a peek the popup forgot about ends by itself.
+    await row.locator('[data-peek]').click();
+    await p.waitForTimeout(300);
+    await p.close();
+    await g.waitForFunction(() => getComputedStyle(document.getElementById('ai-block')).display === 'none', null, { timeout: 10000 }).catch(() => {});
+    ok(!(await shownG('ai-block')), 'a Peek left open re-hides itself after a few seconds');
+
+    // Undo: kept shown for this page load, even when the page changes and the scripts sweep again.
+    const p2 = await openReal();
+    const row2 = p2.locator('.item', { hasText: 'AI Overview' });
+    await row2.locator('[data-undo]').click();
+    await p2.waitForTimeout(400);
+    ok(await shownG('ai-block') && await shownG('ai-block-css'), 'Undo shows the AI Overview on the page');
+    await g.evaluate(() => { const d = document.createElement('div'); d.id = 'poke'; document.getElementById('rso').appendChild(d); });
+    await g.waitForTimeout(600);
+    ok(await shownG('ai-block'), 'and it stays shown after the page changes (the sweep does not hide it again)');
+    ok(await organicAll(), 'organic results are all still present after Undo');
+    ok(/Restored on this page/.test(await row2.innerText()), 'the row says it was restored');
+    await row2.locator('[data-undo]').click();
+    await p2.waitForTimeout(400);
+    ok(!(await shownG('ai-block')) && !(await shownG('ai-block-css')), '"Hide again" puts it back');
+    const tracked = await p2.evaluate(() => window.__tracked.map((m) => m.name));
+    ok(tracked.includes('popup_open') && tracked.includes('undo'), `UI events go to the background as quell:track (${tracked.join(',')})`);
+    ok(await p2.evaluate(() => window.__tracked.every((m) => m.type === 'quell:track' && Object.keys(m).length === 2)), 'a tracked event is a name and nothing else');
+    await p2.close();
+    ok(await organicAll(), 'organic results all present at the end');
+  }
+
+  // First run: shown once; the box writes the setting.
+  {
+    await sw.evaluate(() => QuellSettings.set({ firstRunDone: false, analytics: 'unset' }));
+    const p = await openReal();
+    ok(await p.evaluate(() => !document.getElementById('firstRun').hidden && document.getElementById('featCard').hidden), 'first run: the card shows, the feature rows wait');
+    ok(await p.evaluate(() => document.querySelector('[data-fr=analytics]').checked), 'the usage-counts box is ticked by default');
+    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'unset', 'nothing is stored until the user answers: still unset');
+    await p.click('[data-fr=analytics]');
+    await p.waitForTimeout(300);
+    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'off', 'unticking the box stores analytics: off');
+    await p.click('[data-fr=analytics]');
+    await p.waitForTimeout(300);
+    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'on', 'ticking it stores analytics: on');
+    await p.click('[data-fr=sentBtn]');
+    const sent = await p.evaluate(() => document.getElementById('frSent').textContent);
+    ok(['random install ID', 'version and browser', 'which switches are on', 'how many items each feature hid', 'popup opens and button clicks', 'error messages',
+      'Never the pages you visit, your searches or your browsing history'].every((t) => sent.includes(t)), 'What’s sent lists everything, and what is never sent');
+    ok(await p.evaluate(() => document.getElementById('frT').textContent.includes('Cookie banners') && document.getElementById('frT').textContent.includes('Pop-ups')),
+      'the card explains Cookie banners and Pop-ups');
+    await p.click('[data-fr=skip]');
+    await p.waitForTimeout(500);
+    const st = await sw.evaluate(() => QuellSettings.get({ firstRunDone: false, analytics: 'unset', cookieEnabled: false, popupsEnabled: false }));
+    ok(st.firstRunDone === true && st.analytics === 'on' && !st.cookieEnabled && !st.popupsEnabled, `Skip: answered once, nothing turned on (${JSON.stringify(st)})`);
+    ok(await p.evaluate(() => document.getElementById('firstRun').hidden && !document.getElementById('featCard').hidden), 'the card is gone and the rows are back');
+    ok(await p.evaluate(() => window.__tracked.some((m) => m.name === 'firstrun_skip')), 'firstrun_skip is tracked');
+    await p.close();
+    const again = await openReal();
+    ok(await again.evaluate(() => document.getElementById('firstRun').hidden), 'the card never comes back');
+    await again.close();
+    // The welcome page shows it too, until it has been answered.
+    const w = await openReal({ page: 'src/welcome/welcome.html', tabbed: false });
+    ok(await w.evaluate(() => document.getElementById('firstRun').hidden), 'welcome page: the card is hidden once the popup answered it');
+    await w.close();
+    await sw.evaluate(() => QuellSettings.set({ firstRunDone: false, analytics: 'unset' }));
+    const w2 = await openReal({ page: 'src/welcome/welcome.html', tabbed: false });
+    ok(await w2.evaluate(() => !document.getElementById('firstRun').hidden && document.querySelector('[data-fr=analytics]').checked), 'welcome page: the card shows once, box ticked');
+    await w2.click('[data-fr=analytics]');
+    await w2.waitForTimeout(300);
+    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'off', 'welcome page: the box writes the setting too');
+    ok(!/keeps nothing|collects nothing/i.test(await w2.evaluate(() => document.body.textContent)), 'the welcome page never says Quell keeps or collects nothing');
+    await w2.click('[data-fr=skip]');
+    await w2.waitForTimeout(500);
+    ok((await sw.evaluate(() => QuellSettings.get({ firstRunDone: false }))).firstRunDone === true, 'welcome page: Skip answers it');
+    await w2.close();
+    // "Turn both on": the all-sites request is the click's first call, and both switches follow the grant.
+    await sw.evaluate(() => QuellSettings.set({ firstRunDone: false, analytics: 'unset', cookieEnabled: false, popupsEnabled: false }));
+    const t = await ctx.newPage();
+    await t.addInitScript(() => {
+      window.__req = [];
+      Object.defineProperty(chrome.permissions, 'request', { configurable: true, writable: true, value: async (a) => { window.__req.push(a); return true; } });
+    });
+    await t.goto(`chrome-extension://${extId}/src/popup/popup.html?view=page`);
+    await t.waitForTimeout(500);
+    await t.click('[data-fr=turn]');
+    await t.waitForTimeout(600);
+    ok(JSON.stringify(await t.evaluate(() => window.__req)) === '[{"origins":["<all_urls>"]}]', 'Turn both on asks for all-sites access, once');
+    const on = await sw.evaluate(() => QuellSettings.get({ cookieEnabled: false, popupsEnabled: false, firstRunDone: false }));
+    ok(on.cookieEnabled && on.popupsEnabled && on.firstRunDone, 'and turns Cookie banners and Pop-ups on');
+    await t.close();
+    await sw.evaluate((r) => QuellSettings.set(r), reset);
+  }
+
+  // The quiet switch in the settings panel.
+  {
+    const p = await openReal();
+    await p.click('#gearBtn');
+    ok(await p.evaluate(() => !document.getElementById('settings').hidden && document.getElementById('main').hidden), 'the gear opens the settings panel');
+    ok(await p.evaluate(() => document.getElementById('analyticsSwitch').checked), 'the "Anonymous usage counts" switch reads the stored choice');
+    await p.click('#analyticsSwitch');
+    await p.waitForTimeout(300);
+    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'off', 'switching it off stores analytics: off');
+    await p.click('#analyticsSwitch');
+    await p.waitForTimeout(300);
+    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'on', 'and on stores analytics: on');
+    ok(await p.evaluate(() => ['feedback', 'privacy'].every((i) => document.getElementById(i).href.startsWith('https://purpledirective.com/'))), 'Feedback and Privacy stay reachable from the settings panel');
+    await p.close();
+  }
+
+  // Pause here: the allowlists every content script already reads, plus when to take them back.
+  {
+    const p = await openReal();
+    await p.click('input[name=pdur][value=always]');
+    await p.click('#pauseBtn');
+    await p.waitForTimeout(500);
+    ok(JSON.stringify((await sw.evaluate(() => QuellSettings.get({ aiAllowlist: [] }))).aiAllowlist) === '["www.google.com"]', 'Pause here (Always) puts the site in the same allowlist "Keep AI on this site" uses');
+    ok(/Paused on google\.com/.test(await p.evaluate(() => document.getElementById('pageStatus').textContent)) && await p.evaluate(() => document.getElementById('app').dataset.state) === 'paused', 'the popup reads paused');
+    await g.waitForFunction(() => getComputedStyle(document.getElementById('ai-block')).display !== 'none', null, { timeout: 10000 }).catch(() => {});
+    ok(await shownG('ai-block') && await organicAll(), 'the page is as Google serves it while paused');
+    ok(await p.evaluate(() => window.__tracked.some((m) => m.name === 'pause')), 'pause is tracked');
+    await p.click('#resumeBtn');
+    await p.waitForTimeout(500);
+    ok((await sw.evaluate(() => QuellSettings.get({ aiAllowlist: [] }))).aiAllowlist.length === 0, 'Resume takes the site out again');
+    await g.waitForFunction(() => getComputedStyle(document.getElementById('ai-block')).display === 'none', null, { timeout: 10000 }).catch(() => {});
+    ok(!(await shownG('ai-block')) && await organicAll(), 'and the AI Overview is hidden again, organic results intact');
+    await p.click('input[name=pdur][value=hour]');
+    await p.click('#pauseBtn');
+    await p.waitForTimeout(500);
+    const rec = (await sw.evaluate(() => QuellSettings.get({ sitePauses: {} }))).sitePauses['www.google.com'];
+    ok(rec && rec.until > Date.now() + 3500e3 && rec.until < Date.now() + 3700e3 && rec.added.join() === 'aiAllowlist', `1 hour is recorded as an expiry and what the pause added (${JSON.stringify(rec)})`);
+    await p.close();
+    await sw.evaluate((r) => QuellSettings.set(r), reset);
+    // Expiry takes back only what the pause itself added.
+    await sw.evaluate(() => QuellSettings.set({
+      cookieAllowlist: ['mine.test', 'x.test'], aiAllowlist: ['y.test'],
+      sitePauses: { 'x.test': { until: Date.now() - 1000, added: ['cookieAllowlist'] }, 'y.test': { until: Date.now() + 3600e3, added: ['aiAllowlist'] },
+        'mine.test': { until: Date.now() - 1000, added: [] } },
+    }));
+    const swept = await sw.evaluate(async () => { const r = await QuellSettings.sweepPauses(); return { r, s: await QuellSettings.get({ cookieAllowlist: [], aiAllowlist: [], sitePauses: {} }) }; });
+    ok(swept.r === true && JSON.stringify(swept.s.cookieAllowlist) === '["mine.test"]' && JSON.stringify(swept.s.aiAllowlist) === '["y.test"]'
+      && JSON.stringify(Object.keys(swept.s.sitePauses)) === '["y.test"]', `an expired pause removes only the entries it added, and a live one is kept (${JSON.stringify(swept.s)})`);
+    await sw.evaluate((r) => QuellSettings.set(r), reset);
+  }
+  await g.close();
 }
 
 await ctx.close();

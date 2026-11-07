@@ -560,8 +560,16 @@ async function syncBadges(on) {
   }
 }
 
+// A timed "Pause here" takes its own allowlist entries back out once it has
+// run out (settings.js sweepPauses). Checked when the worker starts, when the
+// browser starts and on each navigation: cheap, and no alarms permission.
+const sweepPauses = () => { try { QuellSettings.sweepPauses().catch(() => {}); } catch (_) { /* old stub */ } };
+sweepPauses();
+chrome.runtime.onStartup?.addListener(sweepPauses);
+
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.status === 'loading') {
+    sweepPauses();
     chrome.storage.session.remove('tab:' + tabId);
     chrome.action.setBadgeText({ tabId, text: '' });
   }

@@ -110,6 +110,12 @@
     (s.enabled && s.aiEnabled !== false && s.bingEnabled && !window.Quell.aiPaused(s))
       ? apply() : teardown();
 
+  // Listed by the popup, Peek and Undo (see QuellSettings.hidden): the same
+  // guarded selectors that hide, so nothing inside #b_results can appear.
+  window.QuellSettings.hidden.register('search',
+    () => (active ? [...document.querySelectorAll(blockSelectors().join(','))]
+      .map((el) => ({ el, label: 'Copilot', detail: 'Bing · hidden' })) : []),
+    () => active);
   // Subscribe before the first async read — see the note in google.js.
   window.Quell.onSettingsChange(['enabled', 'aiEnabled', 'aiAllowlist', 'bingEnabled'], applyState);
   // Cut off from the extension: stop hiding (see onGone in settings.js).
