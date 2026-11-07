@@ -76,7 +76,9 @@
         if (r.t) {
           const re = new RegExp(r.t.re, 'i');
           for (const el of document.querySelectorAll(r.t.sel)) {
-            if (re.test((el.textContent || '').trim()) && !el.querySelector('input, button, a[href], img')) found.push(el);
+            const tx = (el.textContent || '').trim();
+            // Short text only (a picture inside a promo card is fine); never a container of controls.
+            if (tx.length <= 160 && re.test(tx) && !el.querySelector('input, button, a[href]')) found.push(el);
           }
         }
       } catch (_) { continue; }
