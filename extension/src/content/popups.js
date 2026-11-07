@@ -29,6 +29,8 @@
 //         it looks like what this layer is for — an e-mail field or sign-up /
 //         subscribe wording, a known chat widget, or an app-install banner —
 //         and passes (a).
+//      d. A match that sits in-flow inside the page's header or nav (a header
+//         "Subscribe" button, WebMD 0.7.4) is navigation, not an overlay: kept.
 // A wrong selector therefore costs, at worst, a nag that stays visible.
 
 (async () => {
@@ -165,6 +167,25 @@
     return false;
   };
 
+  // Rule (a), third part (0.7.4, WebMD live 2026-11-06): a control that sits
+  // IN the page's header or nav is not a pop-up. WebMD wraps its header
+  // "Subscribe" button and the (closed) sign-up dialog it opens in one
+  // div.newsletter-wrapper, which a site rule matched and hid with the button
+  // in it. Only a thing that is itself a dialog, or is positioned fixed or
+  // sticky somewhere between itself and its header, can be an overlay; an
+  // in-flow match inside header/nav/banner is the site's navigation.
+  const NAV_SEL = 'header, nav, [role="banner"], [role="navigation"]';
+  const inFlowInNav = (el) => {
+    const nav = el.closest(NAV_SEL);
+    if (!nav) return false;
+    if (el.matches(DIALOG_SEL)) return false;
+    for (let n = el; n && n !== nav; n = n.parentElement) {
+      const pos = getComputedStyle(n).position;
+      if (pos === 'fixed' || pos === 'sticky') return false;
+    }
+    return true;
+  };
+
   // Rule (c): does a site-rule match look like a sign-up, chat or app nag?
   const looksLikeNag = (el) => {
     if (el.matches(EMAIL_INPUT) || el.querySelector(EMAIL_INPUT)) return true;
@@ -269,13 +290,13 @@
     // is content or a sign-in / cart surface.
     for (const el of queryAll(selectors)) {
       if (el.hasAttribute('data-quell-keep')) continue;
-      if (isContent(el) || isSensitive(el)) { el.setAttribute('data-quell-keep', '1'); continue; }
+      if (isContent(el) || isSensitive(el) || inFlowInNav(el)) { el.setAttribute('data-quell-keep', '1'); continue; }
       n += count(el);
     }
     // Site rules: hide only what is verifiably a nag.
     for (const el of queryAll(siteSelectors)) {
       if (el.hasAttribute('data-quell-keep') || el.hasAttribute(SITE_MARK)) continue;
-      if (isContent(el) || isSensitive(el)) { el.setAttribute('data-quell-keep', '1'); continue; }
+      if (isContent(el) || isSensitive(el) || inFlowInNav(el)) { el.setAttribute('data-quell-keep', '1'); continue; }
       if (!looksLikeNag(el)) continue; // not (yet) a nag — re-checked next sweep
       el.setAttribute(SITE_MARK, '1');
       n += count(el);

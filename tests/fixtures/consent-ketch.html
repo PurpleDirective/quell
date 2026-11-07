@@ -1,0 +1,9 @@
+<!doctype html><html><head><title>Ketch-shaped consent dialog</title>
+<style>body{margin:0;font-family:sans-serif} .ketch-fixed{position:fixed} .k-full{inset:0;z-index:2147483647;background:rgba(0,0,0,.24)} #ketch-banner{right:4px;bottom:4px;width:328px;background:#fff}</style></head>
+<!-- Shape of drift.com, measured live 2026-11-06: everything Ketch draws sits under #lanyard_root; the banner offers
+     "Open Preferences" only, so Quell hides it and never clicks. -->
+<body><div id="site"><h1>Product page</h1><div id="ketch-site-story" style="height:2000px"><p>Content.</p></div></div>
+<div id="lanyard_root" data-screen="undefined"><div class="root__A7aXF"><div class="ketch-fixed k-full" id="ketch-backdrop"><div data-ketch-backdrop="true" class="ketch-fixed k-full"><div>
+  <div id="ketch-banner" class="ketch-fixed"><div id="ketch-consent-banner" role="dialog" aria-modal="false"><h3>Your Privacy Choices</h3><button id="ketch-banner-button-primary" onclick="document.body.dataset.clicked='1'">Open Preferences</button></div></div>
+</div></div></div></div></div>
+</body></html>

@@ -3696,6 +3696,99 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
   await g.close();
 }
 
+// --- 0.7.4: consent walls found live (CNN, Corriere) and Ketch -------------------
+// Fixtures in tests/fixtures/ keep the markup measured on the live pages 2026-11-06.
+console.log('Consent walls (CNN, Corriere) and Ketch:');
+{
+  const FIXD = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
+  const cookieSrc = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/cookies.js'), 'utf8');
+  const stub = (extra = '') => `window.chrome={storage:{local:{get:async(d)=>({...d${extra}})}},runtime:{sendMessage(){}}};`;
+  const openWall = async (host, file, extra = '') => {
+    const pg = await ctx.newPage();
+    await pg.route(`http://${host}/**`, (r) => r.fulfill({ contentType: 'text/html', body: readFileSync(path.join(FIXD, file), 'utf8') }));
+    await pg.goto(`http://${host}/`);
+    await pg.addScriptTag({ content: stub(extra) + '\n' + cookieSrc });
+    await pg.waitForTimeout(600);
+    return pg;
+  };
+  // What a reader sees: nothing fixed and big and dim left, page scrolls, no gap where the wall was.
+  const clean = (pg, storyId) => pg.evaluate((sid) => {
+    const vw = innerWidth, vh = innerHeight; const bad = [];
+    for (const el of document.querySelectorAll('body *')) {
+      const cs = getComputedStyle(el);
+      if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') continue;
+      const r = el.getBoundingClientRect();
+      if (r.width * r.height >= 0.5 * vw * vh) bad.push(el.id || el.className);
+    }
+    const b = document.body, cs = getComputedStyle(b);
+    const before = scrollY; scrollTo(0, 500); const scrolled = scrollY > 0; scrollTo(0, before);
+    const s = document.getElementById(sid).getBoundingClientRect();
+    return { bad, locked: cs.overflowY === 'hidden' || cs.position === 'fixed', scrolled, storyH: Math.round(s.height) };
+  }, storyId);
+
+  const cnn = await openWall('edition.cnn.com', 'consent-cnn.html');
+  ok(await cnn.evaluate(() => getComputedStyle(document.getElementById('cnn-wall')).display) === 'none', 'CNN: the "Legal Terms and Privacy" wall is hidden');
+  let st = await clean(cnn, 'cnn-story');
+  ok(st.bad.length === 0, `CNN: no dim layer left (${st.bad.join() || 'none'})`);
+  ok(!st.locked && st.scrolled, 'CNN: the scroll lock (inline body styles) is released and the page scrolls');
+  ok(st.storyH === 2400, 'CNN: the story keeps its full height (no gap, nothing collapsed)');
+  ok(await cnn.evaluate(() => !document.getElementById('cnn-header').hasAttribute('inert') && getComputedStyle(document.getElementById('cnn-main')).display !== 'none'), 'CNN: the header is usable again and the page content is untouched');
+  ok(await cnn.evaluate(() => getComputedStyle(document.getElementById('cnn-signin')).display !== 'none'), 'CNN: the header Sign in link stays');
+  await cnn.close();
+  // A look-alike wall on another host is not Quell's to hide.
+  const other = await openWall('elsewhere.test', 'consent-cnn.html');
+  ok(await other.evaluate(() => getComputedStyle(document.getElementById('cnn-wall')).display) !== 'none', 'CNN rule is scoped to cnn.com: the same markup elsewhere stays');
+  await other.close();
+  // Switched off by the per-site pause: wall and lock come back.
+  const cnnPaused = await openWall('edition.cnn.com', 'consent-cnn.html', ',cookieAllowlist:["edition.cnn.com"]');
+  ok(await cnnPaused.evaluate(() => getComputedStyle(document.getElementById('cnn-wall')).display) !== 'none', 'CNN: a paused site keeps the site\'s own wall');
+  await cnnPaused.close();
+
+  const cor = await openWall('www.corriere.it', 'consent-corriere.html');
+  ok(await cor.evaluate(() => getComputedStyle(document.getElementById('corriere-wall')).display) === 'none', 'Corriere: div.privacy-cp-wall is hidden');
+  st = await clean(cor, 'rcs-story');
+  ok(st.bad.length === 0, `Corriere: no dim or blur layer left (${st.bad.join() || 'none'})`);
+  ok(!st.locked && st.scrolled, 'Corriere: body.noScroll is lifted and the page scrolls');
+  ok(st.storyH === 2400, 'Corriere: no blank gap where the wall was');
+  await cor.close();
+  const corOther = await openWall('elsewhere.test', 'consent-corriere.html');
+  ok(await corOther.evaluate(() => getComputedStyle(document.getElementById('corriere-wall')).display) !== 'none', 'Corriere rule is scoped to corriere.it');
+  await corOther.close();
+
+  const ket = await openWall('www.drift-fixture.test', 'consent-ketch.html');
+  ok(await ket.evaluate(() => getComputedStyle(document.getElementById('lanyard_root')).display) === 'none'
+    && await ket.evaluate(() => document.getElementById('ketch-banner').getClientRects().length === 0), 'Ketch: the whole consent root (banner and dim backdrop) is hidden');
+  st = await clean(ket, 'ketch-site-story');
+  ok(st.bad.length === 0 && st.storyH === 2000 && st.scrolled, 'Ketch: no dim layer, page intact and scrollable');
+  ok(await ket.evaluate(() => document.body.dataset.clicked !== '1'), 'Ketch: hide-only, its buttons are never clicked');
+  await ket.close();
+  // With reject-all on, Ketch is STILL not clicked (no vendor-wide reject control exists to name).
+  const ketR = await openWall('www.drift-fixture.test', 'consent-ketch.html', ',cookieReject:true');
+  ok(await ketR.evaluate(() => document.body.dataset.clicked !== '1'), 'Ketch: reject-all on still does not click Ketch\'s buttons');
+  await ketR.close();
+}
+
+// --- 0.7.4: WebMD header "Subscribe" is navigation, not a pop-up -------------------
+console.log('Pop-ups: in-flow header controls are kept (WebMD):');
+{
+  const FIXD = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
+  const popSrc = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/popups.js'), 'utf8');
+  const stub = `window.__state={popupsEnabled:true};window.__cbs=[];window.__sent=[];
+    window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
+      runtime:{sendMessage:async(m)=>{ if(m.type==='blocked'){window.__sent.push(m);return;} if(m.type==='popupRules') return {generic:[],site:['.newsletter-wrapper']}; }}};`;
+  const pg = await ctx.newPage();
+  await pg.route('http://www.webmd.test/**', (r) => r.fulfill({ contentType: 'text/html', body: readFileSync(path.join(FIXD, 'webmd-header.html'), 'utf8') }));
+  await pg.addInitScript({ content: stub + '\n' + popSrc });
+  await pg.goto('http://www.webmd.test/');
+  await pg.waitForTimeout(1000);
+  const shown = (id) => pg.evaluate((i) => { const e = document.getElementById(i); return !!e && e.getClientRects().length > 0; }, id);
+  ok(await shown('webmd-subscribe'), 'WebMD: the header "Subscribe" button (div.newsletter-wrapper.overlay.vn-subscribe) stays visible');
+  ok(await shown('webmd-signin') && await shown('webmd-main'), 'WebMD: header Log in link and the page content stay');
+  ok(!(await shown('webmd-real-modal')), 'WebMD: a real fixed newsletter box with the same class is still hidden');
+  ok(await pg.evaluate(() => document.querySelector('#webmd-subscribe button').getBoundingClientRect().width > 0), 'WebMD: the Subscribe button keeps its size (no collapse)');
+  await pg.close();
+}
+
 await ctx.close();
 console.log(`\n${passed} passed, ${failed} failed${skipped ? `, ${skipped} skipped` : ''}`);
 process.exit(failed ? 1 : 0);
