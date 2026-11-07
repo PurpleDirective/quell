@@ -2,6 +2,7 @@
 # Quell smoke suite — links the global playwright install (ESM ignores
 # NODE_PATH), then runs the tests. node_modules/ here is gitignored.
 set -euo pipefail
+# QUELL_HEADLESS_ONLY=1: new headless Chromium only, never a visible window.
 cd "$(dirname "$0")"
 GLOBAL_ROOT="$(npm root -g)"
 PW=""
