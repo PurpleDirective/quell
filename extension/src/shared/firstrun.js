@@ -83,6 +83,9 @@
     card.querySelectorAll('[data-fr-ask-only]').forEach((el) => { el.hidden = both; });
     // Copy written for the two-button ask is swapped for its one-button version.
     if (both) card.querySelectorAll('[data-fr-upgrade]').forEach((el) => { el.textContent = el.dataset.frUpgrade; });
+    // The card's spoken name must not come from text the upgrade card hides.
+    const label = document.getElementById(card.getAttribute('aria-labelledby') || '');
+    if (both && label && label.hidden) { card.removeAttribute('aria-labelledby'); card.setAttribute('aria-label', 'Usage counts'); }
     box.checked = await analyticsOn(s);
 
     sentBtn.addEventListener('click', () => {

@@ -3589,6 +3589,8 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
       && document.querySelector('[data-fr-ask]').hidden), 'the upgrade card has one button, Save');
     const upText = await up.evaluate(() => { const c = document.getElementById('firstRun'); return [...c.querySelectorAll('p,h2,button,label')].filter((e) => !e.closest('[hidden]')).map((e) => e.textContent).join(' '); });
     ok(!/Either button|Turning both on|Cookie banners\s*hides/.test(upText), `the upgrade card never mentions the two-button ask (${upText.slice(0, 80)}…)`);
+    ok(await up.evaluate(() => { const c = document.getElementById('firstRun'); const l = document.getElementById(c.getAttribute('aria-labelledby') || ''); return l ? !l.hidden : c.getAttribute('aria-label') === 'Usage counts'; }),
+      'the upgrade card\'s accessible name is not the hidden two-button copy');
     await up.close();
     const wu = await openReal({ page: 'src/welcome/welcome.html', tabbed: false });
     const wuText = await wu.evaluate(() => { const c = document.getElementById('firstRun'); return [...c.querySelectorAll('p,h2,button,label')].filter((e) => !e.closest('[hidden]')).map((e) => e.textContent).join(' '); });
