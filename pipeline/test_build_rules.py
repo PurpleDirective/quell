@@ -91,8 +91,9 @@ ok(len(edge["description"]) <= 132 and not any(w in edge["description"] for w in
 ok("browser_specific_settings" not in edge and "scripts" not in edge["background"],
    "Edge keeps the service worker and carries no Firefox keys")
 ok(edge["version"] == src["version"] and edge["name"] == src["name"], "Edge keeps the Chrome version and name")
-ok(derived("opera")["name"] != src["name"] and derived("firefox")["background"] != src["background"],
-   "Opera and Firefox still differ from Chrome where they must")
+ok(derived("opera")["name"] == src["name"] == derived("firefox")["name"] and len(src["name"]) <= 45
+   and derived("firefox")["background"] != src["background"],
+   "one store name everywhere (within AMO's 45 characters); Firefox still differs from Chrome in its background")
 pkg = (ROOT / "pipeline" / "package.sh").read_text()
 ok("for target in chrome firefox opera; do" in pkg,
    "package.sh builds chrome, firefox and opera")
