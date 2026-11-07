@@ -1,16 +1,11 @@
-<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <!-- Quell app icon v2 — "Crescent": noise sets like a moon into calm. Centered mark. -->
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#7C3AED"/>
-      <stop offset="1" stop-color="#4C1D95"/>
-    </linearGradient>
-    <mask id="crescent">
-      <rect width="128" height="128" fill="#000"/>
-      <circle cx="74" cy="64" r="36" fill="#ffffff"/>
-      <circle cx="99" cy="64" r="34" fill="#000000"/>
-    </mask>
-  </defs>
-  <rect width="128" height="128" rx="28" fill="url(#g)"/>
-  <circle cx="74" cy="64" r="36" fill="#ffffff" mask="url(#crescent)"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128"><defs>
+ <linearGradient id="bgA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16222F"/><stop offset="1" stop-color="#0D151D"/></linearGradient>
+ <radialGradient id="glA" cx=".5" cy=".12" r=".75"><stop offset="0" stop-color="#B8D4E8" stop-opacity=".30"/><stop offset="1" stop-color="#B8D4E8" stop-opacity="0"/></radialGradient>
+ <radialGradient id="mgA" cx=".28" cy=".3" r=".95"><stop offset="0" stop-color="#F7FAFC"/><stop offset=".55" stop-color="#CFE0EE"/><stop offset="1" stop-color="#8CA7BD"/></radialGradient>
+ <radialGradient id="mtA" gradientUnits="userSpaceOnUse" cx="99" cy="64" r="50"><stop offset=".62" stop-color="#08121C" stop-opacity=".62"/><stop offset="1" stop-color="#08121C" stop-opacity="0"/></radialGradient>
+ <radialGradient id="haA" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#B8D4E8" stop-opacity=".34"/><stop offset=".5" stop-color="#B8D4E8" stop-opacity=".08"/><stop offset="1" stop-color="#B8D4E8" stop-opacity="0"/></radialGradient>
+ <clipPath id="cpA"><path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z"/></clipPath></defs>
+  <rect width="128" height="128" rx="28" fill="url(#bgA)"/><rect width="128" height="128" rx="28" fill="url(#glA)"/>
+  <circle cx="64" cy="64" r="58" fill="url(#haA)"/>
+  <g transform="translate(64 64) scale(1.12) translate(-64 -64)"><path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" fill="url(#mgA)" /><g clip-path="url(#cpA)"><circle cx="47" cy="50" r="4.2" fill="rgba(60,90,120,.26)" stroke="rgba(255,255,255,.22)" stroke-width=".6"/><circle cx="44" cy="72" r="5.8" fill="rgba(60,90,120,.24)" stroke="rgba(255,255,255,.2)" stroke-width=".6"/><circle cx="55" cy="87" r="3.2" fill="rgba(60,90,120,.26)"/><circle cx="53" cy="39" r="2.6" fill="rgba(60,90,120,.24)"/><circle cx="58" cy="62" r="2" fill="rgba(60,90,120,.22)"/><circle cx="62" cy="76" r="2.4" fill="rgba(60,90,120,.2)"/><rect x="20" y="20" width="100" height="90" fill="url(#mtA)"/></g><path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" fill="none" stroke="rgba(255,255,255,.55)" stroke-width=".7"/></g>
+  <rect x=".5" y=".5" width="127" height="127" rx="27.5" fill="none" stroke="rgba(184,212,232,.22)"/></svg>

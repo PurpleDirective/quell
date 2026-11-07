@@ -25,9 +25,9 @@ const FIXTURE = readFileSync(path.join(HERE, '..', 'tests', 'fixtures', 'google-
 const FONT64 = readFileSync(path.join(EXT, 'fonts', 'atkinson-hyperlegible-next-var.woff2')).toString('base64');
 
 // ---------------------------------------------------------------- captures --
-// Extensions load only in the full browser: new headless first, headed as the fallback.
+// Extensions load in new headless (channel 'chromium'); no visible window is ever opened.
 async function launch() {
-  for (const opts of [{ channel: 'chromium', headless: true }, { headless: true }, { headless: false }]) {
+  for (const opts of [{ channel: 'chromium', headless: true }]) { // never a visible window
     const c = await chromium.launchPersistentContext('', {
       ...opts, deviceScaleFactor: 2, colorScheme: 'dark',
       args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
@@ -49,7 +49,7 @@ const base = {
   enabled: true, aiEnabled: true, googleMode: 'hide', hideOverview: true, hideAiMode: true, hidePaa: false,
   hideGemini: true, bingEnabled: true, cookieEnabled: false, popupsEnabled: false,
   aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [], sitePauses: {},
-  firstRunDone: true, analytics: 'on', totalBlocked: 1284,
+  firstRunDone: true, whatsNewSeen: '0.7.4', analytics: 'on', totalBlocked: 1284,
 };
 
 const gpage = await ctx.newPage();
@@ -94,7 +94,7 @@ async function popupShot(act) {
 const popNormal = await popupShot();
 const popPeek = await popupShot(async (p) => { await p.locator('.item', { hasText: 'AI Overview' }).locator('[data-peek]').click(); await p.waitForTimeout(400); });
 console.log('popup headline:', popNormal.text);
-await set({ ...base, aiAllowlist: ['www.google.com'], sitePauses: { 'www.google.com': { until: Date.now() + 3600e3, added: ['aiAllowlist'] } } });
+await set({ ...base, aiAllowlist: ['www.google.com'], aiWebAllowlist: ['www.google.com'], sitePauses: { 'www.google.com': { until: Date.now() + 3600e3, added: ['aiAllowlist', 'aiWebAllowlist'] } } });
 await gpage.reload();
 await gpage.waitForTimeout(800);
 const popPaused = await popupShot();
@@ -104,7 +104,7 @@ await gpage.close();
 // The welcome page's first-run card, with the three features above it.
 await set({ ...base, firstRunDone: false, analytics: 'unset' });
 const wp = await ctx.newPage();
-await wp.setViewportSize({ width: 1100, height: 1000 });
+await wp.setViewportSize({ width: 1180, height: 1000 });
 await wp.emulateMedia({ colorScheme: 'dark' });
 await wp.goto(`chrome-extension://${extId}/src/welcome/welcome.html`);
 await wp.waitForTimeout(700);
@@ -191,7 +191,7 @@ await render('screenshot-2-1280x800.png', 1280, 800, shell(CAPCSS + `
 
 // 3 — cookie banners and pop-ups.
 await render('screenshot-3-1280x800.png', 1280, 800, shell(CAPCSS + `
-  .wel { position:absolute; left:140px; top:200px; width:1000px; }
+  .wel { position:absolute; left:210px; top:180px; width:860px; }
 `, `
   ${caption('Cookie banners and pop-ups, quietly gone.', 'Off until you turn them on. Quell asks your browser once, and gives the access back when both are off.')}
   ${MK}

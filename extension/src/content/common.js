@@ -70,6 +70,84 @@ window.Quell = window.Quell || {
     else requestAnimationFrame(fn);
   },
 
+  // After Quell hides something, the boxes that wrapped it can stay behind as
+  // an empty strip (padding, min-height, a fixed-size frame): the Google AI
+  // Overview left a 190-205 px blank band above the results. emptyAncestor()
+  // walks up from a hidden element and returns the HIGHEST ancestor that now
+  // has nothing visible in it (no visible text, image, video, canvas, input,
+  // button or frame), stopping at `stop` and never passing one that holds
+  // anything matching `safe` (an organic result, the search box). collapse()
+  // then hides it the same way Quell hides anything, marked so the page's
+  // Peek/Undo list can bring it back together with the element it wrapped.
+  emptyAncestor(el, { stop = null, safe = '' } = {}) {
+    const SAFE = ['input:not([type="hidden"])', 'textarea', '[role="search"]', safe].filter(Boolean).join(',');
+    const MEDIA = 'img,video,canvas,iframe,object,embed,input:not([type="hidden"]),textarea,select,button,svg';
+    const hasContent = (root) => {
+      let budget = 3000;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+        acceptNode(n) {
+          if (n.nodeType === 1) {
+            const cs = getComputedStyle(n);
+            if (cs.display === 'none' || cs.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
+          }
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      });
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        if (--budget < 0) return true; // too big to judge: leave it alone
+        if (n.nodeType === 3) {
+          if (n.nodeValue.trim() && n.parentElement && n.parentElement.getClientRects().length) return true;
+        } else if (n.matches(MEDIA)) {
+          const r = n.getBoundingClientRect();
+          if (r.width > 1 && r.height > 1) return true;
+        }
+      }
+      return false;
+    };
+    let top = null;
+    for (let cur = el.parentElement; cur && cur !== stop && cur !== document.body && cur !== document.documentElement; cur = cur.parentElement) {
+      if (cur.matches(SAFE) || cur.querySelector(SAFE)) break;
+      if (hasContent(cur)) break;
+      top = cur;
+    }
+    return top;
+  },
+
+  collapse(w, label) {
+    if (!w || w.dataset.quellCollapsed === '1') return;
+    w.dataset.quellCollapsed = '1';
+    if (label) w.dataset.quellLabel = label;
+    w.style.setProperty('display', 'none', 'important');
+  },
+
+  uncollapseAll() {
+    for (const w of document.querySelectorAll('[data-quell-collapsed="1"]')) {
+      w.style.removeProperty('display');
+      delete w.dataset.quellCollapsed;
+      delete w.dataset.quellLabel;
+    }
+  },
+
+  // Read the settings again a moment after load and when the tab comes back, and
+  // hand them to cb: a layer that started from a stale read catches up without
+  // an off/on toggle.
+  recheckSettings(cb, initial) {
+    // Only a read that differs from what the layer started with is applied, so
+    // a settled page is never touched again (no DOM writes while idle).
+    // (the running total of hidden things changes as Quell works; it is not a setting)
+    const keyOf = (o) => JSON.stringify(o ? { ...o, totalBlocked: 0 } : null);
+    let seen = keyOf(initial);
+    const run = () => globalThis.QuellSettings.get().then((next) => {
+      const k = keyOf(next);
+      if (k === seen) return;
+      seen = k;
+      cb(next);
+    }).catch(() => {});
+    setTimeout(run, 1500);
+    setTimeout(run, 5000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) run(); });
+  },
+
   // Tell the background how many AI elements we just removed (for the badge).
   report(n) {
     if (n > 0) {

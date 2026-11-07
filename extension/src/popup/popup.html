@@ -46,7 +46,7 @@
 
       <!-- First run: shown once, here and on the welcome page. -->
       <section class="card frc" id="firstRun" hidden aria-labelledby="frT">
-        <p class="fr-def" id="frT" data-fr-ask-only><strong>Cookie banners</strong> hides “we use cookies” notices and can say “reject all” for you. <strong>Pop-ups</strong> hides newsletter boxes, chat bubbles and “open in app” banners.</p>
+        <p class="fr-def" id="frT" data-fr-ask-only><strong>Cookie banners</strong> hides “we use cookies” notices and can say “reject all” for you. <strong>Pop-ups</strong> hides newsletter boxes, chat bubbles and “open in app” banners. The same access lets Quell hide AI buttons and clean tracking from links on other sites.</p>
         <div class="ana">
           <label class="ck"><input type="checkbox" data-fr="analytics" /><span>Share anonymous usage counts to help improve Quell</span></label>
           <button type="button" class="tbtn" data-fr="sentBtn" aria-expanded="false" aria-controls="frSent">What’s sent</button>
@@ -60,6 +60,27 @@
           <button type="button" class="btn pri" data-fr="done">Save</button>
         </div>
         <p class="fine" data-fr="note" data-fr-upgrade="Save keeps your choice above. You can change it any time in Quell’s settings." role="status" aria-live="polite">Either button saves your choice above. Turning both on asks your browser once for access to all sites; Quell never records the pages you visit.</p>
+      </section>
+
+      <!-- Shown once to a user who updated to 0.7.4: Links and AI on websites start off. -->
+      <section class="card frc" id="whatsNew" hidden aria-labelledby="wnT">
+        <button type="button" class="ghost ic-btn wn-x" id="wnClose" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+        <h2 class="wn-t" id="wnT">What’s new in Quell 0.7.4</h2>
+        <ul class="wn-list" id="wnList"></ul>
+        <p class="wn-sum" id="wnSum"></p>
+        <div class="ana" id="wnAna">
+          <label class="ck"><input type="checkbox" data-fr="analytics" /><span>Share anonymous usage counts to help improve Quell</span></label>
+          <button type="button" class="tbtn" data-fr="sentBtn" aria-expanded="false" aria-controls="wnSent">What’s sent</button>
+          <p class="sentp" id="wnSent" hidden>A random install ID, Quell version and browser, which switches are on, how many items each feature hid, popup opens and button clicks, and error messages. Never the pages you visit, your searches or your browsing history.</p>
+        </div>
+        <div class="two" data-fr-ask>
+          <button type="button" class="btn pri" data-fr="turn">Turn these on</button>
+          <button type="button" class="btn ghostb" data-fr="skip">Not now</button>
+        </div>
+        <div class="two" data-fr-done hidden><button type="button" class="btn pri" data-fr="done">Save</button></div>
+        <p class="fine" data-fr="note" role="status" aria-live="polite">What is listed is off until you turn it on. This asks your browser once for access to all sites.</p>
       </section>
 
       <div class="card" id="mainCard">
@@ -176,7 +197,7 @@
           <label class="rs" for="cookies">
             <input type="checkbox" role="switch" class="rsin" id="cookies" aria-describedby="cookiesD" />
             <svg class="gly" width="18" height="18" viewBox="26 20 80 88" aria-hidden="true"><path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" stroke-width="6" stroke-linejoin="round"/></svg>
-            <span class="rt"><b id="gCookies">Cookie banners</b><small id="cookiesD">Asks your browser for access to all sites</small></span>
+            <span class="rt"><b id="gCookies">Cookie banners</b><small id="cookiesD">Asks your browser for all-sites access</small></span>
             <span class="fstate" aria-hidden="true"></span>
           </label>
           <button type="button" class="xp" id="cookieExpand" aria-expanded="false" aria-controls="cookieBody" aria-label="Cookie banner options"><svg class="chev" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -210,6 +231,60 @@
           <div class="orow">
             <label class="olabel" for="pApp">“Open in app” banners</label>
             <label class="sw"><input type="checkbox" role="switch" id="pApp" /><span class="knob"></span></label>
+          </div>
+          <div class="orow">
+            <label class="olabel" for="pSignup">Sign-up and log-in prompts<small id="pSignupD"></small></label>
+            <label class="sw"><input type="checkbox" role="switch" id="pSignup" aria-describedby="pSignupD" /><span class="knob"></span></label>
+          </div>
+        </div>
+
+        <!-- LINKS (0.7.4) -->
+        <div class="frow">
+          <label class="rs" for="links">
+            <input type="checkbox" role="switch" class="rsin" id="links" aria-describedby="linksD" />
+            <svg class="gly" width="18" height="18" viewBox="26 20 80 88" aria-hidden="true"><path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" stroke-width="6" stroke-linejoin="round"/></svg>
+            <span class="rt"><b id="gLinks">Remove tracking from links</b><small id="linksD">Asks your browser for all-sites access</small></span>
+            <span class="fstate" aria-hidden="true"></span>
+          </label>
+          <button type="button" class="xp" id="linkExpand" aria-expanded="false" aria-controls="linkBody" aria-label="Link options"><svg class="chev" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+        <div class="opts" id="linkBody" hidden>
+          <div class="orow">
+            <label class="olabel" for="linkWarn">Warn me if a site swaps an affiliate code<small id="linkWarnD">Only warns. Quell never changes an affiliate code</small></label>
+            <label class="sw"><input type="checkbox" role="switch" id="linkWarn" aria-describedby="linkWarnD" /><span class="knob"></span></label>
+          </div>
+        </div>
+
+        <!-- AI ON WEBSITES -->
+        <div class="frow">
+          <label class="rs" for="aiWeb">
+            <input type="checkbox" role="switch" class="rsin" id="aiWeb" aria-describedby="aiWebD" />
+            <svg class="gly" width="18" height="18" viewBox="26 20 80 88" aria-hidden="true"><path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" stroke-width="6" stroke-linejoin="round"/></svg>
+            <span class="rt"><b id="gAiWeb">AI on websites</b><small id="aiWebD">AI buttons and chat assistants on other sites</small></span>
+            <span class="fstate" aria-hidden="true"></span>
+          </label>
+          <button type="button" class="xp" id="aiWebExpand" aria-expanded="false" aria-controls="aiWebBody" aria-label="AI on websites options"><svg class="chev" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+        <div class="opts" id="aiWebBody" hidden>
+          <div class="orow" id="aiWebAccessRow">
+            <span class="olabel">Hiding buttons and panels needs access to all sites<small>Your browser asks once. Quell gives it back when nothing uses it.</small></span>
+            <button type="button" class="btn small" id="aiWebGrant">Allow</button>
+          </div>
+          <div class="orow">
+            <label class="olabel" for="aiWebButtons">AI buttons and panels<small>“Ask AI” buttons on sites such as docs and shops</small></label>
+            <label class="sw"><input type="checkbox" role="switch" id="aiWebButtons" /><span class="knob"></span></label>
+          </div>
+          <div class="orow">
+            <label class="olabel" for="aiWebChat">AI chat assistants<small>Chat widgets whose product is the AI agent</small></label>
+            <label class="sw"><input type="checkbox" role="switch" id="aiWebChat" /><span class="knob"></span></label>
+          </div>
+          <div class="orow">
+            <label class="olabel" for="aiWebSupport">Support chats that use AI<small>Can remove a site’s support chat</small></label>
+            <label class="sw"><input type="checkbox" role="switch" id="aiWebSupport" /><span class="knob"></span></label>
+          </div>
+          <div class="orow">
+            <label class="olabel" for="aiWebReplay">AI session recording<small>Stops recording tools that replay your visit</small></label>
+            <label class="sw"><input type="checkbox" role="switch" id="aiWebReplay" /><span class="knob"></span></label>
           </div>
         </div>
       </section>

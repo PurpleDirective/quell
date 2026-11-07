@@ -39,6 +39,9 @@
       // the AI card itself as organic and made both passes inert here.
       organic: 'li[data-layout="organic"]',
       cleanParam: ['assist', 'false'],
+      // The "Search Assist" and "Ask Duck.ai" chips in the top bar are AI entry
+      // points: they go with the AI answer (hidden by what they say, near the top).
+      chipText: /^(search assist|ask duck\.ai|duck\.ai)$/i,
       // Web results only. `/?q=…&ia=chat` is Duck.ai — a chat the user opened
       // on purpose — and ia=images/videos/news are other verticals; none of
       // them are a place to be rewriting the URL.
@@ -60,6 +63,9 @@
       block: '#llm-snippet, .snippet',
       organic: '#mixed-main',
       cleanParam: ['summary', '0'],
+      // Brave's "Ask" tab in the top nav is its AI chat mode: it goes with the
+      // AI answer. Found by what it is (a link to /ask that says "Ask").
+      askTab: 'a[href^="/ask"]',
       // Brave's web results live at /search. /images, /videos, /news and
       // especially /ask (its explicit AI page) are not ours to rewrite.
       cleanPath: (u) => u.pathname === '/search',
@@ -80,14 +86,35 @@
         '.dd.scoutNav:not(ol.searchCenterMiddle *)',
         '#scoutPromoTooltip:not(ol.searchCenterMiddle *)',
         '#right .dd:has(> .compTitle a[href*="scout.yahoo.com"]):not(ol.searchCenterMiddle *)',
+        // Live 2026-11-06 the panel's links moved to search.yahoo.com/scout/chat
+        // and the block's class became AlsoTry_E; same guards, both link shapes.
+        '#right .dd:has(> .compTitle a[href*="/scout/chat"]):not(ol.searchCenterMiddle *)',
         // The footer "Also try" block, titled "Explore AI results with Yahoo
         // Scout" on live markup 2026-09-25: every link opens a Scout chat.
         // Only when its own title links into Scout; a plain related-searches
         // footer keeps its place.
-        'ol.searchCenterFooter .dd.AlsoTry:has(> .compTitle a[href*="scout.yahoo.com"]):not(ol.searchCenterMiddle *)'],
+        'ol.searchCenterFooter .dd[class*="AlsoTry"]:has(> .compTitle a[href*="scout.yahoo.com"]):not(ol.searchCenterMiddle *)',
+        'ol.searchCenterFooter .dd[class*="AlsoTry"]:has(> .compTitle a[href*="/scout/chat"]):not(ol.searchCenterMiddle *)',
+        // The sparkle in the search bar (live 2026-11-06) is the same <button
+        // role=switch aria-label="Ask Scout"> as the Search pill. The button is
+        // NOT hidden: only the sparkle part inside it goes (see hideSparkle
+        // below), so Search stays visible and clickable.
+        // The floating round sparkle at the bottom right, and its chat panel.
+        '#scout-widget:not(ol.searchCenterMiddle *)',
+        'button.scout-widget__fab:not(ol.searchCenterMiddle *)',
+        // "AI Takeaways" (live 2026-11-06): Yahoo's AI summary of the news
+        // carousel. It is rendered INSIDE ol.searchCenterMiddle, as the head of
+        // the "Top Stories" module, so it carries no :not(ol.searchCenterMiddle
+        // *) guard; allowInOrganic below tells the sweep it is not organic.
+        // Matched by Yahoo's own class names; the stories under it stay.
+        '.news-ai-overview-host',
+        'div[id^="l-root-"]:has(> .news-ai-overview-host)'],
+      // The only things allowed to be hidden inside the organic container.
+      allowInOrganic: '.news-ai-overview-host, div[id^="l-root-"]:has(> .news-ai-overview-host)',
       label: 'ai summary',
       block: '.grp-genAISum, ol.searchCenterTop > li, .dd.genAiDD',
       organic: 'ol.searchCenterMiddle',
+      sparkleSwitch: 'form[role="search"] button[role="switch"][aria-label="Ask Scout"]',
       // "AI Summary" is a phrase Yahoo also renders in knowledge panels and
       // in organic titles, so the label alone may not hide anything — the
       // block must carry Yahoo's own AI-summary markup too, the same guard
@@ -144,7 +171,42 @@
   // Never hide anything that sits inside the organic-results container. This is
   // the one invariant that must hold on every engine: Quell erasing a real
   // result is worse than any AI block it fails to hide.
-  const isOrganic = (el) => !!(cfg.organic && el.closest(cfg.organic));
+  const isOrganic = (el) => !!(cfg.organic && el.closest(cfg.organic))
+    && !(cfg.allowInOrganic && el.matches(cfg.allowInOrganic));
+
+  // Yahoo renders the Search pill and its AI sparkle as ONE button. Hide only
+  // the icon part that sits to the right of the button's text (the sparkle), as
+  // its highest wrapper that holds no text of its own; the magnifier beside
+  // the word "Search" and the word itself stay. A button with nothing to split
+  // is left exactly as it is.
+  function hideSparkle() {
+    let n = 0;
+    for (const btn of document.querySelectorAll(cfg.sparkleSwitch)) {
+      if (isOrganic(btn)) continue;
+      const range = document.createRange();
+      let textRight = -1;
+      const tw = document.createTreeWalker(btn, NodeFilter.SHOW_TEXT);
+      for (let t = tw.nextNode(); t; t = tw.nextNode()) {
+        if (!t.nodeValue.trim()) continue;
+        range.selectNodeContents(t);
+        const r = range.getBoundingClientRect();
+        if (r.width > 0) textRight = Math.max(textRight, r.right);
+      }
+      if (textRight < 0) continue; // no visible word to anchor on: leave it
+      for (const icon of btn.querySelectorAll('svg, img')) {
+        if (icon.closest('[data-quell-hidden="1"]')) continue;
+        const r = icon.getBoundingClientRect();
+        if (!(r.width > 0 && r.left >= textRight - 1)) continue;
+        let top = icon;
+        while (top.parentElement && top.parentElement !== btn && !top.parentElement.textContent.trim()) top = top.parentElement;
+        top.style.setProperty('display', 'none', 'important');
+        top.dataset.quellHidden = '1';
+        top.dataset.quellLabel = 'Search-bar sparkle';
+        if (!alreadyCounted(top)) { top.dataset.quellCounted = '1'; n++; }
+      }
+    }
+    return n;
+  }
 
   function sweep() {
     let hidden = 0;
@@ -179,6 +241,34 @@
         if (!alreadyCounted(block)) { block.dataset.quellCounted = '1'; hidden++; }
       }
     }
+    if (cfg.sparkleSwitch) hidden += hideSparkle();
+    if (cfg.chipText) {
+      for (const a of document.querySelectorAll('a, button, [role="tab"]')) {
+        if (isOrganic(a) || a.dataset.quellHidden === '1' || a.closest('[data-quell-hidden="1"]')) continue;
+        if (!cfg.chipText.test((a.textContent || '').trim()) || a.getBoundingClientRect().top + scrollY > 260) continue;
+        const tabEl = a.closest('li, [role="tab"]') || a;
+        tabEl.style.setProperty('display', 'none', 'important');
+        tabEl.dataset.quellHidden = '1';
+        tabEl.dataset.quellLabel = 'AI chip';
+        if (!alreadyCounted(tabEl)) { tabEl.dataset.quellCounted = '1'; hidden++; }
+      }
+    }
+    if (cfg.askTab) {
+      for (const a of document.querySelectorAll(cfg.askTab)) {
+        if (isOrganic(a) || a.dataset.quellHidden === '1') continue;
+        if ((a.textContent || '').trim().toLowerCase() !== 'ask') continue;
+        const tabEl = a.closest('[role="tab"], li') || a;
+        tabEl.style.setProperty('display', 'none', 'important');
+        tabEl.dataset.quellHidden = '1';
+        tabEl.dataset.quellLabel = 'Ask tab';
+        if (!alreadyCounted(tabEl)) { tabEl.dataset.quellCounted = '1'; hidden++; }
+      }
+    }
+    // Wrappers a hidden block left empty go too (never one holding a result).
+    for (const el of document.querySelectorAll('[data-quell-hidden="1"]')) {
+      const w = window.Quell.emptyAncestor(el, { safe: cfg.organic || '' });
+      if (w) window.Quell.collapse(w, el.dataset.quellLabel || 'AI answer');
+    }
     window.Quell.report(hidden);
   }
 
@@ -210,7 +300,9 @@
     for (const el of document.querySelectorAll('[data-quell-hidden="1"]')) {
       el.style.removeProperty('display');
       delete el.dataset.quellHidden;
+      delete el.dataset.quellLabel;
     }
+    window.Quell.uncollapseAll();
   }
 
   // Clean mode adds the engine's own no-AI parameter. It may only ever ADD it.
@@ -269,11 +361,14 @@
   window.QuellSettings.hidden.register('search', () => {
     if (!active) return [];
     const els = new Set([...document.querySelectorAll(cfg.css.join(',')), ...document.querySelectorAll('[data-quell-hidden="1"]')]);
+    for (const el of document.querySelectorAll('[data-quell-collapsed="1"]')) els.add(el);
     return [...els].filter((el) => !isOrganic(el))
-      .map((el) => ({ el, label: 'AI answer', detail: engineName + ' · hidden' }));
+      .map((el) => ({ el, label: el.dataset.quellLabel || 'AI answer', detail: engineName + ' · hidden' }));
   }, () => active);
   window.Quell.onSettingsChange(['enabled', 'aiEnabled', 'aiAllowlist', cfg.key], (next) => applyState(next, true));
   // Cut off from the extension: stop hiding (see onGone in settings.js).
   window.Quell.onGone(teardown);
-  applyState(await window.Quell.getSettings(), false);
+  const first = await window.Quell.getSettings();
+  applyState(first, false);
+  window.Quell.recheckSettings((next) => applyState(next, false), first);
 })();

@@ -26,7 +26,7 @@ Firefox differences, and why:
                         background.scripts, with settings.js, config.js,
                         browser.js and analytics.js listed first (Chrome loads
                         them via importScripts instead).
-  name                  AMO caps names at 45 characters; the Chrome name is 50.
+  name                  AMO caps names at 45 characters; the one name (41) fits, so every package uses it.
   minimum_chrome_version  Chrome-only key; dropped.
   browser_specific_settings.gecko
     id                  required for storage.sync and for AMO.
@@ -55,7 +55,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 GECKO_ID = "quell@purpledirective.com"
-SHORT_NAME = "Quell — Block AI Overviews & Cookie Popups"  # ≤ 45 chars (AMO, Opera)
+SHORT_NAME = "Hide AI Overviews & Cookie Popups — Quell"  # 41 chars, ≤ 45 (AMO, Opera); the Chrome name is the same
 FIREFOX_NAME = SHORT_NAME
 
 
@@ -64,7 +64,7 @@ def firefox(m):
     m["name"] = FIREFOX_NAME
     m["background"] = {"scripts": [
         "src/shared/settings.js", "src/shared/config.js", "src/shared/browser.js",
-        "src/shared/analytics.js", "src/background.js",
+        "src/shared/analytics.js", "src/shared/affiliate.js", "src/background.js",
     ]}
     m.pop("minimum_chrome_version", None)
     m["browser_specific_settings"] = {

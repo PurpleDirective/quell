@@ -23,7 +23,7 @@ so it doesn't rot when sites change.
 
 ## Three groups, plain switches
 
-The popup has three groups — **Search**, **Cookie banners**, **Pop-ups** — each
+The popup has four groups — **Search**, **Cookie banners**, **Pop-ups**, **Links** — each
 with one switch for the group and plain-language switches for each surface, plus:
 
 - **This site** — every per-site control in one card: *Keep AI on this site*,
@@ -110,6 +110,26 @@ with one switch for the group and plain-language switches for each surface, plus
   style, attribute, or a recognised vendor state class — is left alone; and for
   the two platforms whose saved choice Quell cannot read (Osano, Termly), a
   banner that appears after being hidden is hidden, never clicked.
+- **Sign-up and log-in prompts** *(0.7.4, a switch under Pop-ups, on with it)* —
+  `src/content/signup-prompts.js` closes the "sign up / log in to keep reading"
+  dialog, its dim layer, the scroll lock and any blur over a page whose text is
+  already in the document, and lets out article text the page clips. A dialog or
+  fixed layer qualifies only by its own words and size; nothing inside a header or
+  nav is ever a candidate; a login the user asked for (a click on a sign-in
+  control) or an address that is a login page is left alone. No paywall is
+  defeated: nothing is fetched, only what the server already sent is shown.
+  Per-site rules (LinkedIn, Pinterest, The Washington Post) were read on the live
+  pages; the rest is the generic heuristic.
+- **Links** *(0.7.4; on by default once all-sites access exists)* — a generated
+  static ruleset (`rules/links-clean.json`, from `pipeline/build_rules.py links`)
+  redirects a page address with known tracking parameters (utm_*, fbclid, gclid…)
+  to the same address without them, and takes Google's `/url?q=` step out of a
+  result link; `src/content/links.js` does the same to links in the page and
+  decodes Bing's `ck/a` links. Affiliate parameters and anything that changes the
+  page are never on the list (tests check both). The optional switch *Warn me if a
+  site swaps an affiliate code* (off by default, optional `webNavigation`
+  permission) shows a notice on Amazon product and cart pages only when the tag
+  changed AND a redirect, not the user, caused it. It never changes anything.
 - **Pop-ups** *(opt-in, off by default)* — newsletter sign-up modals, chat-widget
   launchers and "open in app" banners, each with its own switch. Rules derive
   from EasyList's *Newsletter Notices*, *Chat Widgets* and (app-banner rules

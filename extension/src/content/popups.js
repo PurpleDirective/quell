@@ -29,6 +29,8 @@
 //         it looks like what this layer is for — an e-mail field or sign-up /
 //         subscribe wording, a known chat widget, or an app-install banner —
 //         and passes (a).
+//      d. A match that sits in-flow inside the page's header or nav (a header
+//         "Subscribe" button, WebMD 0.7.4) is navigation, not an overlay: kept.
 // A wrong selector therefore costs, at worst, a nag that stays visible.
 
 (async () => {
@@ -90,6 +92,9 @@
   const APP_LINK = 'a[href*="apps.apple.com"], a[href*="itunes.apple.com"], a[href*="play.google.com"]';
 
   let active = false;
+  const G = globalThis.QuellSettings && globalThis.QuellSettings.guard;
+  let registered = false;
+  let appOn = false;
   let selectors = [];   // generic + seed: hidden by stylesheet at once
   let siteSelectors = []; // this host's rules: hidden only once verified
   let observer = null;
@@ -116,6 +121,8 @@
     root.appendChild(st);
   };
   const dropStyle = (id) => document.getElementById(id)?.remove();
+  // Judge Quell's own stylesheet by what it hides (QuellSettings.guard.probe).
+  const probeSoon = () => { if (!G) return; for (const ms of [0, 1500, 5000]) setTimeout(() => { if (active) G.probe(['quell-popups']); }, ms); };
 
   const buildCSS = (sels) => {
     const out = [];
@@ -163,6 +170,25 @@
       if (SENSITIVE_TEXT_RE.test(label)) return true;
     }
     return false;
+  };
+
+  // Rule (a), third part (0.7.4, WebMD live 2026-11-06): a control that sits
+  // IN the page's header or nav is not a pop-up. WebMD wraps its header
+  // "Subscribe" button and the (closed) sign-up dialog it opens in one
+  // div.newsletter-wrapper, which a site rule matched and hid with the button
+  // in it. Only a thing that is itself a dialog, or is positioned fixed or
+  // sticky somewhere between itself and its header, can be an overlay; an
+  // in-flow match inside header/nav/banner is the site's navigation.
+  const NAV_SEL = 'header, nav, [role="banner"], [role="navigation"]';
+  const inFlowInNav = (el) => {
+    const nav = el.closest(NAV_SEL);
+    if (!nav) return false;
+    if (el.matches(DIALOG_SEL)) return false;
+    for (let n = el; n && n !== nav; n = n.parentElement) {
+      const pos = getComputedStyle(n).position;
+      if (pos === 'fixed' || pos === 'sticky') return false;
+    }
+    return true;
   };
 
   // Rule (c): does a site-rule match look like a sign-up, chat or app nag?
@@ -261,28 +287,85 @@
     return 1;
   };
 
+  // "Open in app" bars the rule lists do not know (MyRecipes on seriouseats.com
+  // and allrecipes.com, 0.7.4 retest): a short bar across the top of the page,
+  // or fixed along the bottom, that asks you to use the app and carries its own
+  // close control. Never inside the page's header or nav (the header's own "Get
+  // the app" button stays), never content, never a bar with no way to dismiss it.
+  const APPBAR_RE = /\bapp\b/i;
+  const APP_VERB = /\b(get|save|open|use|download|install|continue|try)\b/i;
+  const CLOSE_SEL = '[aria-label*="close" i], [aria-label*="dismiss" i], [class*="close" i], [data-testid*="close" i]';
+  const appBars = () => {
+    if (!appOn || !document.body) return 0;
+    let n = 0, looked = 0;
+    const vw = innerWidth, vh = innerHeight;
+    for (const el of document.body.querySelectorAll('div, section, aside, p, span, a')) {
+      if (++looked > 2500) break;
+      if (el.hasAttribute(SITE_MARK) || el.hasAttribute('data-quell-keep') || el.closest('[' + SITE_MARK + ']')) continue;
+      const txt = el.textContent || '';
+      if (txt.length < 15 || txt.length > 220 || !APPBAR_RE.test(txt) || !APP_VERB.test(txt)) continue;
+      let bar = el;
+      for (let a = el; a && a !== document.body; a = a.parentElement) {
+        const r = a.getBoundingClientRect();
+        if (r.height > 160 || a.querySelector('main, article, h1, [role="main"]')) break;
+        bar = a;
+        if (r.width >= 0.7 * vw) break;
+      }
+      const r = bar.getBoundingClientRect();
+      if (r.width < 0.6 * vw || r.height < 24 || r.height > 160) continue;
+      const top = r.top + scrollY;
+      const topBar = top <= 320;
+      const bottomBar = getComputedStyle(bar).position === 'fixed' && r.bottom >= vh - 4;
+      if (!topBar && !bottomBar) continue;
+      const hasClose = !!bar.querySelector(CLOSE_SEL) || [...bar.querySelectorAll('button, [role="button"]')].some((b) => /^[×✕✖xX]$/.test((b.textContent || '').trim()));
+      if (!hasClose) continue;
+      if (isContent(bar) || isSensitive(bar) || inFlowInNav(bar) || (G && G.protects(bar))) continue;
+      bar.setAttribute(SITE_MARK, '1');
+      n += count(bar);
+    }
+    return n;
+  };
+
   const sweep = () => {
     lastSweep = Date.now();
     if (!document.body || (!selectors.length && !siteSelectors.length)) return;
+    if (G) { if (G.state.tripped) return; G.measure(); }
     let n = 0;
     // Generic rules: already hidden by the stylesheet — put back anything that
     // is content or a sign-in / cart surface.
     for (const el of queryAll(selectors)) {
       if (el.hasAttribute('data-quell-keep')) continue;
-      if (isContent(el) || isSensitive(el)) { el.setAttribute('data-quell-keep', '1'); continue; }
+      if (isContent(el) || isSensitive(el) || inFlowInNav(el) || (G && G.protects(el))) { el.setAttribute('data-quell-keep', '1'); continue; }
       n += count(el);
     }
     // Site rules: hide only what is verifiably a nag.
     for (const el of queryAll(siteSelectors)) {
       if (el.hasAttribute('data-quell-keep') || el.hasAttribute(SITE_MARK)) continue;
-      if (isContent(el) || isSensitive(el)) { el.setAttribute('data-quell-keep', '1'); continue; }
+      if (isContent(el) || isSensitive(el) || inFlowInNav(el)) { el.setAttribute('data-quell-keep', '1'); continue; }
       if (!looksLikeNag(el)) continue; // not (yet) a nag — re-checked next sweep
       el.setAttribute(SITE_MARK, '1');
       n += count(el);
     }
+    n += appBars();
     unlock();
+    collapseEmptied();
+    if (G) { if (n > 0) G.acted(); G.check(); }
     if (n > 0) {
       try { chrome.runtime.sendMessage({ type: 'blocked', count: n, feature: 'popups' }); } catch (_) { /* sw asleep */ }
+    }
+  };
+
+  // A hidden newsletter box can leave its footer cell or strip empty (WebMD,
+  // 0.7.4): whatever it wrapped that now holds nothing goes with it, bounded
+  // by QuellSettings.emptied (never a landmark, never other content).
+  const collapseEmptied = () => {
+    const E = globalThis.QuellSettings.emptied;
+    if (!E) return;
+    E.recheckCollapsed('popups', (n) => n.dataset.quellPopupSeen === '1' || n.hasAttribute('data-quell-pop'));
+    for (const el of document.querySelectorAll('[data-quell-popup-seen="1"]')) {
+      if (el.hasAttribute('data-quell-keep') || el.getBoundingClientRect().width > 0 && getComputedStyle(el).display !== 'none') continue;
+      const w = E.emptyAncestor(el, {});
+      if (w) E.collapse(w, 'Pop-up', 'popups');
     }
   };
 
@@ -297,6 +380,8 @@
   };
 
   async function apply(s) {
+    if (G && G.state.tripped) return;
+    if (G && !registered) { registered = true; G.register(() => teardown()); }
     let rules = { generic: [], site: [] };
     try {
       rules = await chrome.runtime.sendMessage({
@@ -314,10 +399,12 @@
     dropStyle('quell-popups');
     clearSiteMarks();
     selectors = next;
+    appOn = !!s.hideAppBanners;
     siteSelectors = rules.site || [];
     active = next.length > 0 || siteSelectors.length > 0;
     if (!active) { teardown(); return; }
     addStyle('quell-popups', buildCSS(next) + `\n[${SITE_MARK}]${KEEP}{display:none!important;}`);
+    probeSoon();
     const attach = () => {
       if (!active) return;
       if (!observer && document.documentElement) {
@@ -355,6 +442,7 @@
     dropStyle('quell-popups');
     relock();
     overlaySeen = false;
+    try { globalThis.QuellSettings.emptied.uncollapseAll('popups'); } catch (_) { /* test context */ }
   }
 
   const applyState = (s) => {
@@ -385,6 +473,7 @@
       () => readSettings().then(applyState).catch(() => {}));
     // Cut off from the extension: stop hiding (see onGone in settings.js).
     globalThis.QuellSettings.onGone(teardown);
+    document.addEventListener('quell:rearm', () => readSettings().then(applyState).catch(() => {}));
   } catch (_) { /* test context */ }
 
   let s = DEFAULTS;

@@ -1,4 +1,4 @@
-# Quell — store listings (v0.7.3)
+# Quell — store listings (v0.7.4)
 
 Build with `pipeline/package.sh`:
 
@@ -16,87 +16,53 @@ Everything the Developer Dashboard asks for, in order.
 
 ## Store listing
 
-**Name** (from manifest): Quell — Block AI Overviews, Gemini & Cookie Popups
+**Name** (from manifest, 41 characters): Hide AI Overviews & Cookie Popups — Quell
 
 **Summary** (from manifest, ≤132 chars):
-Quiet the web. Turn off AI answers on Google, Bing, DuckDuckGo, Brave & Yahoo,
-and block cookie pop-ups. Free, private, open source.
+Hide Google AI Overviews, AI Mode and Bing Copilot and keep every real result. Blocks cookie banners and pop-ups too. Free.
 
 **Category:** Tools
 **Language:** English
 
 **Description:**
 
-Quell removes the noise you didn't ask for — and never the things you did.
+Hide Google's AI Overview and keep the results you came for.
 
-★ GOOGLE — hide AI Overviews and AI Mode, or switch to Classic results for
-Google's plain list of links (zero AI, and it doesn't rely on page markup).
-Works on all 190 Google country domains. Separate switches per surface, so you
-decide what goes.
+Quell removes the AI answers search engines put above your results, and can quiet the cookie banners and pop-ups that cover the page. It never hides a real search result, and every release is tested against that.
 
-★ NEVER HIDES A REAL RESULT — every search engine Quell handles has a guard
-that keeps organic results out of reach, and every release is tested against
-it. Search for "Copilot" or "Gemini" and the real results are still there.
+WHAT IT DOES
+• Google: hides AI Overviews, AI Mode and Gemini buttons, with a switch for each. Or choose Classic results, Google's own plain list of links with no AI at all.
+• Bing: hides the Copilot panel, its buttons and its suggestions, with one switch.
+• DuckDuckGo, Brave and Yahoo: hides their AI answers too. Off until you switch it on; your browser then asks once for access to those three sites and nothing else.
+• Cookie banners: hides "we use cookies" notices. Off until you switch it on. Optionally says "reject all" for you on the consent tools Quell recognises. That is a separate switch, off by default, and Quell never overrides a choice you already made.
+• Pop-ups: newsletter sign-up boxes, chat bubbles, "open in app" banners, and the "sign up or log in to keep reading" boxes that cover a page whose text is already there, each with its own switch. Off until you switch it on. It hides them and lets the page scroll again; it never blocks a page, never gets around a paywall, and never touches the sign-in button a site gives you or a login you opened yourself.
+• Links: takes tracking codes (utm_, fbclid, gclid and the like) off links, and sends a Google or Bing result straight to its site. On once you have allowed all-sites access on a new install; if you update from an earlier version it stays off until you turn it on from a one-time card in the popup. Affiliate codes are never touched. A separate switch, off by default, warns you if a shopping page swaps its affiliate code; it only warns, and your browser asks once for one more permission when you turn it on.
 
-★ ANSWERS YOU OPEN STAY — Google builds "People also ask" answers with the
-same AI as the Overview above your results. Most blockers hide both. Quell
-tells them apart: the overview you didn't ask for goes, the answer you clicked
-open stays. Turn that off too if you'd rather.
+Cookie banners, pop-ups and links need your browser's all-sites access. Quell asks once, only when you turn one on, and gives it back when you turn all of them off.
 
-★ BING — hides the Copilot panel, its buttons, and the Copilot suggestion
-chips, with one switch.
+AI ON OTHER WEBSITES
+Quell can also hide "Ask AI" buttons and panels on sites such as docs and shops, and stop AI chat widgets from loading. Off after an update until you turn it on. Four switches: AI buttons and panels, AI chat assistants, support chats that use AI (off by default, because it can remove a site's support chat), and AI session recording (off by default). Hiding buttons and panels needs your browser's all-sites access, asked once; stopping chat scripts needs none. Pause it for a site any time.
+Covered today: YouTube (Ask buttons, AI summaries, Ask questions), Amazon (Rufus / Alexa for shopping, AI highlights and review summaries), X (Grok buttons and drawer, Today's News), Airbnb (the AI search bar), many documentation and shopping sites, and the chat launchers of many AI chat services. Not covered: Quora. Reddit's AI features did not appear for our test account, so we do not claim them.
+What it does not do: AI crawlers work on servers and AI built into your browser is out of reach, and features that only some accounts or regions see may be missed.
 
-★ DUCKDUCKGO, BRAVE & YAHOO (opt-in) — switch these on and your browser asks
-once for access to those three sites; nothing else. Quell then hides their AI
-answers, or — on DuckDuckGo and Brave — uses the engines' OWN setting for
-turning AI off. If you've already set that switch yourself, Quell leaves your
-choice alone.
+SEE WHAT IT HID
+Open Quell on any page to see what it hid there. Peek at an item, or bring it back with Undo. If a site looks wrong, pause Quell on it for an hour, for today, or until you resume. You can also send a "this site looks broken" report from the same place.
 
-★ COOKIE BANNERS (beta, opt-in) — blocks the major consent platforms at the
-network layer and hides banners using the full EasyList Cookie List, rebuilt
-weekly. Optionally says "reject all" for you on consent platforms it
-recognises — and checks the platform's own saved choice first, so a choice
-you already made is left alone. To do that it lets the consent platform load
-(hide-only mode keeps it blocked), so it can record your "no".
+ANSWERS YOU ASK FOR STAY
+Google builds "People also ask" answers with the same AI as the Overview. Most blockers hide both. Quell hides the Overview you didn't ask for and keeps the answers you open. Turn that off too if you prefer.
 
-★ POP-UPS (opt-in) — newsletter sign-up boxes, chat bubbles and "open in app"
-banners, each with its own switch. Hides only — never blocks page content.
+PRIVATE BY DESIGN
+Your settings stay in your browser and sync through your own browser account, never to us. On first run Quell asks whether it may send anonymous usage counts: which features are used and how many items were hidden. They never include the pages you visit, your searches or your browsing history, and you can turn them off at any time. When you remove Quell, your browser opens a short page on our site asking why. A "this site looks broken" report is sent only when you press Send, after showing you exactly what goes.
 
-★ THIS SITE — one card for the site you're on: keep AI here, allow cookie
-banners here, allow pop-ups here, or tell us "this site looks broken" in one
-click.
+FREE AND OPEN SOURCE
+No account, no ads, no paid tier on the blocking. MIT licensed, with the code on GitHub. Works in Chrome and other Chromium browsers.
 
-WHY QUELL?
-• Free forever. No account, no paywall, no "pro" upsell on the blocking core.
-• Private. Your settings sync through your own browser account like bookmarks
-  do — never to us. Quell sends us nothing until you answer one question on
-  first run: may it send anonymous usage counts (which features get used,
-  never a page, a domain or a search). Say no and it sends no counts.
-  When you remove Quell, your browser opens a short page on our site asking
-  why; its address carries the Quell version and browser (and the install
-  id only if counts were on).
-  A "this site looks broken" report is sent only when you press Send, with
-  the site's domain and Quell's version shown to you first.
-• Asks before AI comes back — switching an AI surface back on needs a
-  confirmation, so a stray click doesn't undo your choice.
-• Honest. Quell doesn't claim to "delete your data from AI servers" — no
-  browser tool can. It quiets what you see, in your browser.
-• Open source (MIT).
-• Quell ships with access to Google and Bing search only. DuckDuckGo, Brave and
-  Yahoo are asked for one click at a time, and the all-sites permission is
-  requested only if you turn on cookie banners or pop-ups — and handed back
-  the moment you turn both off. Revoke any of it whenever you like, from your
-  browser's extensions page.
-
-For ads, use uBlock Origin — it's the better tool for that job. Quell focuses
-on what it does best: AI features and web nags.
+What it is not: Quell does not block ads (uBlock Origin does that well), and it cannot delete anything from AI companies' servers. It quiets what you see, in your browser.
 
 ## Privacy tab
 
 **Single purpose:**
-Quell removes unwanted content from web pages — AI feature blocks on search
-engines, cookie-consent banners and (optionally) sign-up pop-ups, chat widgets
-and app banners — in the user's browser.
+Quell removes unwanted content from web pages — AI features in search engines and on websites, cookie banners, sign-up prompts and pop-ups — and removes tracking codes from links, in the user's browser.
 
 **Permission justifications:**
 - `storage` — saves the user's settings (in `storage.sync`, so the browser can
@@ -104,7 +70,14 @@ and app banners — in the user's browser.
   feature switches, the hidden-items counter, your usage-counts answer and,
   only if you said yes, the queued counts. Settings are never sent to us.
 - `declarativeNetRequest` — blocks known cookie-consent-platform scripts by
-  URL rule, without Quell ever reading the user's traffic.
+  URL rule, without Quell ever reading the user's traffic; and, for the Links
+  switch, a fixed set of redirect rules that take known tracking parameters
+  (utm_*, fbclid, gclid and similar) out of a page address.
+- `webNavigation` (OPTIONAL) — requested only when the user turns on "Warn me
+  if a site swaps an affiliate code", and given back when they turn it off. It
+  lets Quell see, on Amazon pages only, whether a page was reached by a
+  redirect and whether its tag= code changed, to show a notice in the page.
+  Nothing is stored beyond the tab's life and nothing is sent.
 - `scripting` — registers and unregisters content scripts at runtime as the user
   turns optional features on and off: the cookie-banner and pop-up scripts
   (with `<all_urls>`) and the AI-hiding script for DuckDuckGo, Brave and Yahoo
@@ -112,6 +85,10 @@ and app banners — in the user's browser.
   same scripts into tabs the user already has open at the moment they switch a
   feature on, so the change applies without a reload. Nothing is injected or
   registered until the matching permission has been granted.
+- `declarativeNetRequestFeedback` — lets Quell's popup read, for the open tab
+  only, how many AI scripts its own block rules stopped (`getMatchedRules`),
+  so it can say "Blocked 2 AI scripts". It carries no page content and the
+  count is not sent anywhere.
 - Host permissions (google.* / bing.com content scripts) — inject the CSS/JS
   that hides AI feature blocks on search result pages only. These are the ONLY
   hosts Quell is installed with.
@@ -121,10 +98,14 @@ and app banners — in the user's browser.
   same job as the Google and Bing host permissions. Optional so that existing
   users are not disabled on update.
 - `<all_urls>` (OPTIONAL) — requested at runtime only when the user enables
-  Cookie banners or Pop-ups, and **given back** (`permissions.remove`) as soon
-  as both are switched off again — Quell does not keep all-sites access it is
+  Cookie banners, Pop-ups, Links (on by default once access exists on a new install; off after an update until turned on), or the
+  page-level part of AI on websites (hiding AI buttons and chat launchers from
+  rules shipped inside the extension), and **given back** (`permissions.remove`)
+  as soon as none of them is in use — Quell does not keep all-sites access it is
   not using. Used to hide those elements on the sites the user visits; to read
-  the active tab's hostname so the popup can offer the per-site switches and
+  the active tab's hostname so the popup can offer the per-site switches; to
+  clean tracking parameters out of links on the page and show the affiliate
+  notice (nothing is sent); and
   the breakage report; and, if the user additionally switches on "Say reject
   all for me" (off by default), to click the consent platform's own Reject-all
   control.
@@ -136,7 +117,7 @@ and app banners — in the user's browser.
   https://purpledirective.com/quell/goodbye?v=<version>&b=<browser> when Quell
   is removed; `&i=<install id>` is added only while usage counts are on.
 
-**Data usage — the dashboard's answers for 0.7.3:**
+**Data usage — the dashboard's answers for 0.7.4:**
 
 *What user data do you plan to collect from users now or in the future?*
 Tick **Web history** (the breakage report) and **User activity** (the usage
@@ -196,7 +177,7 @@ now describes the usage counts and the uninstall page, and the live policy must 
 
 ## Assets (store/assets/)
 
-Regenerated for 0.7.3 from real renders (`node store/make-assets.mjs`): the popup
+Regenerated for 0.7.3 and re-run for 0.7.4 (new icon) from real renders (`node store/make-assets.mjs`): the popup
 and welcome page are screenshotted from the loaded extension, and the lead image
 loads the local fixture `tests/fixtures/google-results.html` once with Quell off
 and once with it on. Captions, labels and framing are the only things drawn.
@@ -231,22 +212,20 @@ Upload `dist/quell-<version>-firefox.zip` at
 https://addons.mozilla.org/developers/ → Submit a New Add-on → "On this site".
 Compatibility: Firefox 140+ desktop, Firefox for Android 142+.
 
-**Name** (from the Firefox manifest, AMO caps names at 45 characters):
-Quell — Block AI Overviews & Cookie Popups
+**Name** (from the Firefox manifest; the same name as Chrome, 41 characters, under AMO's 45):
+Hide AI Overviews & Cookie Popups — Quell
 
 **Add-on URL slug (suggested):** `quell-quiet-the-web`
 
 **Summary** (≤250 chars):
-Quiet the web. Hide AI answers on Google, Bing, DuckDuckGo, Brave and Yahoo —
-never a real result — and block cookie banners and pop-ups. Free, open source,
-no ads, no profiling.
+Hide Google AI Overviews, AI Mode and Bing Copilot, plus AI answers on DuckDuckGo, Brave and Yahoo, and keep every real result. Quiets cookie banners and pop-ups too. Free and open source.
 
-**Description:** use the Chrome description above, with these edits:
-- DuckDuckGo, Brave & Yahoo: "your browser asks once" → "Firefox asks once, on a Quell
-  settings tab" (a Firefox popup cannot hold a permission prompt, so Quell opens a tab).
-- Private: after "never to us." add "(Firefox for Android keeps them on the device.)"
-- Add after THIS SITE: "★ WORKS ON FIREFOX FOR ANDROID — the same switches,
-  where AI Overviews are hardest to escape."
+**Description:** the Chrome description above, with these edits:
+- Last line of "FREE AND OPEN SOURCE": replace "Works in Chrome and other Chromium browsers." with "Works on Firefox for desktop and Android."
+- DuckDuckGo, Brave and Yahoo, and the cookie banners and pop-ups paragraph: "your browser then asks once" / "Quell asks once" becomes "Firefox asks once, on a Quell settings tab" (a Firefox popup cannot hold a permission prompt, so Quell opens a tab).
+- PRIVATE BY DESIGN: after "never to us." add "Firefox for Android keeps them on the device." On Firefox the usage-counts choice is Firefox's own data-collection prompt, and Quell sends counts only while you have allowed it.
+- AI ON OTHER WEBSITES: "your browser asks once" becomes "Firefox asks once, on a Quell settings tab".
+- Add after SEE WHAT IT HID: "WORKS ON FIREFOX FOR ANDROID: the same switches, where AI Overviews are hardest to escape."
 
 **Categories:** Privacy & Security; Search Tools
 **Tags:** ai, google, bing, cookies, annoyances

@@ -39,7 +39,7 @@ const REPORT_DATA = ['browsingActivity', 'technicalAndInteraction'];
 
 const ENGINE_MODES = ['ddgMode', 'braveMode', 'yahooMode'];
 const SURFACE_IDS = { sOverview: 'hideOverview', sAiMode: 'hideAiMode', sPaa: 'hidePaa', sGemini: 'hideGemini' };
-const POPUP_IDS = { pNews: 'hideNewsletters', pChat: 'hideChat', pApp: 'hideAppBanners' };
+const POPUP_IDS = { pNews: 'hideNewsletters', pChat: 'hideChat', pApp: 'hideAppBanners', pSignup: 'hideSignupPrompts' };
 const SURFACE_NAMES = {
   hideOverview: 'the AI Overview', hideAiMode: 'AI Mode',
   hidePaa: 'answers you open in “People also ask”', hideGemini: 'Gemini buttons and promos',
@@ -167,15 +167,15 @@ const ICONS = {
 const iconFor = (it) => it.kind === 'cookie' ? ICONS.cookie : it.kind === 'popup' ? (it.label === 'Chat widget' ? ICONS.chat : ICONS.popup)
   : /gemini/i.test(it.label) ? ICONS.chat : ICONS.search;
 
-let tab = { items: [], active: [], reachable: false, session: 0 };
+let tab = { items: [], active: [], reachable: false, session: 0, links: null };
 let itemsExpanded = false;
-const expanded = { search: false, cookie: false, popup: false };
-const SHOWN_ITEMS = 3;
+const expanded = { search: false, cookie: false, popup: false, aiweb: false, link: false };
+const SHOWN_ITEMS = 2;
 
 // What the tab says Quell hid on it (a kind and a short label per item: the
 // page's text is never asked for here), plus the toolbar count for the tab.
 async function loadTab() {
-  const out = { items: [], active: [], reachable: false, session: 0 };
+  const out = { items: [], active: [], reachable: false, session: 0, links: null, netBlocked: 0 };
   if (PAGE_VIEW || tabId == null || !hasChrome) return out;
   if (chrome.storage?.session) {
     const key = 'tab:' + tabId;
@@ -186,17 +186,37 @@ async function loadTab() {
       const r = await chrome.tabs.sendMessage(tabId, { type: 'quell:hidden:list' });
       if (r && Array.isArray(r.items)) { out.items = r.items; out.active = r.active || []; out.reachable = true; }
     } catch (_) { /* nothing of Quell's in that tab */ }
+    // Links: how many links the page script cleaned here (a count, nothing else).
+    try {
+      const l = await chrome.tabs.sendMessage(tabId, { type: 'quell:links:status' });
+      if (l && Number.isInteger(l.cleaned)) out.links = l.cleaned;
+    } catch (_) { /* the links script is not in that tab */ }
   }
+  out.netBlocked = await netBlockedFor(tabId);
   return out;
 }
+// How many AI scripts the network rules stopped in this tab. The browser's own
+// matched-rule record (declarativeNetRequest.getMatchedRules, which needs the
+// declarativeNetRequestFeedback permission) is the only honest source: it
+// holds the last few minutes, and the browser limits how often it can be read,
+// so a failure just means no count is shown.
+async function netBlockedFor(id) {
+  try {
+    const dnr = chrome.declarativeNetRequest;
+    if (!dnr || typeof dnr.getMatchedRules !== 'function') return 0;
+    const r = await dnr.getMatchedRules({ tabId: id });
+    return (r.rulesMatchedInfo || []).filter((m) => /^ai_web_/.test(m.rule && m.rule.rulesetId)).length;
+  } catch (_) { return 0; }
+}
 
-const AI_KEYS = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist'];
+const AI_KEYS = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist', 'aiWebAllowlist'];
 // The allowlists a pause on this host has to cover: the features that are on.
 function pauseKeys(s) {
   const k = [];
   if (AI_HOST_RE.test(host || '') && s.aiEnabled) k.push('aiAllowlist');
   if (s.cookieEnabled) k.push('cookieAllowlist');
   if (s.popupsEnabled) k.push('popupAllowlist');
+  if (s.aiWebOn) k.push('aiWebAllowlist');
   return k;
 }
 // "Paused" means Pause here was used on this site (it left a record) and every
@@ -210,14 +230,39 @@ const pausedHere = (s) => {
 const timeWord = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 function firstRunOn(s) { return !s.firstRunDone; }
+// An updated user sees "What's new" once: first run is done, and the newest card answered is older than this.
+const WHATS_NEW = '0.7.4';
+const verLess = (a, b) => { const x = String(a || '0').split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
+// What the card lists, and what "Turn these on" switches on, come from the same answer.
+function whatsNewPlan(s) {
+  const cp = !(s.cookieEnabled && s.popupsEnabled);
+  const ai = !(s.aiWebOn && s.aiWebAccess);
+  const links = !s.linksEnabled;
+  const lines = ['A new look.'];
+  if (cp) lines.push('Cookie banners and pop-ups, including sign-up and log-in prompts.');
+  else if (s.popupsEnabled && s.hideSignupPrompts !== false) lines.push('Sign-up and log-in prompts can be hidden.');
+  if (ai) lines.push('AI buttons and chat assistants on other websites.');
+  if (links) lines.push('Tracking removed from links.');
+  const names = [];
+  if (cp) names.push('cookie banners', 'pop-ups');
+  if (ai) names.push('AI on websites');
+  if (links) names.push('link cleaning');
+  const patch = {};
+  if (cp) { patch.cookieEnabled = true; patch.popupsEnabled = true; }
+  if (ai) { patch.aiWebOn = true; patch.aiWebAccess = true; }
+  if (links) patch.linksEnabled = true;
+  return { lines, patch, sum: names.length ? 'Turns on: ' + names.join(', ') + '.' : '' };
+}
+function whatsNewOn(s) { return !!s.firstRunDone && verLess(s.whatsNewSeen, WHATS_NEW); }
 
 function renderHero(s) {
   const app = $('app');
   const paused = !!host && s.enabled && isPaused(s);
   const first = firstRunOn(s);
-  const n = Math.max(tab.items.length, tab.session);
+  const n = Math.max(tab.items.length, tab.session) + (tab.netBlocked || 0);
   const total = Number(s.totalBlocked || 0);
-  const state = first ? 'first-run' : paused ? 'paused' : !s.enabled ? 'off' : !host ? 'no-run' : 'normal';
+  const wn = !first && whatsNewOn(s);
+  const state = first ? 'first-run' : wn ? 'whats-new' : paused ? 'paused' : !s.enabled ? 'off' : !host ? 'no-run' : 'normal';
   app.dataset.state = state;
   document.body.classList.toggle('is-off', !s.enabled && !first);
   $('enabled').checked = !!s.enabled;
@@ -247,13 +292,14 @@ function renderHero(s) {
     h.textContent = n > 0 ? `Hid ${n} ${n === 1 ? 'thing' : 'things'} on this page.` : 'Nothing to hide on this page.';
     sub.textContent = `Quell is on · ${since}`;
   }
-  $('featCard').hidden = first;
-  $('mainCard').hidden = first;
+  if (wn) { h.textContent = 'Quell is on.'; sub.hidden = true; }
+  $('featCard').hidden = first || wn;
+  $('mainCard').hidden = first || wn;
 }
 
 function renderItems(s) {
   const card = $('itemsCard');
-  const show = !firstRunOn(s) && s.enabled && !!host && tab.items.length > 0 && !isPaused(s);
+  const show = !firstRunOn(s) && !whatsNewOn(s) && s.enabled && !!host && tab.items.length > 0 && !isPaused(s);
   card.hidden = !show;
   if (!show) return;
   const list = $('itemList');
@@ -338,11 +384,39 @@ function rowStatus(kind, s, paused) {
   }
   return `Hid ${mine.length} here`;
 }
+// AI on websites: page-level hides come from the tab's own list; network
+// blocks are counted per tab (declarativeNetRequest.getMatchedRules, see netBlockedFor).
+function aiWebStatus(s, paused) {
+  if (!s.enabled) return 'Quell is off';
+  if (!s.aiWebOn) return 'Off';
+  if (paused) return 'Paused here';
+  const hid = tab.items.filter((i) => i.kind === 'ai-web' && !i.kept).length;
+  const blocked = tab.netBlocked || 0;
+  if (hid || blocked) {
+    return [hid ? `Hid ${hid} here` : '', blocked ? `Blocked ${blocked} AI ${blocked === 1 ? 'script' : 'scripts'}` : ''].filter(Boolean).join(' · ');
+  }
+  if (!s.aiWebAccess && (s.aiWebButtons || s.aiWebChat)) return 'Buttons need all-sites access';
+  return !host || !tab.reachable ? 'On for other pages' : 'Watching. Nothing to hide here';
+}
+// The Links row and the sign-up prompt line (0.7.4), kept apart from rowStatus.
+function renderLinkRows(s, paused) {
+  const prompts = tab.items.filter((i) => i.kind === 'popup' && i.label === 'Sign-up prompt' && !i.kept).length;
+  $('pSignupD').textContent = prompts ? `Closed ${prompts} sign-up ${prompts === 1 ? 'prompt' : 'prompts'}` : '';
+  let line = 'Asks your browser for all-sites access';
+  if (!s.enabled) line = 'Quell is off';
+  else if (s.linksEnabled) {
+    if (!host || tab.links === null) line = 'On for other pages';
+    else line = tab.links ? `Cleaned ${tab.links} ${tab.links === 1 ? 'link' : 'links'} here` : 'Watching. Nothing to clean here';
+  }
+  $('linksD').textContent = line;
+}
 function renderRows(s) {
   const paused = !!host && s.enabled && isPaused(s);
   $('gSearchD').textContent = rowStatus('search', s, paused && AI_HOST_RE.test(host) );
   $('cookiesD').textContent = rowStatus('cookie', s, paused);
   $('popupsD').textContent = rowStatus('popup', s, paused);
+  $('aiWebD').textContent = aiWebStatus(s, paused);
+  renderLinkRows(s, paused);
 }
 
 async function renderAccess() {
@@ -399,10 +473,23 @@ function renderCookies(s) {
   $('rejectRow').hidden = !(s.enabled && s.cookieEnabled);
 }
 
+function renderAiWeb(s) {
+  $('aiWeb').checked = !!s.aiWebOn;
+  setExpander($('aiWebExpand'), $('aiWebBody'), expanded.aiweb, !!s.aiWebOn);
+  for (const k of ['aiWebButtons', 'aiWebChat', 'aiWebSupport', 'aiWebReplay']) $(k).checked = !!s[k];
+  $('aiWebAccessRow').hidden = !!s.aiWebAccess;
+}
+
 function renderPopups(s) {
   $('popups').checked = !!s.popupsEnabled;
   setExpander($('popupExpand'), $('popupBody'), expanded.popup, !!s.popupsEnabled);
   for (const [id, key] of Object.entries(POPUP_IDS)) $(id).checked = !!s[key];
+}
+
+function renderLinkGroup(s) {
+  $('links').checked = !!s.linksEnabled;
+  setExpander($('linkExpand'), $('linkBody'), expanded.link, !!s.linksEnabled);
+  $('linkWarn').checked = !!s.linksWarnAffiliate;
 }
 
 function renderSite(s) {
@@ -451,7 +538,7 @@ async function renderAnalytics(s) {
   $('analyticsSwitch').checked = FR ? (FR.dataApi && await FR.dataApi() ? await FR.analyticsOn(s) : s.analytics === 'on') : s.analytics === 'on';
 }
 
-let frMounted = false;
+let frMounted = false, wnMounted = false;
 async function render() {
   current = await store.get(S.DEFAULTS);
   const s = current;
@@ -460,6 +547,8 @@ async function render() {
   renderSearch(s, engines);
   renderCookies(s);
   renderPopups(s);
+  renderAiWeb(s);
+  renderLinkGroup(s);
   renderSite(s);
   renderHero(s);
   renderItems(s);
@@ -467,6 +556,25 @@ async function render() {
   await renderAnalytics(s);
   const first = firstRunOn(s);
   $('firstRun').hidden = !first;
+  const wnShow = !first && whatsNewOn(s);
+  $('whatsNew').hidden = !wnShow;
+  if (wnShow) $('wnAna').hidden = s.analytics !== 'unset';
+  const wnPlan = whatsNewPlan(s);
+  if (wnShow) {
+    const ul = $('wnList');
+    ul.textContent = '';
+    $('wnSum').textContent = wnPlan.sum;
+    for (const line of wnPlan.lines) { const li = document.createElement('li'); li.textContent = line; ul.appendChild(li); }
+  }
+  if (wnShow && !wnMounted && globalThis.QuellFirstRun) {
+    wnMounted = true;
+    globalThis.QuellFirstRun.mount($('whatsNew'), {
+      grantInTab: GRANT_IN_TAB, openTab: openPageView, forceAsk: true, grantName: 'whatsnew',
+      turnPatch: wnPlan.patch,
+      onDone: () => render(),
+      onChange: () => { $('app').classList.toggle('sent-open', !$('wnSent').hidden); },
+    }).catch(() => { wnMounted = false; });
+  }
   if (first && !frMounted && globalThis.QuellFirstRun) {
     frMounted = true;
     globalThis.QuellFirstRun.mount($('firstRun'), {
@@ -582,7 +690,7 @@ $('engines').addEventListener('change', async (e) => {
 // the click itself), the engines switch goes off and the user is told why.
 async function releaseAllSitesIfUnused() {
   if (!hasChrome || !chrome.permissions) return;
-  if (current.cookieEnabled || current.popupsEnabled) return; // still in use
+  if (current.cookieEnabled || current.popupsEnabled || current.linksEnabled || current.aiWebAccess) return; // still in use
   const held = await chrome.permissions.contains({ origins: ALL_SITES }).catch(() => false);
   if (!held) return;
   const keepEngines = await enginesOn(current);
@@ -619,7 +727,9 @@ function grantedFeature(id, key, grantName) {
       const granted = await chrome.permissions.request({ origins: ALL_SITES }).catch(() => false);
       if (!granted) { e.target.checked = false; await render(); return; }
       await save({ [key]: true });
-    } else if (await save({ [key]: false })) {
+    } else if (await save(key === 'linksEnabled' ? { linksEnabled: false, linksWarnAffiliate: false } : { [key]: false })) {
+      // Links also gives back the optional webNavigation permission its affiliate warning used.
+      if (key === 'linksEnabled') await chrome.permissions.remove({ permissions: ['webNavigation'] }).catch(() => {});
       await releaseAllSitesIfUnused();
     }
     await render();
@@ -627,6 +737,27 @@ function grantedFeature(id, key, grantName) {
 }
 grantedFeature('cookies', 'cookieEnabled', 'cookies');
 grantedFeature('popups', 'popupsEnabled', 'popups');
+grantedFeature('links', 'linksEnabled', 'links');
+
+// "What's new": the close button answers it without turning anything on.
+$('wnClose').addEventListener('click', async () => { await save({ whatsNewSeen: WHATS_NEW }); await render(); });
+
+// "Warn me if a site swaps an affiliate code" needs the optional webNavigation
+// permission, asked for on this click and given back when it is switched off.
+$('linkWarn').addEventListener('change', async (e) => {
+  if (!hasChrome || !chrome.permissions) return;
+  showInfo('');
+  if (e.target.checked) {
+    if (GRANT_IN_TAB) { e.target.checked = false; openPageView({ grant: 'links' }); return; }
+    const granted = await chrome.permissions.request({ permissions: ['webNavigation'] }).catch(() => false);
+    if (!granted) { e.target.checked = false; await render(); return; }
+    await save({ linksWarnAffiliate: true });
+  } else {
+    await save({ linksWarnAffiliate: false });
+    await chrome.permissions.remove({ permissions: ['webNavigation'] }).catch(() => {});
+  }
+  await render();
+});
 
 $('cookieReject').addEventListener('change', async (e) => { await save({ cookieReject: e.target.checked }); await render(); });
 for (const [id, key] of Object.entries(POPUP_IDS)) {
@@ -657,6 +788,22 @@ $('grantBase').addEventListener('click', async () => {
   const origins = [...new Set((m.content_scripts || []).flatMap((c) => c.matches || []))];
   await chrome.permissions.request({ origins }).catch(() => false);
   await renderAccess();
+});
+
+// AI on websites: the group master and the four switches are plain settings
+// (the network rules need no access); hiding buttons and panels on pages needs
+// the all-sites grant, asked for here on the click and released with the
+// others when nothing uses it.
+for (const [id, key] of [['aiWeb', 'aiWebOn'], ['aiWebButtons', 'aiWebButtons'], ['aiWebChat', 'aiWebChat'],
+  ['aiWebSupport', 'aiWebSupport'], ['aiWebReplay', 'aiWebReplay']]) {
+  $(id).addEventListener('change', async (e) => { await save({ [key]: e.target.checked }); await render(); });
+}
+$('aiWebGrant').addEventListener('click', async () => {
+  if (!hasChrome || !chrome.permissions) return;
+  if (GRANT_IN_TAB) { openPageView({ grant: 'aiweb' }); return; }
+  const granted = await chrome.permissions.request({ origins: ALL_SITES }).catch(() => false);
+  if (granted) await save({ aiWebAccess: true });
+  await render();
 });
 
 // ---------------------------------------------------- pause, settings, more --
@@ -703,6 +850,8 @@ function toggler(btn, onFlip) {
 toggler($('searchExpand'), (o) => { expanded.search = o; render(); });
 toggler($('cookieExpand'), (o) => { expanded.cookie = o; render(); });
 toggler($('popupExpand'), (o) => { expanded.popup = o; render(); });
+toggler($('aiWebExpand'), (o) => { expanded.aiweb = o; render(); });
+toggler($('linkExpand'), (o) => { expanded.link = o; render(); });
 toggler($('siteMore'), (o) => { $('siteMore').setAttribute('aria-expanded', String(o)); $('siteDetail').hidden = !o; closeMenu(); });
 function closeMenu() { $('siteMenu').hidden = true; $('siteMenuBtn').setAttribute('aria-expanded', 'false'); }
 $('siteMenuBtn').addEventListener('click', (e) => {
@@ -825,8 +974,9 @@ $('reportSend').addEventListener('click', async () => {
   await render();
   await renderAccess();
   const grant = params.get('grant');
-  const focusId = { engines: 'engines', cookies: 'cookies', popups: 'popups', base: 'grantBase', analytics: 'analyticsSwitch', firstrun: 'firstRun' }[grant];
+  const focusId = { engines: 'engines', cookies: 'cookies', popups: 'popups', links: 'links', base: 'grantBase', analytics: 'analyticsSwitch', firstrun: 'firstRun', aiweb: 'aiWebGrant', whatsnew: 'whatsNew' }[grant];
   if (PAGE_VIEW && grant === 'engines') { expanded.search = true; await render(); }
+  if (PAGE_VIEW && grant === 'aiweb') { expanded.aiweb = true; await render(); }
   if (PAGE_VIEW && grant === 'analytics') { $('gearBtn').click(); }
   if (PAGE_VIEW && focusId) {
     $(focusId).focus?.();

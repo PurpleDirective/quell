@@ -91,13 +91,68 @@ ok(len(edge["description"]) <= 132 and not any(w in edge["description"] for w in
 ok("browser_specific_settings" not in edge and "scripts" not in edge["background"],
    "Edge keeps the service worker and carries no Firefox keys")
 ok(edge["version"] == src["version"] and edge["name"] == src["name"], "Edge keeps the Chrome version and name")
-ok(derived("opera")["name"] != src["name"] and derived("firefox")["background"] != src["background"],
-   "Opera and Firefox still differ from Chrome where they must")
+ok(derived("opera")["name"] == src["name"] == derived("firefox")["name"] and len(src["name"]) <= 45
+   and derived("firefox")["background"] != src["background"],
+   "one store name everywhere (within AMO's 45 characters); Firefox still differs from Chrome in its background")
 pkg = (ROOT / "pipeline" / "package.sh").read_text()
 ok("for target in chrome firefox opera; do" in pkg,
    "package.sh builds chrome, firefox and opera")
 ok("edge" not in pkg.split("for target in")[1].split("do")[0],
    "package.sh does NOT build an Edge zip (Edge dropped 2026-10-02)")
+
+print("AI on websites rules (generated from pipeline/sources/ai-web.json):")
+import build_ai_web as aw  # noqa: E402
+
+AW_SRC = json.loads((aw.SRC).read_text())
+RULES_DIR = aw.OUT
+shipped = {g: json.loads((RULES_DIR / f"ai-web-{g}.json").read_text()) for g in ("chat", "support", "replay")}
+shipped_cos = json.loads((RULES_DIR / "ai-web-cosmetic.json").read_text())["rules"]
+ok(all(shipped[g] == aw.net_rules(AW_SRC, g) for g in shipped) and shipped_cos == aw.cosmetic(AW_SRC),
+   "shipped rules are exactly what the generator emits from the source (nothing hand-edited)")
+ok(all(len(v) > 0 for v in shipped.values()) and len(shipped_cos) >= 25,
+   f"each ruleset is non-empty ({', '.join(f'{g} {len(v)}' for g, v in shipped.items())}; {len(shipped_cos)} cosmetic rules)")
+all_ids = [r["id"] for v in shipped.values() for r in v]
+ok(len(all_ids) == len(set(all_ids)), "network rule ids are unique across the three rulesets")
+doms = [d for v in shipped.values() for r in v for d in r["condition"]["requestDomains"]]
+ok(not any(d in aw.NEVER_BLOCK or aw.base(d) in aw.NEVER_BLOCK for d in doms),
+   "no shared host is ever blocked (CDNs, algolia.net, googleapis ...)")
+ok(all("/" not in d and "*" not in d for d in doms), "every blocked host is a plain domain, no path or wildcard")
+ok(all(r["action"] == {"type": "block"} and r["condition"]["excludedInitiatorDomains"]
+       for v in shipped.values() for r in v),
+   "every rule only blocks, and excludes the vendor's own sites as initiators")
+ok(all(set(r["condition"]["resourceTypes"]) <= aw.TYPES_OK for v in shipped.values() for r in v),
+   "resource types are all ones dNR accepts")
+vendors = {n["vendor"]: n["group"] for n in AW_SRC["network"]}
+ok("Algolia Ask AI / DocSearch" not in vendors and "Mintlify AI assistant" not in vendors and not any("OpenAI" in v for v in vendors),
+   "vendors marked skip (or with an unverified purpose) are not in the source")
+ok(all(vendors[v] == "replay" for v in vendors if any(k in v for k in ("Hotjar", "Fullstory", "Clarity", "LogRocket", "Heap"))),
+   "session-replay vendors are in the opt-in replay group only")
+ok(all(vendors[v] == "support" for v in vendors if any(k in v for k in ("Intercom", "Zendesk", "HubSpot", "Gorgias", "LiveChat"))),
+   "support-chat vendors are in the opt-in support group, not the default one")
+ok(shipped_cos and all(c["g"] in ("buttons", "chat", "support") and c["h"] and (c["sel"] or c.get("t")) and c["what"] for c in shipped_cos),
+   "every cosmetic rule has a group, hosts, selectors and a label")
+src_c = {c["id"]: c for c in AW_SRC["cosmetic"]}
+ok(not any("tawk" in " ".join(c["hosts"]) or "tawk" in c["id"] for c in AW_SRC["cosmetic"]),
+   "tawk.to has no cosmetic rule (it sets inline !important): its network rule only")
+ok(all(c["what"] and (c["selectors"] or c.get("text")) for c in AW_SRC["cosmetic"]), "every rule has selectors or a heading to find by its words")
+ok(all(len(c["sel"]) == 1 for c in shipped_cos if src_c[c["id"]]["hide"].startswith("ancestor:")),
+   "rules that name a container hide the container itself, so no empty box is left")
+man = json.loads((aw.ROOT / "extension" / "manifest.json").read_text())
+res = {r["id"]: r for r in man["declarative_net_request"]["rule_resources"]}
+ok(all(res.get("ai_web_" + g, {}).get("path") == f"rules/ai-web-{g}.json" and res["ai_web_" + g]["enabled"] is False for g in shipped),
+   "the manifest declares the three rulesets, off until the background enables them")
+ok("declarativeNetRequestFeedback" in man["permissions"] and "<all_urls>" not in man.get("host_permissions", []),
+   "the matched-rule feedback permission is declared; <all_urls> stays optional")
+
+print("Links ruleset (0.7.4):")
+gen = b.links_ruleset()
+shipped = json.loads((Path(__file__).resolve().parent.parent / "extension" / "rules" / "links-clean.json").read_text())
+ok(gen == shipped, "rules/links-clean.json is exactly what the pipeline generates (never hand-edited)")
+ok(not set(b.LINK_PROTECTED_PARAMS) & set(b.LINK_TRACKING_PARAMS), "no protected (affiliate / page-changing) parameter is in the tracking list")
+ok(not set(b.YOUTUBE_ONLY_PARAMS) & set(b.LINK_PROTECTED_PARAMS - {"si"} if isinstance(b.LINK_PROTECTED_PARAMS, set) else b.LINK_PROTECTED_PARAMS), "the YouTube-only parameter is not a protected one")
+ok(len(set(b.LINK_TRACKING_PARAMS)) == len(b.LINK_TRACKING_PARAMS), "the tracking list has no duplicates")
+ok(all(len(r["condition"]["regexFilter"]) < 1500 for r in gen), "each regexFilter is well under Chrome's 2 KB regex limit")
+ok(len(gen) < 50, f"{len(gen)} static redirect rules, far under the unsafe-rule limit")
 
 print(f"\n{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

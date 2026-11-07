@@ -1,0 +1,12 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Placeholder news site</title>
+<style>#menu-panel,#menu-lite{display:none;position:fixed;left:0;top:0;width:320px;height:100%;background:#fff;border-right:1px solid #ccc;z-index:50;overflow:auto}
+#menu-panel.open,#menu-lite.open{display:block}#modal{position:fixed;left:30%;top:20%;width:40%;background:#fff;border:1px solid #888;padding:16px;z-index:100}</style></head><body>
+<!-- Reduced from the markup recorded on wired.com 2026-11-07: a slide-out navigation panel that holds "Sign In" among many links. Placeholder content only. -->
+<header><button id="hamburger" style="position:fixed;right:10px;top:10px;z-index:200" aria-expanded="false" aria-controls="menu-panel" onclick="this.setAttribute('aria-expanded','true');document.getElementById('menu-panel').classList.add('open')">Menu</button>
+<button id="hamburger-lite" style="position:fixed;right:10px;top:50px;z-index:200" onclick="document.getElementById('menu-lite').classList.add('open')">Open menu</button>
+<a id="hdr-signin" href="/signin">Sign In</a> <a id="hdr-home" href="/">Home</a></header>
+<div id="menu-panel"><ul><li><a href="/a">Security</a></li><li><a href="/b">Politics</a></li><li><a href="/c">The Big Story</a></li><li><a href="/d">Business</a></li><li><a href="/e">Science</a></li><li><a href="/f">Culture</a></li><li><a href="/g">Reviews</a></li><li><a href="/h">Newsletters</a></li><li><a href="/i">Search</a></li><li><a id="drawer-signin" href="/signin">Sign In</a></li></ul></div>
+<div id="menu-lite"><a href="/x">About</a> <a id="lite-signin" href="/signin">Sign In</a> <a href="/y">Subscribe</a></div>
+<main id="main"><h1>Placeholder article</h1><p>Placeholder paragraph one with enough words to count as the page itself, written for a test and nothing else. It keeps going so that the page clearly has content of its own outside of any overlay.</p><p>Placeholder paragraph two, also long enough to matter. More words follow here, still placeholder text, so the content outside any layer is well over two hundred and fifty characters in total.</p></main>
+<script>setTimeout(function(){var m=document.createElement('div');m.id='modal';m.setAttribute('role','dialog');m.innerHTML='<h2>Sign up to keep reading</h2><p>Create a free account to continue.</p><button>Sign up</button> <button>Log in</button>';document.body.appendChild(m);},700);</script>
+</body></html>

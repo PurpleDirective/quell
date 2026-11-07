@@ -52,18 +52,34 @@
     hideChat: true,
     hideAppBanners: true,
     popupAllowlist: [],     // hostnames where the pop-ups layer is paused
+    // --- AI on websites (0.7.4) ---
+    aiWebOn: true,          // group master
+    aiWebButtons: true,     // cosmetic: "Ask AI" buttons and panels on known sites
+    aiWebChat: true,        // AI chat assistants (network + cosmetic, vendors whose product is the agent)
+    aiWebSupport: false,    // support chats that use AI (opt-in: can remove a site's support chat)
+    aiWebReplay: false,     // AI session recording (opt-in)
+    aiWebAllowlist: [],     // hostnames where this group is paused
+    hideSignupPrompts: true, // 0.7.4: sign-up / log-in prompts (a row under Pop-ups)
   };
 
   const LOCAL_DEFAULTS = {
     enginesEnabled: false,  // intent for DuckDuckGo/Brave/Yahoo (grant-bound)
     cookieEnabled: false,   // grant-bound: <all_urls>
     popupsEnabled: false,   // grant-bound: <all_urls>; OFF by default
+    linksEnabled: false,    // grant-bound: <all_urls>; 0.7.4 "Remove tracking from links" (the background turns it on once, when the grant exists)
+    linksWarnAffiliate: false, // grant-bound: <all_urls> + the optional webNavigation permission; OFF by default
     totalBlocked: 0,
+    // The page-level part of "AI on websites" runs on every site, so it needs the
+    // all-sites grant like Cookie banners do; this is the user's ask for it.
+    aiWebAccess: false,
     // Anonymous usage counts: 'unset' (never answered: nothing is sent) | 'on' | 'off'.
     // Per device, like the Firefox data-collection permission it mirrors.
     analytics: 'unset',
     // The one-time first-run card (popup and welcome page) has been answered.
     firstRunDone: false,
+    // The newest "What's new" card this user has answered or closed (a version
+    // string; '' = none). Fresh installs record the current version at first run.
+    whatsNewSeen: '',
     // Timed per-site pauses: { host: { until: <ms>, added: [allowlist keys the
     // pause itself added] } }. The allowlists stay the one thing every content
     // script and the background read; this only remembers when to take the
@@ -79,7 +95,7 @@
   // value that can grow toward it; refuse to write past this budget rather
   // than let the browser reject the whole write.
   const LIST_BYTE_BUDGET = 7000;
-  const LIST_KEYS = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist'];
+  const LIST_KEYS = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist', 'aiWebAllowlist'];
 
   const DEFAULTS = { ...SYNC_DEFAULTS, ...LOCAL_DEFAULTS };
   const home = (k) => (k in LOCAL_DEFAULTS ? 'local' : 'sync');
@@ -241,8 +257,8 @@
   // themselves before the pause are never removed by it. Run by the background
   // (startup, each navigation) and by the popup when it opens.
   async function sweepPauses(now = Date.now()) {
-    const keys = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist'];
-    const cur = await get({ sitePauses: {}, aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [] });
+    const keys = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist', 'aiWebAllowlist'];
+    const cur = await get({ sitePauses: {}, aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [], aiWebAllowlist: [] });
     const pauses = cur.sitePauses && typeof cur.sitePauses === 'object' ? cur.sitePauses : {};
     const patch = {};
     const left = {};
@@ -307,6 +323,12 @@
     // to the page's default display rather than guessing a value.
     el.style.setProperty('display', 'revert', 'important');
     if (mode === 'peek') st.timer = setTimeout(() => restoreEl(el), PEEK_MS);
+    // A wrapper Quell collapsed (or another block Quell hid) around this one
+    // comes back with it, or the thing could not be seen (it may hold more than one hidden thing; it goes back to
+    // hidden when the last of them does).
+    for (let a = el.parentElement; a; a = a.parentElement) {
+      if (a.dataset && (a.dataset.quellCollapsed === '1' || a.dataset.quellHidden === '1') && !revealed.has(a)) revealEl(a, mode);
+    }
   }
   function restoreEl(el) {
     const st = revealed.get(el);
@@ -315,6 +337,10 @@
     if (st.prev) el.style.setProperty('display', st.prev, st.prio); else el.style.removeProperty('display');
     if (!st.hadKeep) el.removeAttribute(KEEP_ATTR);
     revealed.delete(el);
+    for (let a = el.parentElement; a; a = a.parentElement) {
+      if (a.dataset && (a.dataset.quellCollapsed === '1' || a.dataset.quellHidden === '1') && revealed.has(a)
+        && ![...a.querySelectorAll('*')].some((x) => revealed.has(x))) restoreEl(a);
+    }
   }
   const modeOf = (grp) => grp.els.some((e) => revealed.get(e)?.mode === 'keep') ? 'keep'
     : grp.els.some((e) => revealed.get(e)?.mode === 'peek') ? 'peek' : null;
@@ -370,9 +396,229 @@
     } catch (_) { /* not an extension context (tests inject files into a plain page) */ }
   }
 
+  // EMPTIED WRAPPERS (content scripts)
+  // Hiding something can leave the box that wrapped it as an empty cell or
+  // strip. emptyAncestor() returns the HIGHEST ancestor of `el` that now holds
+  // nothing a person could see: no text, image, control or frame that is not
+  // itself hidden. It stops at `stop`, never passes a landmark (nav, main,
+  // article, header, footer, a search box), anything matching `safe`, or any
+  // ancestor that still holds other content. Text counts as content whether or
+  // not the browser has laid it out yet, so a page still rendering is never
+  // collapsed by mistake (Microsoft Learn's article header was, in 0.7.4).
+  const LANDMARKS = 'input:not([type="hidden"]), textarea, select, [role="search"], nav, main, article, header, footer, h1, h2, [role="banner"], [role="navigation"], [role="contentinfo"]';
+  const MEDIA = 'img, picture, video, canvas, iframe, object, embed, button, a[href], svg';
+  function hasVisibleContent(root, ignore) {
+    let budget = 2000;
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode(n) {
+        if (n.nodeType === 1) {
+          if (ignore && ignore(n)) return NodeFilter.FILTER_REJECT;
+          const cs = getComputedStyle(n);
+          if (cs.display === 'none' || cs.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      if (--budget < 0) return true; // too big to judge: leave it alone
+      if (n.nodeType === 3) { if (n.nodeValue.trim()) return true; } else if (n.matches(MEDIA)) return true;
+    }
+    return false;
+  }
+  // A landmark or control that is itself still showing (not one inside what was
+  // just hidden) inside `root`.
+  function holdsLandmark(root, safe, ignore) {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
+      acceptNode(n) {
+        if (ignore && ignore(n)) return NodeFilter.FILTER_REJECT;
+        const cs = getComputedStyle(n);
+        return cs.display === 'none' || cs.visibility === 'hidden' ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (n.matches(safe)) return true;
+    return false;
+  }
+  function emptyAncestor(el, { stop = null, safe = '', ignore = null } = {}) {
+    const SAFE = [LANDMARKS, safe].filter(Boolean).join(',');
+    let top = null;
+    for (let cur = el.parentElement; cur && cur !== stop && cur !== document.body && cur !== document.documentElement; cur = cur.parentElement) {
+      if (cur.matches(SAFE) || holdsLandmark(cur, SAFE, ignore) || hasVisibleContent(cur, ignore)) break;
+      top = cur;
+    }
+    return top;
+  }
+  function collapseEl(w, label, owner) {
+    if (!w || w.dataset.quellCollapsed === '1' || guard.state.tripped || guard.protects(w)) return;
+    w.dataset.quellCollapsed = '1';
+    w.dataset.quellOwner = owner || '';
+    if (label) w.dataset.quellLabel = label;
+    w.style.setProperty('display', 'none', 'important');
+  }
+  // A page that was still rendering when a wrapper was collapsed may fill it
+  // afterwards (Microsoft Learn's header, 0.7.4). Each sweep calls this first:
+  // a collapsed wrapper that now holds visible content of its own is let back.
+  function recheckCollapsed(owner, ignore) {
+    for (const w of document.querySelectorAll('[data-quell-collapsed="1"]')) {
+      if (owner && w.dataset.quellOwner !== owner) continue;
+      if (!hasVisibleContent(w, (n) => n.dataset && (n.dataset.quellCollapsed === '1' || (ignore && ignore(n))))) continue;
+      w.style.removeProperty('display');
+      delete w.dataset.quellCollapsed;
+      delete w.dataset.quellOwner;
+      delete w.dataset.quellLabel;
+    }
+  }
+  function uncollapseAll(owner) {
+    for (const w of document.querySelectorAll('[data-quell-collapsed="1"]')) {
+      if (owner && w.dataset.quellOwner !== owner) continue;
+      w.style.removeProperty('display');
+      delete w.dataset.quellCollapsed;
+      delete w.dataset.quellOwner;
+      delete w.dataset.quellLabel;
+    }
+  }
+
+  // PAGE SAFETY NET (content scripts)
+  // Quell hides things; it must never blank a page. Every hiding layer calls
+  // measure() at the start of a sweep and check() at its end. The sweep is
+  // synchronous, so the text held just before and just after it differs only
+  // by what Quell itself did: if a sweep that hid something left under half of
+  // the text it started with, the page was blanked (Zara, 0.7.4 retest), so
+  // every layer takes its hides back and the page is marked data-quell-safety.
+  // A page's own content swap (a single-page app showing a spinner, then
+  // re-rendering) is never compared with anything, so it cannot trip this.
+  // The net re-arms on a URL change, or after 10 s (at most twice per
+  // address, so a real blanking cannot flicker forever): layers listen for
+  // the quell:rearm event and start again. protects() names what may never
+  // be hidden or collapsed: the document, main, the app root, or an element
+  // that holds most of the page's text.
+  const guard = (() => {
+    let base = 0, acted = false, tripUrl = '', trips = 0, timer = null, trippedAt = 0;
+    const undos = [];
+    const state = { tripped: false, before: 0, after: 0 };
+    // One measure for the sweep check and the stylesheet probe: in-flow text (flowText below).
+    const textLen = () => flowText();
+    const ROOTS = 'html, body, main, [role="main"], #root, #app, #__next, #__nuxt, #app-root';
+    // Text of the page itself, for judging a stylesheet: what a visible
+    // overlay holds (a fixed or sticky layer, a dialog, a consent tool) is not
+    // counted, so a sheet that hides only a banner can never look like a
+    // blanked page, however much of a sparse page's text the banner holds.
+    // An overlay is a CMP or dialog (by its markup), or a fixed / sticky layer
+    // that is a consent tool by name, or one that is not the page itself: it
+    // neither is nor holds the page's landmarks and does not fill the window.
+    // A fixed <main>, a sticky <article>, a full-window app shell, or a page
+    // that merely has "cookie" or "consent" in a class (a policy page) are the
+    // page, never an overlay.
+    const LANDMARK = 'main, article, [role="main"], #root, #app, #__next, #__nuxt, #app-root';
+    const CMP = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], dialog, #onetrust-consent-sdk, #onetrust-banner-sdk, '
+      + '#CybotCookiebotDialog, #didomi-host, .didomi-popup-container, [id^="sp_message_container"], #usercentrics-root, #cmpwrapper, '
+      + '#qc-cmp2-container, .cc-window';
+    const NAMED = '[id*="cookie" i], [id*="consent" i], [class*="cookie-banner" i], [class*="consent" i]';
+    const layer = (el, cs) => {
+      if (el.matches(CMP)) return true;
+      if (cs.position !== 'fixed' && cs.position !== 'sticky') return false;
+      // Landmarks first: a consent-named shell that holds the page is the page.
+      if (el.matches(LANDMARK) || el.querySelector(LANDMARK)) return false;
+      if (el.matches(NAMED)) return true;
+      // 90%, not 98%: an app pane under a fixed top bar still fills the window.
+      const r = el.getBoundingClientRect();
+      return !(r.width >= innerWidth * 0.9 && r.height >= innerHeight * 0.9);
+    };
+    const flowText = () => {
+      let n = 0, seen = 0;
+      const walk = (el) => {
+        for (let c = el.firstChild; c; c = c.nextSibling) {
+          if (c.nodeType === 3) { n += c.nodeValue.replace(/\s+/g, ' ').trim().length; continue; }
+          if (c.nodeType !== 1 || ++seen > 8000) continue;
+          if (/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(c.tagName)) continue;
+          const cs = getComputedStyle(c);
+          if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+          if (layer(c, cs)) continue;
+          walk(c);
+        }
+      };
+      walk(document.body);
+      return n;
+    };
+    const isOverlay = (el) => {
+      for (let a = el; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+        const cs = getComputedStyle(a);
+        if (layer(a, cs)) return true;
+      }
+      return false;
+    };
+    const trip = (was, now) => {
+      state.tripped = true; state.before = was; state.after = now;
+      trips++; tripUrl = location.href; trippedAt = Date.now();
+      for (const fn of undos) { try { fn(); } catch (_) { /* the rest still run */ } }
+      try { document.documentElement.setAttribute('data-quell-safety', '1'); } catch (_) { /* no root */ }
+      watch();
+      return true;
+    };
+    const rearm = () => {
+      if (timer) { clearInterval(timer); timer = null; }
+      state.tripped = false; base = 0; acted = false;
+      try { document.documentElement.removeAttribute('data-quell-safety'); } catch (_) { /* no root */ }
+      try { document.dispatchEvent(new Event('quell:rearm')); } catch (_) { /* no document */ }
+    };
+    const watch = () => {
+      if (timer) return;
+      timer = setInterval(() => {
+        if (!state.tripped) { clearInterval(timer); timer = null; return; }
+        if (location.href !== tripUrl) { trips = 0; rearm(); return; }
+        if (Date.now() - trippedAt >= 10000 && trips < 2) rearm();
+      }, 1000);
+    };
+    return {
+      state,
+      register(fn) { undos.push(fn); },
+      acted() { acted = true; },
+      measure() {
+        if (state.tripped || typeof document === 'undefined' || !document.body) return;
+        acted = false;
+        base = textLen();
+      },
+      check() {
+        if (state.tripped || !acted || base < 800 || !document.body) return false;
+        acted = false;
+        const now = textLen();
+        if (now >= base * 0.5) return false;
+        return trip(base, now);
+      },
+      // A stylesheet hides before any sweep can measure, so it is judged by
+      // switching Quell's own stylesheets off and on again around two reads of
+      // the page's text: the same "just before, just after" comparison.
+      probe(ids) {
+        if (state.tripped || typeof document === 'undefined' || !document.body) return false;
+        const sheets = ids.map((i) => document.getElementById(i)).filter((e) => e && e.sheet);
+        if (!sheets.length) return false;
+        for (const s of sheets) s.sheet.disabled = true;
+        const before = textLen();
+        for (const s of sheets) s.sheet.disabled = false;
+        const after = textLen();
+        if (before < 800 || after >= before * 0.5) return false;
+        return trip(before, after);
+      },
+      protects(el) {
+        if (!el || !el.matches) return false;
+        try {
+          if (el.matches(ROOTS) || el.querySelector('main, [role="main"], #root, #app, #__next, #__nuxt')) return true;
+          // textContent, not innerText: the element may already be hidden by a
+          // stylesheet, which empties its innerText but not what it holds.
+          // An overlay (a banner, a dialog, a consent tool) is not "the page":
+          // however much of a sparse page's text it holds, it may be hidden.
+          if (isOverlay(el)) return false;
+          const total = ((document.body && document.body.textContent) || '').replace(/\s+/g, ' ').length;
+          return total >= 600 && ((el.textContent || '').replace(/\s+/g, ' ').length > total * 0.5);
+        } catch (_) { return false; }
+      },
+    };
+  })();
+
   g.QuellSettings = {
     SYNC_DEFAULTS, LOCAL_DEFAULTS, DEFAULTS, OBSOLETE_KEYS, LIST_BYTE_BUDGET,
     home, get, set, migrate, onChange, onGone, ListFullError, sweepPauses,
     hidden: { register: registerHidden, list: listHidden, listen },
+    guard,
+    emptied: { emptyAncestor, collapse: collapseEl, uncollapseAll, recheckCollapsed, hasVisibleContent },
   };
 })();

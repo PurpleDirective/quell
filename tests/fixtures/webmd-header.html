@@ -1,0 +1,14 @@
+<!doctype html><html><head><title>WebMD-shaped header</title>
+<style>body{margin:0;font-family:sans-serif} nav.vn-wrapper{position:fixed;top:0;left:0;right:0;height:60px;background:#fff;z-index:50} .vn-actions{display:inline-block} main{padding-top:80px}</style></head>
+<!-- Shape of www.webmd.com measured live 2026-11-06: the header "Subscribe" button and the closed sign-up dialog it
+     opens share one div.newsletter-wrapper.overlay.vn-subscribe, in flow inside a fixed nav. -->
+<body>
+<header class="global-header"><nav class="vn-wrapper"><div class="vn-container"><div id="vn-links" class="vn-links"><div class="vn-actions">
+  <div class="newsletter-wrapper overlay vn-subscribe" id="webmd-subscribe"><button class="webmd-button" type="button"><span> Subscribe </span></button>
+    <div class="webmd-dialog__wrapper" style="display:none"><div class="webmd-dialog"><button type="button" aria-label="Close">x</button></div></div></div>
+  <a id="webmd-signin" href="/login">Log in</a>
+</div></div></div></nav></header>
+<main id="webmd-main"><h1>Health</h1><p>Article body.</p></main>
+<!-- A real pop-up with the same class: fixed over the page, e-mail field. Must still go. -->
+<div class="newsletter-wrapper overlay" id="webmd-real-modal" style="position:fixed;left:20%;right:20%;top:30%;background:#fff;padding:20px;z-index:100"><p>Sign up for our newsletter</p><input type="email" placeholder="Email"></div>
+</body></html>

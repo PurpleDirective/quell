@@ -1,0 +1,7 @@
+# Default gitleaks rules, plus one narrow exclusion.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Generated declarativeNetRequest rule files hold only host names and CSS selectors (e.g. api2.amplitude.com reads as a generic API key). They are built by pipeline/ from committed sources; the sources are still scanned."
+paths = ['''^extension/rules/[^/]+\.json$''']

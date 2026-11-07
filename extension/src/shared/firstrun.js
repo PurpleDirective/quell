@@ -21,6 +21,9 @@
     && chrome.runtime.getURL('').startsWith('moz-extension:');
   const DATA = ['technicalAndInteraction'];
   const ALL_SITES = ['<all_urls>'];
+  // The version whose "What's new" card exists. A fresh install has seen it by
+  // being told everything at first run; an update shows the card once.
+  const WHATS_NEW = '0.7.4';
 
   // Fire-and-forget. A background that is not listening (or asleep) is fine.
   function track(name) {
@@ -67,7 +70,10 @@
   // Wire one card. `card` holds the [data-fr] hooks used by popup and welcome.
   //   grantInTab:  Firefox toolbar popup: prompts cannot work there, so the
   //                action opens the tab view instead (openTab)
-  async function mount(card, { grantInTab = false, openTab = () => {}, onDone = () => {}, onChange = () => {} } = {}) {
+  //   forceAsk / turnPatch / grantName: the "What's new" card reuses this wiring with
+  //                its own button pair and what "Turn these on" switches on
+  async function mount(card, { grantInTab = false, openTab = () => {}, onDone = () => {}, onChange = () => {},
+    forceAsk = false, turnPatch = { cookieEnabled: true, popupsEnabled: true, aiWebAccess: true }, grantName = 'firstrun' } = {}) {
     const q = (n) => card.querySelector(`[data-fr="${n}"]`);
     const ask = card.querySelector('[data-fr-ask]');
     const done = card.querySelector('[data-fr-done]');
@@ -76,7 +82,7 @@
     const sentBtn = q('sentBtn');
 
     const s = await S.get();
-    const both = !!(s.cookieEnabled && s.popupsEnabled);
+    const both = !forceAsk && !!(s.cookieEnabled && s.popupsEnabled);
     // Already running both (an upgrade): only the analytics line is left to ask.
     ask.hidden = both;
     done.hidden = !both;
@@ -117,7 +123,7 @@
       return { analytics: box.checked ? 'on' : 'off' };
     };
     const finish = async (patch) => {
-      await S.set({ ...patch, ...(await analyticsPatch()), firstRunDone: true });
+      await S.set({ ...patch, ...(await analyticsPatch()), firstRunDone: true, whatsNewSeen: WHATS_NEW });
       // The answer is saved. The box must not stay live: its change handler stores
       // nothing, so an untick here would show a choice that was never saved. From
       // now on the settings switch in the toolbar popup is where it changes.
@@ -126,7 +132,7 @@
     };
 
     q('turn').addEventListener('click', async () => {
-      if (grantInTab) { openTab({ grant: 'firstrun' }); return; }
+      if (grantInTab) { openTab({ grant: grantName }); return; }
       // The permission request is the click's first call: browsers need the gesture.
       const granted = hasChrome && chrome.permissions
         ? await chrome.permissions.request({ origins: ALL_SITES }).catch(() => false) : false;
@@ -135,12 +141,12 @@
         return;
       }
       track('firstrun_turn_on');
-      await finish({ cookieEnabled: true, popupsEnabled: true });
+      await finish(turnPatch);
     });
     q('skip').addEventListener('click', async () => { track('firstrun_skip'); await finish({}); });
     q('done').addEventListener('click', async () => { track('firstrun_done'); await finish({}); });
     return { both };
   }
 
-  g.QuellFirstRun = { mount, track, analyticsOn, setAnalytics, dataApi };
+  g.QuellFirstRun = { mount, track, analyticsOn, setAnalytics, dataApi, WHATS_NEW };
 })();

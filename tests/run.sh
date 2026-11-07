@@ -2,6 +2,7 @@
 # Quell smoke suite — links the global playwright install (ESM ignores
 # NODE_PATH), then runs the tests. node_modules/ here is gitignored.
 set -euo pipefail
+# QUELL_HEADLESS_ONLY=1: new headless Chromium only, never a visible window.
 cd "$(dirname "$0")"
 GLOBAL_ROOT="$(npm root -g)"
 PW=""
@@ -22,9 +23,14 @@ echo
 # Usage counts: consent gate, queue clearing, payload scrubbing, Firefox gate.
 node analytics.mjs || rc=1
 echo
+node links.mjs || rc=1
+echo
 node smoke.mjs || rc=1
 echo
 node compat.mjs || rc=1
+echo
+# 0.7.4: Google blank-box collapse + AI Mode chrome (live-page fixture), AI on websites (ten sites), the popup group.
+node q074.mjs || rc=1
 echo
 # The pop-ups rule filter (pipeline) and the shipped rules it produced.
 python3 ../pipeline/test_build_rules.py || rc=1
