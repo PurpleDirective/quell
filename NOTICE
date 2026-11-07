@@ -38,3 +38,11 @@ is Quell's own.
 Quell does not bundle, fork, or copy source code from "I don't care about
 cookies", "I still don't care about cookies", uBlock Origin, or AdGuard. Those
 projects informed our understanding of the problem space only.
+
+Typeface (0.7.3)
+----------------
+extension/fonts/atkinson-hyperlegible-next-var.woff2 is Atkinson Hyperlegible
+Next (Latin subset), Copyright 2020-2024 The Atkinson Hyperlegible Next Project
+Authors, licensed under the SIL Open Font License 1.1. The licence text ships
+beside it (extension/fonts/Atkinson-Hyperlegible-Next-OFL.txt). It is loaded
+from inside the extension only; Quell never fetches a font from the network.

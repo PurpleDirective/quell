@@ -78,6 +78,7 @@ async function save(patch) {
     await store.set(patch);
     showError('');
     Object.assign(current, patch);
+    setTimeout(refreshTab, 500); // the page reacts to a change a moment later
     return true;
   } catch (e) {
     showError(e && e.name === 'ListFullError'
@@ -152,31 +153,186 @@ async function enginesOn(s) {
 }
 
 // ----------------------------------------------------------------- render --
-function renderHeader(s) {
-  $('enabled').checked = !!s.enabled;
-  $('stateLine').textContent = s.enabled ? 'Quiet the web.' : 'Paused everywhere.';
-  document.body.classList.toggle('is-off', !s.enabled);
+async function refreshTab() {
+  tab = await loadTab();
+  renderHero(current); renderItems(current); renderRows(current);
+}
+const T = (name) => { try { globalThis.QuellFirstRun?.track(name); } catch (_) { /* ignore */ } };
+const ICONS = {
+  search: '<path d="M12 2.5l1.7 5.8 5.8 1.7-5.8 1.7L12 17.5l-1.7-5.8L4.5 10l5.8-1.7z" fill="currentColor"/>',
+  chat: '<path d="M4 5.5h16v10H10l-4 3.5v-3.5H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  cookie: '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9" cy="9.5" r="1.2" fill="currentColor"/><circle cx="14.5" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="14.5" r="1.2" fill="currentColor"/><circle cx="9.5" cy="15" r="1.2" fill="currentColor"/>',
+  popup: '<rect x="3.5" y="5" width="17" height="14" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 10.5h8M8 14h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+};
+const iconFor = (it) => it.kind === 'cookie' ? ICONS.cookie : it.kind === 'popup' ? (it.label === 'Chat widget' ? ICONS.chat : ICONS.popup)
+  : /gemini/i.test(it.label) ? ICONS.chat : ICONS.search;
+
+let tab = { items: [], active: [], reachable: false, session: 0 };
+let itemsExpanded = false;
+const expanded = { search: false, cookie: false, popup: false };
+const SHOWN_ITEMS = 3;
+
+// What the tab says Quell hid on it (a kind and a short label per item: the
+// page's text is never asked for here), plus the toolbar count for the tab.
+async function loadTab() {
+  const out = { items: [], active: [], reachable: false, session: 0 };
+  if (PAGE_VIEW || tabId == null || !hasChrome) return out;
+  if (chrome.storage?.session) {
+    const key = 'tab:' + tabId;
+    out.session = (await chrome.storage.session.get({ [key]: 0 }).catch(() => ({ [key]: 0 })))[key] || 0;
+  }
+  if (host && chrome.tabs?.sendMessage) {
+    try {
+      const r = await chrome.tabs.sendMessage(tabId, { type: 'quell:hidden:list' });
+      if (r && Array.isArray(r.items)) { out.items = r.items; out.active = r.active || []; out.reachable = true; }
+    } catch (_) { /* nothing of Quell's in that tab */ }
+  }
+  return out;
 }
 
-async function renderStatus(s) {
-  const el = $('pageStatus');
-  if (PAGE_VIEW) { el.textContent = ''; return; } // a settings tab has no page of its own
-  if (!s.enabled) { el.textContent = 'Quell is off. Nothing is hidden anywhere.'; return; }
-  if (!host) { el.textContent = 'Quell doesn’t run on this page.'; return; }
-  let n = 0;
-  if (tabId != null && hasChrome && chrome.storage?.session) {
-    const key = 'tab:' + tabId;
-    n = (await chrome.storage.session.get({ [key]: 0 }).catch(() => ({ [key]: 0 })))[key] || 0;
-  }
-  el.textContent = '';
-  if (n > 0) {
-    el.append('On this page Quell hid ');
-    const b = document.createElement('strong');
-    b.textContent = String(n);
-    el.append(b, n === 1 ? ' thing.' : ' things.');
+const AI_KEYS = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist'];
+// The allowlists a pause on this host has to cover: the features that are on.
+function pauseKeys(s) {
+  const k = [];
+  if (AI_HOST_RE.test(host || '') && s.aiEnabled) k.push('aiAllowlist');
+  if (s.cookieEnabled) k.push('cookieAllowlist');
+  if (s.popupsEnabled) k.push('popupAllowlist');
+  return k;
+}
+const pausedHere = (s) => {
+  const k = host ? pauseKeys(s) : [];
+  return k.length > 0 && k.every((key) => (s[key] || []).includes(host));
+};
+const timeWord = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+function firstRunOn(s) { return !s.firstRunDone; }
+
+function renderHero(s) {
+  const app = $('app');
+  const paused = !!host && s.enabled && pausedHere(s);
+  const first = firstRunOn(s);
+  const n = Math.max(tab.items.length, tab.session);
+  const total = Number(s.totalBlocked || 0);
+  const state = first ? 'first-run' : paused ? 'paused' : !s.enabled ? 'off' : !host ? 'no-run' : 'normal';
+  app.dataset.state = state;
+  document.body.classList.toggle('is-off', !s.enabled && !first);
+  $('enabled').checked = !!s.enabled;
+  $('enabled').disabled = paused;
+  const h = $('pageStatus'), sub = $('subLine'), copy = $('heroCopy');
+  copy.hidden = true; $('resumeBtn').hidden = true; sub.hidden = false;
+  const since = `${total.toLocaleString()} hidden since you installed it`;
+  if (first) {
+    const both = !!(s.cookieEnabled && s.popupsEnabled);
+    h.textContent = both ? 'One more thing.' : 'Quell is ready.';
+    sub.hidden = true; copy.hidden = false;
+    copy.textContent = both ? 'Quell is already quieting search, cookie banners and pop-ups. Help improve it with anonymous counts, or leave that off.'
+      : 'It hides AI answers in search. Want it to quiet cookie banners and pop-ups too?';
+  } else if (paused) {
+    h.textContent = `Paused on ${host.replace(/^www\./, '')}`;
+    const until = s.sitePauses?.[host]?.until;
+    sub.textContent = until > 0 ? `Until ${timeWord(until)}. Nothing is hidden here until then.` : 'Until you resume. Nothing is hidden here.';
+    $('resumeBtn').hidden = false;
+  } else if (!s.enabled) {
+    h.textContent = 'Quell is off.';
+    sub.textContent = 'Nothing is hidden anywhere. Click the moon to turn it on.';
+  } else if (PAGE_VIEW) {
+    h.textContent = 'Quell is on.';
+    sub.textContent = since;
+  } else if (!host) {
+    h.textContent = 'Quell doesn’t run on this page.';
+    sub.textContent = `Nothing to hide here. ${since}`;
   } else {
-    el.textContent = 'Nothing to hide on this page.';
+    h.textContent = n > 0 ? `Hid ${n} ${n === 1 ? 'thing' : 'things'} on this page.` : 'Nothing to hide on this page.';
+    sub.textContent = `Quell is on · ${since}`;
   }
+  $('tryIt').hidden = !first;
+  $('featCard').hidden = first;
+}
+
+function renderItems(s) {
+  const card = $('itemsCard');
+  const show = !firstRunOn(s) && s.enabled && !!host && tab.items.length > 0 && !pausedHere(s);
+  card.hidden = !show;
+  if (!show) return;
+  const list = $('itemList');
+  const items = tab.items;
+  const shown = itemsExpanded ? items : items.slice(0, SHOWN_ITEMS);
+  list.textContent = '';
+  for (const it of shown) {
+    const li = document.createElement('li');
+    li.className = 'item' + (it.kept ? ' undone' : '');
+    li.dataset.id = it.id;
+    li.innerHTML = '<div class="line"><span class="ii"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"></svg></span>'
+      + '<span class="il"><b></b><small></small></span>'
+      + '<span class="acts"><button type="button" class="lk" data-peek>Peek</button><button type="button" class="lk" data-undo>Undo</button></span></div>'
+      + '<p class="ex" hidden></p>';
+    li.querySelector('svg').innerHTML = iconFor(it);
+    li.querySelector('b').textContent = it.label;
+    li.querySelector('small').textContent = it.kept ? 'Restored on this page'
+      : it.rejected ? it.detail : it.detail;
+    const peek = li.querySelector('[data-peek]'), undo = li.querySelector('[data-undo]');
+    peek.setAttribute('aria-label', `Peek at ${it.label}`);
+    undo.setAttribute('aria-label', (it.kept ? 'Hide again: ' : 'Undo hiding: ') + it.label);
+    peek.setAttribute('aria-pressed', 'false');
+    if (it.kept) { undo.textContent = 'Hide again'; peek.disabled = true; }
+    peek.addEventListener('click', () => onPeek(it, li, peek));
+    undo.addEventListener('click', () => onUndo(it, !it.kept));
+    list.append(li);
+  }
+  const more = $('itemsMore');
+  more.hidden = items.length <= SHOWN_ITEMS;
+  more.textContent = itemsExpanded ? 'Show fewer' : `Show ${items.length - SHOWN_ITEMS} more`;
+  more.setAttribute('aria-expanded', String(itemsExpanded));
+}
+
+async function tellTab(msg) {
+  try { return await chrome.tabs.sendMessage(tabId, msg); } catch (_) { return null; }
+}
+const peekTimers = new Map();
+async function onPeek(it, li, btn) {
+  const on = btn.getAttribute('aria-pressed') !== 'true';
+  // Only one peek at a time, like the mockup: close any other first.
+  const r = await tellTab({ type: 'quell:hidden:peek', id: it.id, on });
+  if (!r || !r.ok) return;
+  btn.setAttribute('aria-pressed', String(on));
+  const ex = li.querySelector('.ex');
+  ex.hidden = !on;
+  if (on) {
+    T('peek');
+    ex.textContent = r.excerpt || 'Showing on the page for a few seconds.';
+    clearTimeout(peekTimers.get(it.id));
+    peekTimers.set(it.id, setTimeout(() => { btn.setAttribute('aria-pressed', 'false'); ex.hidden = true; }, 6000));
+  }
+}
+async function onUndo(it, on) {
+  const r = await tellTab({ type: 'quell:hidden:keep', id: it.id, on });
+  if (!r || !r.ok) return;
+  if (on) T('undo');
+  tab = { ...tab, ...(await loadTab()) };
+  renderHero(current); renderItems(current); renderRows(current);
+}
+
+// One short line under each feature.
+function rowStatus(kind, s, paused) {
+  const on = kind === 'search' ? s.aiEnabled : kind === 'cookie' ? s.cookieEnabled : s.popupsEnabled;
+  if (!s.enabled) return 'Quell is off';
+  if (!on) return 'Off';
+  if (paused) return 'Paused here';
+  const mine = tab.items.filter((i) => i.kind === kind && !i.kept);
+  const nowhere = { search: 'On for search pages', cookie: 'On for other pages', popup: 'On for other pages' }[kind];
+  if (!host || !tab.reachable || !tab.active.includes(kind)) return nowhere;
+  if (!mine.length) return 'Watching. Nothing to hide here';
+  if (kind === 'cookie') {
+    const rej = mine.some((i) => i.rejected);
+    return `${rej ? 'Rejected' : 'Hid'} ${mine.length} ${mine.length === 1 ? 'banner' : 'banners'}`;
+  }
+  return `Hid ${mine.length} here`;
+}
+function renderRows(s) {
+  const paused = !!host && s.enabled && pausedHere(s);
+  $('gSearchD').textContent = rowStatus('search', s, paused && AI_HOST_RE.test(host) );
+  $('cookiesD').textContent = rowStatus('cookie', s, paused);
+  $('popupsD').textContent = rowStatus('popup', s, paused);
 }
 
 async function renderAccess() {
@@ -203,16 +359,22 @@ async function renderAccess() {
   note.hidden = ok;
 }
 
+function setExpander(btn, body, open, usable) {
+  btn.disabled = !usable;
+  btn.setAttribute('aria-expanded', String(!!(open && usable)));
+  body.hidden = !(open && usable);
+}
+
 function renderSearch(s, engines) {
   $('aiEnabled').checked = !!s.aiEnabled;
-  $('searchBody').hidden = !s.aiEnabled;
+  setExpander($('searchExpand'), $('searchBody'), expanded.search, !!s.aiEnabled);
   for (const r of document.querySelectorAll('input[name="gmode"]')) r.checked = r.value === s.googleMode;
   $('gmodeHint').textContent = s.googleMode === 'cleanweb'
     ? 'Google’s plain list of links, no AI at all. The most reliable option.'
     : s.googleMode === 'off' ? 'Quell leaves Google as Google serves it.' : '';
   $('surfaces').hidden = !(s.enabled && s.aiEnabled && s.googleMode === 'hide');
   for (const [id, key] of Object.entries(SURFACE_IDS)) $(id).checked = !!s[key];
-  $('sPaaD').textContent = s.hidePaa ? 'Hidden too' : 'Kept — you asked for these';
+  $('sPaaD').textContent = s.hidePaa ? 'Hidden too' : 'Kept. You asked for these';
   $('bing').checked = !!s.bingEnabled;
   $('engines').checked = engines;
   $('engineModes').hidden = !(s.enabled && s.aiEnabled && engines);
@@ -221,30 +383,35 @@ function renderSearch(s, engines) {
 
 function renderCookies(s) {
   $('cookies').checked = !!s.cookieEnabled;
-  $('cookieBody').hidden = !s.cookieEnabled;
+  setExpander($('cookieExpand'), $('cookieBody'), expanded.cookie, !!s.cookieEnabled);
   $('cookieReject').checked = !!s.cookieReject;
-  // Kept for the smoke suite's long-standing id: the reject row only means
-  // anything while the cookie layer is on.
+  // The reject row only means anything while the cookie layer is on.
   $('rejectRow').hidden = !(s.enabled && s.cookieEnabled);
 }
 
 function renderPopups(s) {
   $('popups').checked = !!s.popupsEnabled;
-  $('popupBody').hidden = !s.popupsEnabled;
+  setExpander($('popupExpand'), $('popupBody'), expanded.popup, !!s.popupsEnabled);
   for (const [id, key] of Object.entries(POPUP_IDS)) $(id).checked = !!s[key];
 }
 
 function renderSite(s) {
   const card = $('siteCard');
-  if (!host) { card.hidden = true; return; }
+  if (!host || firstRunOn(s)) { card.hidden = true; return; }
   card.hidden = false;
   $('siteHost').textContent = host;
+  const keys = pauseKeys(s);
+  const paused = pausedHere(s);
+  // Pause here: only where there is something to pause, and not while Quell is off.
+  $('pauseRow').hidden = !(s.enabled && keys.length > 0 && !paused);
+  $('siteMore').hidden = keys.length === 0;
   $('siteAiRow').hidden = !(AI_HOST_RE.test(host) && s.aiEnabled);
   $('siteAi').checked = (s.aiAllowlist || []).includes(host);
   $('siteRow').hidden = !s.cookieEnabled;
   $('siteAllow').checked = (s.cookieAllowlist || []).includes(host);
   $('sitePopRow').hidden = !s.popupsEnabled;
   $('sitePop').checked = (s.popupAllowlist || []).includes(host);
+  if (keys.length === 0) $('siteDetail').hidden = true;
   // Offer the report only for a host the endpoint will accept (the same rule,
   // src/shared/report-host.js) — an IP address, localhost or a .local name
   // would only earn the user a "failed" message.
@@ -267,19 +434,34 @@ function renderLinks() {
   $('privacy').href = CFG.PRIVACY_URL || 'https://purpledirective.com/quell/privacy/';
 }
 
+async function renderAnalytics(s) {
+  const FR = globalThis.QuellFirstRun;
+  $('analyticsSwitch').checked = FR ? (FR.dataApi && await FR.dataApi() ? await FR.analyticsOn(s) : s.analytics === 'on') : s.analytics === 'on';
+}
+
+let frMounted = false;
 async function render() {
   current = await store.get(S.DEFAULTS);
   const s = current;
   const engines = await enginesOn(s);
-  renderHeader(s);
+  tab = await loadTab();
   renderSearch(s, engines);
   renderCookies(s);
   renderPopups(s);
   renderSite(s);
-  const total = Number(s.totalBlocked || 0);
-  $('total').textContent = total.toLocaleString();
-  $('totalL').textContent = (total === 1 ? 'thing' : 'things') + ' quelled so far';
-  await renderStatus(s);
+  renderHero(s);
+  renderItems(s);
+  renderRows(s);
+  await renderAnalytics(s);
+  const first = firstRunOn(s);
+  $('firstRun').hidden = !first;
+  if (first && !frMounted && globalThis.QuellFirstRun) {
+    frMounted = true;
+    globalThis.QuellFirstRun.mount($('firstRun'), {
+      grantInTab: GRANT_IN_TAB, openTab: openPageView,
+      onDone: () => render(),
+    }).catch(() => { frMounted = false; });
+  }
 }
 
 // ------------------------------------------------------------- behaviours --
@@ -464,6 +646,72 @@ $('grantBase').addEventListener('click', async () => {
   await renderAccess();
 });
 
+// ---------------------------------------------------- pause, settings, more --
+// Pause here: the features that are on step back on this site, for an hour,
+// until midnight, or until resumed. It is the per-site allowlists the
+// content scripts and the background already read (so behaviour is exactly
+// that of the per-feature allows below), plus a note of when to take back out
+// what the pause itself added (settings.js sweepPauses).
+$('pauseBtn').addEventListener('click', async () => {
+  if (!host) return;
+  const dur = document.querySelector('input[name="pdur"]:checked')?.value || 'hour';
+  const now = new Date();
+  const until = dur === 'hour' ? Date.now() + 3600e3
+    : dur === 'today' ? new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() : 0;
+  const patch = {};
+  const added = [];
+  for (const key of pauseKeys(current)) {
+    const list = current[key] || [];
+    if (!list.includes(host)) { patch[key] = [...list, host]; added.push(key); }
+  }
+  const pauses = { ...(current.sitePauses || {}) };
+  if (until > 0) pauses[host] = { until, added }; else delete pauses[host];
+  patch.sitePauses = pauses;
+  if (await save(patch)) T('pause');
+  await render();
+});
+$('resumeBtn').addEventListener('click', async () => {
+  if (!host) return;
+  const patch = {};
+  for (const key of AI_KEYS) if ((current[key] || []).includes(host)) patch[key] = current[key].filter((h) => h !== host);
+  const pauses = { ...(current.sitePauses || {}) };
+  delete pauses[host];
+  patch.sitePauses = pauses;
+  await save(patch);
+  await render();
+});
+
+function toggler(btn, onFlip) {
+  btn.addEventListener('click', () => { onFlip(btn.getAttribute('aria-expanded') !== 'true'); });
+}
+toggler($('searchExpand'), (o) => { expanded.search = o; render(); });
+toggler($('cookieExpand'), (o) => { expanded.cookie = o; render(); });
+toggler($('popupExpand'), (o) => { expanded.popup = o; render(); });
+toggler($('siteMore'), (o) => { $('siteMore').setAttribute('aria-expanded', String(o)); $('siteDetail').hidden = !o; });
+$('itemsMore').addEventListener('click', () => { itemsExpanded = !itemsExpanded; renderItems(current); });
+$('gearBtn').addEventListener('click', () => {
+  const open = $('gearBtn').getAttribute('aria-expanded') !== 'true';
+  $('gearBtn').setAttribute('aria-expanded', String(open));
+  $('settings').hidden = !open;
+  $('main').hidden = open;
+});
+$('sentBtn2').addEventListener('click', () => {
+  const open = $('sent2').hidden;
+  $('sent2').hidden = !open;
+  $('sentBtn2').setAttribute('aria-expanded', String(open));
+});
+// Anonymous usage counts. Firefox asks for its own data-collection permission
+// from the click (see shared/firstrun.js); from the toolbar popup that prompt
+// cannot work, so the tab view takes over there.
+$('analyticsSwitch').addEventListener('change', async (e) => {
+  const FR = globalThis.QuellFirstRun;
+  const want = e.target.checked;
+  if (!FR) return;
+  if (GRANT_IN_TAB && await FR.dataApi()) { e.target.checked = !want; openPageView({ grant: 'analytics' }); return; }
+  e.target.checked = await FR.setAnalytics(want);
+  await render();
+});
+
 // --------------------------------------------------------- breakage report --
 // Exactly two fields leave the browser, shown to the user verbatim first.
 function reportPayload(h) {
@@ -472,6 +720,7 @@ function reportPayload(h) {
 }
 
 function openReport(h) {
+  T('report_open');
   const dlg = $('reportDlg');
   dlg.dataset.host = h;
   $('reportPayload').textContent = JSON.stringify(reportPayload(h), null, 2);
@@ -537,6 +786,8 @@ $('reportSend').addEventListener('click', async () => {
 // ------------------------------------------------------------------- boot --
 (async () => {
   renderLinks();
+  await S.sweepPauses().catch(() => {});
+  T('popup_open');
   if (PAGE_VIEW) {
     // A tab has no "current site" of its own; a report handed over from the
     // Firefox popup carries its hostname in the URL (local only).
@@ -549,10 +800,12 @@ $('reportSend').addEventListener('click', async () => {
   await render();
   await renderAccess();
   const grant = params.get('grant');
-  const focusId = { engines: 'engines', cookies: 'cookies', popups: 'popups', base: 'grantBase' }[grant];
+  const focusId = { engines: 'engines', cookies: 'cookies', popups: 'popups', base: 'grantBase', analytics: 'analyticsSwitch', firstrun: 'firstRun' }[grant];
+  if (PAGE_VIEW && grant === 'engines') { expanded.search = true; await render(); }
+  if (PAGE_VIEW && grant === 'analytics') { $('gearBtn').click(); }
   if (PAGE_VIEW && focusId) {
-    $(focusId).focus();
-    $(focusId).closest('.grp, .notice')?.classList.add('flash');
+    $(focusId).focus?.();
+    $(focusId).closest('.frow, .notice, .frc, .orow')?.classList.add('flash');
   }
   if (PAGE_VIEW && params.get('report') && reportable(host)) openReport(host);
 })();
