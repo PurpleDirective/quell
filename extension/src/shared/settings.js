@@ -59,6 +59,16 @@
     cookieEnabled: false,   // grant-bound: <all_urls>
     popupsEnabled: false,   // grant-bound: <all_urls>; OFF by default
     totalBlocked: 0,
+    // Anonymous usage counts: 'unset' (never answered: nothing is sent) | 'on' | 'off'.
+    // Per device, like the Firefox data-collection permission it mirrors.
+    analytics: 'unset',
+    // The one-time first-run card (popup and welcome page) has been answered.
+    firstRunDone: false,
+    // Timed per-site pauses: { host: { until: <ms>, added: [allowlist keys the
+    // pause itself added] } }. The allowlists stay the one thing every content
+    // script and the background read; this only remembers when to take the
+    // pause's own entries back out (sweepPauses).
+    sitePauses: {},
   };
 
   // Keys that existed in 0.5.x and are gone. hideBingChips was the separate
@@ -223,8 +233,146 @@
     try { document.dispatchEvent(new Event(TAKEOVER_EVENT)); } catch (_) { /* no document to tell */ }
   }
 
+  // TIMED PAUSES
+  // "Pause here" for an hour / today puts the site into the allowlists of the
+  // features it applies to (so every content script and the declarativeNetRequest
+  // allow rules behave exactly as they do for a permanent per-site allow) and
+  // records when to take those entries back out. Entries the user had put there
+  // themselves before the pause are never removed by it. Run by the background
+  // (startup, each navigation) and by the popup when it opens.
+  async function sweepPauses(now = Date.now()) {
+    const keys = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist'];
+    const cur = await get({ sitePauses: {}, aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [] });
+    const pauses = cur.sitePauses && typeof cur.sitePauses === 'object' ? cur.sitePauses : {};
+    const patch = {};
+    const left = {};
+    let changed = false;
+    for (const [host, rec] of Object.entries(pauses)) {
+      if (!rec || !(rec.until > 0) || rec.until > now) { left[host] = rec; continue; }
+      changed = true;
+      for (const k of (rec.added || [])) {
+        if (!keys.includes(k)) continue;
+        patch[k] = (patch[k] || cur[k] || []).filter((h) => h !== host);
+      }
+    }
+    if (!changed) return false;
+    patch.sitePauses = left;
+    await set(patch);
+    return true;
+  }
+
+  // HIDDEN-ITEM REGISTRY + the popup's questions (content scripts only)
+  // Each content script that hides something registers a finder here. The
+  // popup can then ask the tab what was hidden on it (a kind and a short label
+  // per item), reveal one for a few seconds (Peek) or keep one shown for this
+  // page load (Undo). Everything stays inside the browser: the answer goes to
+  // Quell's own popup and nowhere else, and only elements a finder returned,
+  // which are by construction things Quell hid, can be revealed. A page cannot
+  // send these messages.
+  const hiddenSources = [];
+  const revealed = new WeakMap(); // el -> { prev, prio, hadKeep, mode, timer }
+  const PEEK_MS = 6000;
+  const KEEP_ATTR = 'data-quell-keep';
+
+  function registerHidden(kind, find, active) {
+    hiddenSources.push({ kind, find, active: active || (() => true) });
+  }
+  function collectHidden() {
+    const groups = new Map();
+    for (const src of hiddenSources) {
+      let found = [];
+      try { found = src.find() || []; } catch (_) { /* a finder must never break the popup */ }
+      for (const f of found) {
+        if (!f || !f.el || !f.el.isConnected) continue;
+        const id = src.kind + ':' + f.label;
+        let grp = groups.get(id);
+        if (!grp) groups.set(id, grp = { id, kind: src.kind, label: f.label, detail: f.detail || '', rejected: false, els: [] });
+        if (f.rejected) grp.rejected = true;
+        if (!grp.els.includes(f.el)) grp.els.push(f.el);
+      }
+    }
+    return groups;
+  }
+  function revealEl(el, mode) {
+    let st = revealed.get(el);
+    if (!st) {
+      st = { prev: el.style.getPropertyValue('display'), prio: el.style.getPropertyPriority('display'),
+        hadKeep: el.hasAttribute(KEEP_ATTR), mode: null, timer: 0 };
+      revealed.set(el, st);
+    }
+    clearTimeout(st.timer);
+    st.mode = mode;
+    if (mode === 'keep') el.setAttribute(KEEP_ATTR, '1');
+    // Inline beats Quell's own stylesheet, and `revert` hands the element back
+    // to the page's default display rather than guessing a value.
+    el.style.setProperty('display', 'revert', 'important');
+    if (mode === 'peek') st.timer = setTimeout(() => restoreEl(el), PEEK_MS);
+  }
+  function restoreEl(el) {
+    const st = revealed.get(el);
+    if (!st) return;
+    clearTimeout(st.timer);
+    if (st.prev) el.style.setProperty('display', st.prev, st.prio); else el.style.removeProperty('display');
+    if (!st.hadKeep) el.removeAttribute(KEEP_ATTR);
+    revealed.delete(el);
+  }
+  const modeOf = (grp) => grp.els.some((e) => revealed.get(e)?.mode === 'keep') ? 'keep'
+    : grp.els.some((e) => revealed.get(e)?.mode === 'peek') ? 'peek' : null;
+  function excerptOf(grp) {
+    for (const el of grp.els) {
+      const t = String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (t) return t.length > 140 ? t.slice(0, 139) + '…' : t;
+    }
+    return '';
+  }
+  function listHidden() {
+    const items = [];
+    for (const grp of collectHidden().values()) {
+      const m = modeOf(grp);
+      items.push({ id: grp.id, kind: grp.kind, label: grp.label, detail: grp.detail,
+        rejected: grp.rejected, kept: m === 'keep', peeking: m === 'peek' });
+    }
+    const active = [...new Set(hiddenSources.filter((s) => { try { return s.active(); } catch (_) { return false; } }).map((s) => s.kind))];
+    return { items, active };
+  }
+  function actOnHidden(msg) {
+    if (typeof msg.id !== 'string') return { ok: false };
+    const grp = collectHidden().get(msg.id);
+    if (!grp) return { ok: false };
+    if (msg.type === 'quell:hidden:peek') {
+      if (msg.on === false) { if (modeOf(grp) === 'peek') grp.els.forEach(restoreEl); return { ok: true }; }
+      if (modeOf(grp) === 'keep') return { ok: true, excerpt: '' };
+      grp.els.forEach((e) => revealEl(e, 'peek'));
+      try { grp.els[0].scrollIntoView({ block: 'nearest', behavior: 'instant' }); } catch (_) { /* detached */ }
+      return { ok: true, excerpt: excerptOf(grp) };
+    }
+    if (msg.on === false) { grp.els.forEach(restoreEl); return { ok: true }; }
+    grp.els.forEach((e) => revealEl(e, 'keep'));
+    return { ok: true };
+  }
+
+  let listening = false;
+  // The ONE listener of this world. Answers Quell's own popup (never a tab, a
+  // page or another extension): which host this is, what is hidden, and
+  // Peek/Undo on one hidden thing. The host answer is the hostname and nothing
+  // else; Chrome does not show the popup a tab's address on content-script-only
+  // access (Google and Bing), so the popup has to ask.
+  function listen() {
+    if (listening || typeof document === 'undefined') return;
+    listening = true;
+    try {
+      chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+        if (!msg || sender.id !== chrome.runtime.id || sender.tab) return;
+        if (msg.type === 'where') { sendResponse({ host: location.hostname }); return; }
+        if (msg.type === 'quell:hidden:list') { sendResponse(listHidden()); return; }
+        if (msg.type === 'quell:hidden:peek' || msg.type === 'quell:hidden:keep') sendResponse(actOnHidden(msg));
+      });
+    } catch (_) { /* not an extension context (tests inject files into a plain page) */ }
+  }
+
   g.QuellSettings = {
     SYNC_DEFAULTS, LOCAL_DEFAULTS, DEFAULTS, OBSOLETE_KEYS, LIST_BYTE_BUDGET,
-    home, get, set, migrate, onChange, onGone, ListFullError,
+    home, get, set, migrate, onChange, onGone, ListFullError, sweepPauses,
+    hidden: { register: registerHidden, list: listHidden, listen },
   };
 })();

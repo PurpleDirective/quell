@@ -566,6 +566,22 @@
   if (window.__quellCookies) return;
   window.__quellCookies = true;
 
+  // Listed by the popup, Peek and Undo (see QuellSettings.hidden): the consent
+  // containers this script found and hid on this page.
+  try {
+    globalThis.QuellSettings.hidden.register('cookie', () => {
+      if (!active) return [];
+      const out = [];
+      for (const sel of SEED) {
+        for (const el of document.querySelectorAll(sel)) {
+          out.push({ el, label: 'Cookie banner', detail: rejected && rejectOn ? 'Rejected for you' : 'Hidden', rejected: rejected && rejectOn });
+        }
+      }
+      return out;
+    }, () => active);
+    globalThis.QuellSettings.hidden.listen();
+  } catch (_) { /* test context */ }
+
   // Subscribe before the first async read — a toggle landing during that read
   // would otherwise be missed and the page would sit stale until reload.
   try {
