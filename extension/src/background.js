@@ -16,6 +16,10 @@ if (typeof QuellSettings === 'undefined' && typeof importScripts === 'function')
 if (typeof QuellAnalytics === 'undefined' && typeof importScripts === 'function') {
   importScripts('/src/shared/config.js', '/src/shared/browser.js', '/src/shared/analytics.js');
 }
+// Affiliate-swap warning (0.7.4; optional webNavigation permission).
+if (typeof QuellAffiliate === 'undefined' && typeof importScripts === 'function') {
+  importScripts('/src/shared/affiliate.js');
+}
 
 // Only the keys this worker reads; everything else is the content scripts'.
 const DEFAULTS = {
@@ -33,6 +37,8 @@ const DEFAULTS = {
   cookieAllowlist: [], // hostnames where the cookie layer is paused
   cookieReject: false,  // "Say reject all for me"
   popupsEnabled: false,
+  linksEnabled: false,
+  linksWarnAffiliate: false,
   totalBlocked: 0,
 };
 const readSettings = (d = DEFAULTS) => QuellSettings.get(d);
@@ -45,6 +51,9 @@ const ENGINE_SCRIPT_ID = 'quell-engines';
 const POPUP_SCRIPT_ID = 'quell-popups';
 const COOKIE_FILES = ['src/shared/settings.js', 'src/content/cookies.js'];
 const ENGINE_FILES = ['src/shared/settings.js', 'src/content/common.js', 'src/content/engines.js'];
+const LINKS_RULESETS = ['links_clean'];
+const LINKS_SCRIPT_ID = 'quell-links';
+const LINKS_FILES = ['src/shared/settings.js', 'src/content/links.js'];
 const POPUP_FILES = ['src/shared/settings.js', 'src/content/popups.js', 'src/content/signup-prompts.js'];
 
 // DuckDuckGo / Brave / Yahoo are OPTIONAL hosts, requested from the popup and
@@ -163,6 +172,9 @@ async function syncEngineLayerInOpenTabs() {
 chrome.permissions.onAdded.addListener(async () => {
   await applyEngineScripts();
   await syncEngineLayerInOpenTabs();
+  // First time all-sites access exists: Links starts on (see defaultLinksOn).
+  if (await defaultLinksOn()) { await applyLinks((await readSettings()).enabled); await syncLinksInOpenTabs(); }
+  await applyAffiliateWarning();
 });
 // The popup marks a removal it makes itself (giving all-sites access back
 // when Cookie banners and Pop-ups are both off) so it is not mistaken for the
@@ -201,10 +213,13 @@ chrome.permissions.onRemoved.addListener(async () => {
     const patch = {};
     if (s.cookieEnabled) patch.cookieEnabled = false;
     if (s.popupsEnabled) patch.popupsEnabled = false;
+    if (s.linksEnabled) patch.linksEnabled = false;
     if (Object.keys(patch).length) await chrome.storage.local.set(patch).catch(() => {});
     const on = s.enabled;
     await applyCookieBlocking(on && s.cookieEnabled && !('cookieEnabled' in patch));
     await applyPopupLayer(on && s.popupsEnabled && !('popupsEnabled' in patch));
+    await applyLinks(on && s.linksEnabled && !('linksEnabled' in patch));
+    await applyAffiliateWarning();
   }
 });
 
@@ -216,13 +231,13 @@ chrome.permissions.onRemoved.addListener(async () => {
 // and only the popup, on a click, can ask for those back.
 async function releaseAllSitesIfUnused() {
   const s = await readSettings();
-  if (s.cookieEnabled || s.popupsEnabled || s.enginesEnabled) return;
+  if (s.cookieEnabled || s.popupsEnabled || s.enginesEnabled || s.linksEnabled) return;
   const held = await chrome.permissions.contains({ origins: ['<all_urls>'] }).catch(() => false);
   if (!held) return;
   // Re-read: a popup click can grant access for a feature switched on in the
   // moment since the first read (browser start). Never take it back from that.
   const now = await readSettings();
-  if (now.cookieEnabled || now.popupsEnabled || now.enginesEnabled) return;
+  if (now.cookieEnabled || now.popupsEnabled || now.enginesEnabled || now.linksEnabled) return;
   await chrome.permissions.remove({ origins: ['<all_urls>'] }).catch(() => false);
 }
 
@@ -250,6 +265,54 @@ async function syncCookieLayerInOpenTabs(on) {
   }
 }
 
+
+// Links group (0.7.4): "Remove tracking from links". The network rules
+// (rules/links-clean.json, redirects that take tracking parameters off an
+// address) need the all-sites grant to act, like the cosmetic layers do, and
+// the page script (links.js) cleans links in the page and tells the popup how
+// many. ON by default wherever the all-sites grant already exists: the first
+// time Quell sees that grant with no answer stored, it records "on" once; after
+// that the user's switch is the answer.
+async function applyLinks(on) {
+  const hasHosts = await chrome.permissions.contains({ origins: ['<all_urls>'] }).catch(() => false);
+  const live = on && hasHosts;
+  try {
+    await chrome.declarativeNetRequest.updateEnabledRulesets(
+      live ? { enableRulesetIds: LINKS_RULESETS } : { disableRulesetIds: LINKS_RULESETS });
+  } catch (_) { /* already in the desired state */ }
+  const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [LINKS_SCRIPT_ID] }).catch(() => []);
+  if (live && existing.length === 0) {
+    await chrome.scripting.registerContentScripts([{
+      id: LINKS_SCRIPT_ID, matches: ['<all_urls>'], js: LINKS_FILES, runAt: 'document_start', allFrames: false,
+    }]).catch(() => {});
+  } else if (!live && existing.length > 0) {
+    await chrome.scripting.unregisterContentScripts({ ids: [LINKS_SCRIPT_ID] }).catch(() => {});
+  }
+}
+async function syncLinksInOpenTabs() {
+  const granted = await chrome.permissions.contains({ origins: ['<all_urls>'] }).catch(() => false);
+  if (!granted) return;
+  const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] }).catch(() => []);
+  for (const tab of tabs) {
+    if (tab.id) chrome.scripting.executeScript({ target: { tabId: tab.id }, files: LINKS_FILES }).catch(() => {});
+  }
+}
+async function defaultLinksOn() {
+  const held = await chrome.permissions.contains({ origins: ['<all_urls>'] }).catch(() => false);
+  if (!held) return false;
+  const raw = await chrome.storage.local.get('linksEnabled').catch(() => ({ linksEnabled: false }));
+  if ('linksEnabled' in raw) return false;
+  await chrome.storage.local.set({ linksEnabled: true }).catch(() => {});
+  return true;
+}
+async function applyAffiliateWarning() {
+  const s = await readSettings();
+  try { await QuellAffiliate.sync(s.enabled && s.linksEnabled && s.linksWarnAffiliate); } catch (_) { /* no webNavigation */ }
+}
+
+// A network rule redirects only what the grant covers, and a registered
+// content script only injects on navigation, so the pop-up layer's way of
+// healing open tabs is reused for the layers below.
 // Pop-ups layer (0.6.0, OFF by default): cosmetic only, no network rules. Same
 // gate as the cookie layer — the user's switch AND the <all_urls> grant —
 // because it runs on the sites the user visits.
@@ -358,6 +421,11 @@ async function init() {
   await applyCookieBlocking(current.enabled && current.cookieEnabled);
   await applyEngineScripts();
   await applyPopupLayer(current.enabled && current.popupsEnabled);
+  // Only where the grant is in use: a grant nothing uses is handed back below.
+  if (current.cookieEnabled || current.popupsEnabled) await defaultLinksOn();
+  const withLinks = await readSettings();
+  await applyLinks(withLinks.enabled && withLinks.linksEnabled);
+  await applyAffiliateWarning();
   await syncAllowRules(current.cookieAllowlist);
   await syncRejectRules(current.enabled && current.cookieEnabled && current.cookieReject);
   await releaseAllSitesIfUnused();
@@ -381,6 +449,7 @@ async function healOpenTabsAfterUpdate() {
   await syncEngineLayerInOpenTabs();
   if (s.cookieEnabled) await syncCookieLayerInOpenTabs(true);
   if (s.popupsEnabled) await syncPopupLayerInOpenTabs();
+  if (s.linksEnabled) await syncLinksInOpenTabs();
 }
 
 // The welcome page opens ONCE, on a fresh install — never on an update, which
@@ -435,6 +504,13 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
     await applyPopupLayer(on);
     if (on) await syncPopupLayerInOpenTabs();
   }
+  if (changed('enabled') || changed('linksEnabled')) {
+    const s = await readSettings();
+    const on = s.enabled && s.linksEnabled;
+    await applyLinks(on);
+    if (on) await syncLinksInOpenTabs();
+  }
+  if (changed('enabled') || changed('linksEnabled') || changed('linksWarnAffiliate')) await applyAffiliateWarning();
   // Switched back on: the branches above put the cookie and pop-up scripts into
   // the open tabs, and DuckDuckGo, Brave and Yahoo tabs need theirs as well
   // when the copy they had has stood down (an update that landed while Quell

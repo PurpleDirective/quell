@@ -27,6 +27,9 @@
     "declarativeNetRequest",
     "scripting"
   ],
+  "optional_permissions": [
+    "webNavigation"
+  ],
   "optional_host_permissions": [
     "<all_urls>",
     "*://duckduckgo.com/*",
@@ -46,6 +49,11 @@
         "id": "cookie_cmp_easylist",
         "enabled": false,
         "path": "rules/cookie-cmp-easylist.json"
+      },
+      {
+        "id": "links_clean",
+        "enabled": false,
+        "path": "rules/links-clean.json"
       }
     ]
   },

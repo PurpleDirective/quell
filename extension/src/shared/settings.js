@@ -59,6 +59,8 @@
     enginesEnabled: false,  // intent for DuckDuckGo/Brave/Yahoo (grant-bound)
     cookieEnabled: false,   // grant-bound: <all_urls>
     popupsEnabled: false,   // grant-bound: <all_urls>; OFF by default
+    linksEnabled: false,    // grant-bound: <all_urls>; 0.7.4 "Remove tracking from links" (the background turns it on once, when the grant exists)
+    linksWarnAffiliate: false, // grant-bound: <all_urls> + the optional webNavigation permission; OFF by default
     totalBlocked: 0,
     // Anonymous usage counts: 'unset' (never answered: nothing is sent) | 'on' | 'off'.
     // Per device, like the Firefox data-collection permission it mirrors.

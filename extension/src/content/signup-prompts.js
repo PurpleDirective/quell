@@ -69,6 +69,7 @@
   let hiddenCount = 0;
   let unlockStyle = null;
   const kept = new WeakSet();
+  let notFixed = new WeakSet();   // elements already seen not to be position:fixed
   let listening = false;
 
   const textOf = (el, max) => {
@@ -96,6 +97,7 @@
     const label = (t.textContent || '') + ' ' + (t.getAttribute('aria-label') || '') + ' ' + (t.getAttribute('title') || '') + ' ' + (t.getAttribute('href') || '');
     if (ASKED_RE.test(label.slice(0, 300))) lastAsk = Date.now();
   };
+  const onKey = (e) => { if (e.key === 'Enter') onAsk(e); };
   const askedRecently = () => Date.now() - lastAsk < ASK_WINDOW_MS;
 
   // The address says the user is on a login or account page.
@@ -246,8 +248,10 @@
     let looked = 0;
     for (const el of document.body.querySelectorAll('div, section, aside, form')) {
       if (++looked > SCAN_CAP) break;
-      if (cands.has(el)) continue;
-      if (getComputedStyle(el).position === 'fixed') cands.add(el);
+      if (cands.has(el) || notFixed.has(el)) continue;
+      // Only elements not yet judged cost a style read, so a feed that keeps
+      // adding nodes does not make every scan a full-document one.
+      if (getComputedStyle(el).position === 'fixed') cands.add(el); else notFixed.add(el);
     }
     const bySite = siteSel.length ? new Set(document.querySelectorAll(siteSel.join(','))) : new Set();
     for (const c of cands) {
@@ -299,7 +303,7 @@
     active = true;
     addStyle();
     document.addEventListener('click', onAsk, true);
-    document.addEventListener('keydown', (e) => { if (e.key === 'Enter') onAsk(e); }, true);
+    document.addEventListener('keydown', onKey, true);
     const attach = () => {
       if (!active || observer || !document.documentElement) return;
       observer = new MutationObserver(schedule);
@@ -319,6 +323,8 @@
     if (observer) { observer.disconnect(); observer = null; }
     if (lockObserver) { lockObserver.disconnect(); lockObserver = null; }
     document.removeEventListener('click', onAsk, true);
+    document.removeEventListener('keydown', onKey, true);
+    notFixed = new WeakSet();
     for (const el of document.querySelectorAll(`[${MARK}]`)) el.removeAttribute(MARK);
     for (const a of ['data-quell-unblur', 'data-quell-unclamp']) {
       for (const el of document.querySelectorAll(`[${a}]`)) el.removeAttribute(a);

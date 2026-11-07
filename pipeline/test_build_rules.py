@@ -100,5 +100,15 @@ ok("for target in chrome firefox opera; do" in pkg,
 ok("edge" not in pkg.split("for target in")[1].split("do")[0],
    "package.sh does NOT build an Edge zip (Edge dropped 2026-10-02)")
 
+print("Links ruleset (0.7.4):")
+gen = b.links_ruleset()
+shipped = json.loads((Path(__file__).resolve().parent.parent / "extension" / "rules" / "links-clean.json").read_text())
+ok(gen == shipped, "rules/links-clean.json is exactly what the pipeline generates (never hand-edited)")
+ok(not set(b.LINK_PROTECTED_PARAMS) & set(b.LINK_TRACKING_PARAMS), "no protected (affiliate / page-changing) parameter is in the tracking list")
+ok(not set(b.YOUTUBE_ONLY_PARAMS) & set(b.LINK_PROTECTED_PARAMS - {"si"} if isinstance(b.LINK_PROTECTED_PARAMS, set) else b.LINK_PROTECTED_PARAMS), "the YouTube-only parameter is not a protected one")
+ok(len(set(b.LINK_TRACKING_PARAMS)) == len(b.LINK_TRACKING_PARAMS), "the tracking list has no duplicates")
+ok(all(len(r["condition"]["regexFilter"]) < 1500 for r in gen), "each regexFilter is well under Chrome's 2 KB regex limit")
+ok(len(gen) < 50, f"{len(gen)} static redirect rules, far under the unsafe-rule limit")
+
 print(f"\n{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

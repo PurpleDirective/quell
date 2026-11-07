@@ -427,9 +427,87 @@ def build_popups():
     print(f"  wrote extension/rules/popups.json ({kb} KB)")
 
 
+# --------------------------------------------------------------------------
+# Links (0.7.4) — extension/rules/links-clean.json. No network: a fixed list.
+# --------------------------------------------------------------------------
+# Tracking query parameters, removed from a page address on navigation. Every
+# entry is pure tracking: it identifies a campaign click, a mailing or a
+# browser, and the page is the same page without it. AFFILIATE parameters are
+# NEVER here (tag, ascsubtag, aff_id, affiliate, ref, linkCode, ...): they pay
+# someone and are not Quell's to take away. Nor is anything that changes what
+# the page shows (q, page, id, v, t, ...). tests/smoke.mjs checks both.
+LINK_TRACKING_PARAMS = [
+    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_id",
+    "utm_name", "utm_brand", "utm_social", "utm_social-type", "utm_cid", "utm_reader",
+    "utm_viz_id", "utm_pubreferrer", "utm_swu",
+    "fbclid", "gclid", "gclsrc", "dclid", "gbraid", "wbraid", "msclkid", "yclid",
+    "twclid", "ttclid", "li_fat_id", "igshid", "igsh",
+    "mc_eid", "mc_cid", "_hsenc", "_hsmi", "mkt_tok", "vero_id", "vero_conv",
+    "oly_anon_id", "oly_enc_id", "rb_clickid", "s_cid", "ref_src", "_openstat",
+    "wickedid", "soc_src", "soc_trk", "sr_share", "epik", "pk_campaign", "pk_kwd",
+    "ml_subscriber", "ml_subscriber_hash", "trk", "trkEmail",
+]
+# YouTube's share-link identifier. `si` means something else on other sites,
+# so it is removed on these hosts only.
+YOUTUBE_ONLY_PARAMS = ["si"]
+YOUTUBE_HOSTS = ["youtube.com", "youtu.be"]
+# Parameters that must never be removed, by this list or any later edit
+# (checked by pipeline/test_build_rules.py and tests/smoke.mjs).
+LINK_PROTECTED_PARAMS = [
+    "tag", "ascsubtag", "linkCode", "linkId", "aff_id", "aff", "affiliate", "affiliate_id",
+    "ref", "ref_", "referrer", "partner", "partner_id", "camp", "creative", "creativeASIN",
+    "q", "query", "s", "p", "page", "id", "v", "t", "list", "u", "url", "k", "search",
+]
+LINK_REGEX_CHUNK = 14  # params per condition regex (RE2 compiles each under Chrome's 2 KB cap)
+
+
+def _param_regex(params):
+    return r"[?&](?:" + "|".join(re.escape(p) for p in params) + r")="
+
+
+def links_ruleset():
+    """The declarativeNetRequest rules of the Links switch: strip tracking
+    parameters from a page address (main frame only) and take Google's own
+    redirect step out of a result link."""
+    rules, rid = [], 0
+
+    def add(action, cond, priority=1):
+        nonlocal rid
+        rid += 1
+        rules.append({"id": rid, "priority": priority, "action": action, "condition": cond})
+
+    strip = {"type": "redirect", "redirect": {"transform": {"queryTransform": {"removeParams": LINK_TRACKING_PARAMS}}}}
+    # Every chunk's rule carries the FULL list, so one hop clears everything;
+    # the chunk only decides whether any listed parameter is in the address at
+    # all (a redirect to an unchanged address must never fire).
+    for i in range(0, len(LINK_TRACKING_PARAMS), LINK_REGEX_CHUNK):
+        chunk = LINK_TRACKING_PARAMS[i:i + LINK_REGEX_CHUNK]
+        add(strip, {"regexFilter": _param_regex(chunk), "isUrlFilterCaseSensitive": True,
+                    "resourceTypes": ["main_frame"]})
+    yt = {"type": "redirect", "redirect": {"transform": {"queryTransform": {"removeParams": YOUTUBE_ONLY_PARAMS}}}}
+    add(yt, {"regexFilter": _param_regex(YOUTUBE_ONLY_PARAMS), "isUrlFilterCaseSensitive": True,
+             "requestDomains": YOUTUBE_HOSTS, "resourceTypes": ["main_frame"]})
+    # google.com/url?q=<address>&sa=...: straight to the address. Only when the
+    # address carries no percent-escapes (a declarative rule cannot decode one);
+    # the page script unwraps those (src/content/links.js).
+    add({"type": "redirect", "redirect": {"regexSubstitution": "\\1"}},
+        {"regexFilter": r"^https?://www\.google\.[a-z.]+(?::[0-9]+)?/url\?(?:[^#]*&)?q=(https?://[^&#%]+)(?:&[^#]*)?$",
+         "isUrlFilterCaseSensitive": True, "resourceTypes": ["main_frame"]}, priority=2)
+    return rules
+
+
+def build_links():
+    rules = links_ruleset()
+    (RULES_DIR / "links-clean.json").write_text(json.dumps(rules, separators=(",", ":")) + "\n")
+    print(f"  wrote extension/rules/links-clean.json ({len(rules)} rules, "
+          f"{len(LINK_TRACKING_PARAMS)} tracking parameters)")
+
+
 if __name__ == "__main__":
     only = sys.argv[1] if len(sys.argv) > 1 else "all"
     if only in ("all", "cookies"):
         main()
     if only in ("all", "popups"):
         build_popups()
+    if only in ("all", "links"):
+        build_links()

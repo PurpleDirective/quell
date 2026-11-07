@@ -2897,7 +2897,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
     const asked = (await pg.evaluate(() => window.__calls)).filter((c) => c[0] === 'tabs.sendMessage');
     const where = asked.filter((c) => c[2].type === 'where');
     ok(where.length === 1 && where[0][1] === 7 && JSON.stringify(where[0][2]) === '{"type":"where"}'
-      && asked.every((c) => c[1] === 7 && ['where', 'quell:hidden:list'].includes(c[2].type) && Object.keys(c[2]).length === 1),
+      && asked.every((c) => c[1] === 7 && ['where', 'quell:hidden:list', 'quell:links:status'].includes(c[2].type) && Object.keys(c[2]).length === 1),
       'the popup asked that tab which site it is on, once, and otherwise only what it hid: questions, nothing else');
     await pg.close();
     // A tab address the browser does show is used as it is; the page is not asked.
@@ -3880,6 +3880,238 @@ console.log('Sign-up and log-in prompts:');
   const pinElse = await open('else.test', 'signup-pinterest.html', { popupsEnabled: true }, '/');
   ok(await shown(pinElse, '#pin-upsell'), 'per-site rules are scoped to their host (Pinterest card stays elsewhere)');
   await pinElse.close();
+}
+
+// --- 0.7.4: Links in a real browser (tracking redirects, page cleaner, affiliate notice) ------
+// A test copy of the extension holds <all_urls> and webNavigation as REQUIRED (the real build asks for
+// both as optional, which Playwright cannot accept); everything else is the shipped tree. A local server
+// stands in for the sites through host-resolver rules, so no live traffic is used.
+console.log('Links (real browser, local server):');
+{
+  const { createServer } = await import('node:http');
+  const { mkdtempSync, cpSync, writeFileSync } = await import('node:fs');
+  const os = await import('node:os');
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'quell-links-'));
+  const copy = path.join(tmp, 'ext');
+  cpSync(EXT, copy, { recursive: true });
+  const mf = JSON.parse(readFileSync(path.join(copy, 'manifest.json'), 'utf8'));
+  mf.host_permissions = ['<all_urls>'];
+  mf.permissions = [...mf.permissions, 'webNavigation'];
+  writeFileSync(path.join(copy, 'manifest.json'), JSON.stringify(mf));
+  const seen = [];
+  const server = createServer((req, res) => {
+    seen.push(req.headers.host + req.url);
+    const u = new URL(req.url, 'http://x');
+    if (u.pathname === '/redir') { res.writeHead(302, { Location: u.searchParams.get('to') }); res.end(); return; }
+    res.writeHead(200, { 'content-type': 'text/html' });
+    if (u.pathname === '/links') {
+      res.end(`<!doctype html><body>
+        <a id="l1" href="/p?utm_source=a&id=1&tag=aff-20">tracked</a>
+        <a id="l2" href="/p?q=eggs&page=2">plain</a>
+        <a id="l3" href="/p?fbclid=abc&aff_id=77&ref=partner">mixed</a>
+        <a id="l4" href="https://www.google.com/url?q=https%3A%2F%2Fexample.com%2Fa%3Fb%3D1&amp;sa=U">google redirect</a>
+        <a id="l5" href="mailto:a@b.c?utm_source=x">mail</a></body>`);
+    } else res.end(`<!doctype html><title>${u.pathname}</title><body><h1>${u.pathname}</h1><p id="q">${u.search}</p><a id="more" href="/dp/B2?tag=blog-20">more</a></body>`);
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+  const lc = await chromium.launchPersistentContext('', {
+    headless: true, channel: 'chromium',
+    args: [`--disable-extensions-except=${copy}`, `--load-extension=${copy}`, '--host-resolver-rules=MAP *.amazon.com 127.0.0.1, MAP www.google.com 127.0.0.1, MAP shop.test 127.0.0.1'],
+  });
+  const lsw = lc.serviceWorkers()[0] || await lc.waitForEvent('serviceworker', { timeout: 15000 });
+  const set = (p) => lsw.evaluate((x) => QuellSettings.set(x), p);
+
+  // Browser limits for the shipped ruleset.
+  const lim = await lsw.evaluate(async () => {
+    const rules = await (await fetch(chrome.runtime.getURL('rules/links-clean.json'))).json();
+    const regexOk = [];
+    for (const r of rules) regexOk.push((await chrome.declarativeNetRequest.isRegexSupported({ regex: r.condition.regexFilter, isCaseSensitive: true })).isSupported);
+    return { n: rules.length, regexOk, unsafe: chrome.declarativeNetRequest.MAX_NUMBER_OF_UNSAFE_STATIC_RULES, avail: await chrome.declarativeNetRequest.getAvailableStaticRuleCount() };
+  });
+  ok(lim.regexOk.every(Boolean), 'Chrome accepts every regexFilter of the links ruleset (isRegexSupported)');
+  // Chrome documents 5000 unsafe (redirect / header) static rules; newer builds expose the constant.
+  const unsafeMax = lim.unsafe || 5000;
+  ok(lim.n <= unsafeMax && lim.avail > 0, `rule count ${lim.n} is within the unsafe static rule limit (${unsafeMax}), ${lim.avail} static rules still available`);
+
+  // Switch Links on the way the background does, then navigate.
+  await lsw.evaluate(async () => { await chrome.storage.local.set({ linksEnabled: true }); });
+  await new Promise((r) => setTimeout(r, 1500));
+  const enabled = await lsw.evaluate(async () => (await chrome.declarativeNetRequest.getEnabledRulesets()).includes('links_clean'));
+  ok(enabled, 'Links on: the links_clean ruleset is enabled by the background');
+  const goto = async (p, url) => { await p.goto(url).catch(() => {}); await p.waitForTimeout(300); return p.url(); };
+  const pg = await lc.newPage();
+  let u = await goto(pg, `http://shop.test:${port}/p?utm_source=news&id=1&tag=aff-20&fbclid=zz&utm_medium=email`);
+  ok(new URL(u).search === '?id=1&tag=aff-20', `navigation: tracking removed, id and the affiliate tag kept (${new URL(u).search})`);
+  u = await goto(pg, `http://shop.test:${port}/p?q=eggs&page=2&aff_id=77&ref=partner&affiliate=me`);
+  ok(new URL(u).search === '?q=eggs&page=2&aff_id=77&ref=partner&affiliate=me', 'navigation: search, page and every affiliate parameter untouched');
+  u = await goto(pg, `http://shop.test:${port}/p?id=9`);
+  ok(seen.filter((x) => x.endsWith('/p?id=9')).length === 1, 'a clean address is requested once (no redirect loop, no extra hop)');
+  u = await goto(pg, `http://www.google.com:${port}/url?sa=t&q=http://shop.test:${port}/landing&ved=1`);
+  ok(new URL(u).pathname === '/landing' && new URL(u).hostname === 'shop.test', 'Google result redirect (plain address): straight to the site');
+  u = await goto(pg, `http://shop.test:${port}/p?v=abc&si=keep`);
+  ok(new URL(u).search === '?v=abc&si=keep', '`si` is kept on an ordinary site');
+
+  // The page cleaner, in the page.
+  await pg.goto(`http://shop.test:${port}/links`);
+  await pg.waitForTimeout(1500);
+  // A cleaned link is written as an absolute address; compare path and query for the relative ones.
+  const hrefs = await pg.evaluate(() => Object.fromEntries([...document.querySelectorAll('a')].map((a) => { const h = a.getAttribute('href'); return [a.id, /^https?:\/\/shop\.test/.test(h) ? new URL(h).pathname + new URL(h).search : h]; })));
+  ok(hrefs.l1 === '/p?id=1&tag=aff-20', `links: tracking removed from a link, affiliate tag kept (${hrefs.l1})`);
+  ok(hrefs.l2 === '/p?q=eggs&page=2', 'links: a link with nothing to clean is not touched');
+  ok(hrefs.l3 === '/p?aff_id=77&ref=partner', `links: fbclid removed, aff_id and ref kept (${hrefs.l3})`);
+  ok(hrefs.l4 === 'https://example.com/a?b=1', `links: an escaped Google redirect goes straight to the site (${hrefs.l4})`);
+  ok(hrefs.l5 === 'mailto:a@b.c?utm_source=x', 'links: mailto: untouched');
+  const status = await lsw.evaluate(async () => { const [t] = await chrome.tabs.query({ url: '*://shop.test/*' }); return chrome.tabs.sendMessage(t.id, { type: 'quell:links:status' }).catch((e) => String(e)); });
+  ok(status && status.cleaned === 3, `the popup's count: 3 links cleaned here (${JSON.stringify(status)})`);
+  // Off: rules and script stand down.
+  await set({ linksEnabled: false });
+  await new Promise((r) => setTimeout(r, 1200));
+  u = await goto(pg, `http://shop.test:${port}/p?utm_source=news&id=1`);
+  ok(new URL(u).search === '?utm_source=news&id=1', 'Links off: the address is left exactly as typed');
+  await set({ linksEnabled: true });
+
+  // Affiliate-swap warning: needs both switches; two signals; shown once.
+  await set({ linksWarnAffiliate: true });
+  await new Promise((r) => setTimeout(r, 800));
+  const ap = await lc.newPage();
+  await ap.goto(`http://www.amazon.com:${port}/dp/B000?tag=blog-20`);
+  await ap.waitForTimeout(400);
+  await ap.evaluate((to) => { location.href = to; }, `/redir?to=${encodeURIComponent(`http://www.amazon.com:${port}/dp/B000?tag=thief-20`)}`);
+  await ap.waitForURL(/thief-20/);
+  await ap.waitForTimeout(1500);
+  ok(await ap.evaluate(() => !!document.getElementById('quell-affiliate-notice')), 'affiliate swap (tag changed by a redirect): the notice is in the page');
+  await ap.screenshot({ path: path.join(tmp, 'affiliate-notice.png') });
+  ok(/dp\/B000\?tag=thief-20$/.test(ap.url()), 'the address is exactly as the site sent it (Quell changed nothing)');
+  await ap.evaluate(() => document.getElementById('quell-affiliate-notice')?.remove());
+  // A plain click to another product with a different tag: no notice.
+  const bp = await lc.newPage();
+  await bp.goto(`http://www.amazon.com:${port}/dp/B000?tag=blog-20`);
+  await bp.goto(`http://www.amazon.com:${port}/dp/B111?tag=other-20`);
+  await bp.waitForTimeout(1200);
+  ok(await bp.evaluate(() => !document.getElementById('quell-affiliate-notice')), 'two product pages with different tags reached normally: no notice');
+  await set({ linksWarnAffiliate: false });
+  const cp = await lc.newPage();
+  await cp.goto(`http://www.amazon.com:${port}/dp/B000?tag=blog-20`);
+  await cp.waitForTimeout(300);
+  await cp.evaluate((to) => { location.href = to; }, `/redir?to=${encodeURIComponent(`http://www.amazon.com:${port}/dp/B000?tag=thief-20`)}`);
+  await cp.waitForURL(/thief-20/);
+  await cp.waitForTimeout(1200);
+  ok(await cp.evaluate(() => !document.getElementById('quell-affiliate-notice')), 'warning switch off: no notice even for a swap');
+  console.log(`  (affiliate notice screenshot: ${path.join(tmp, 'affiliate-notice.png')})`);
+  await lc.close();
+  server.close();
+}
+
+// --- 0.7.4: popup rows for sign-up prompts and Links (switches, status lines, permissions) ----
+console.log('Popup: sign-up prompts switch and the Links group:');
+{
+  const html = readFileSync(path.join(EXT, 'src/popup/popup.html'), 'utf8');
+  const js = readFileSync(path.join(EXT, 'src/popup/popup.js'), 'utf8');
+  const css = readFileSync(path.join(EXT, 'src/popup/popup.css'), 'utf8');
+  const fake = ({ local = {}, granted = [], allowGrant = true, prompts = 0, cleaned = null }) => `
+    window.__calls = [];
+    const st = window.__st = { granted: new Set(${JSON.stringify(granted)}), perms: new Set(), local: { firstRunDone: true, ...${JSON.stringify(local)} } };
+    const covers = (o) => st.granted.has(o) || st.granted.has('<all_urls>');
+    window.chrome = {
+      runtime: { id: 'fake', getManifest: () => ({ version: '0.7.4', content_scripts: [] }), getURL: (p) => 'chrome-extension://fake/' + p },
+      storage: { local: { get: async (d) => ({ ...d, ...st.local }), set: async (o) => { Object.assign(st.local, o); window.__calls.push(['storage.set', o]); } },
+                 session: { get: async (d) => ({ ...d, 'tab:7': 0 }) } },
+      permissions: {
+        contains: async (q) => q.permissions ? q.permissions.every((x) => st.perms.has(x)) : (q.origins || []).length > 0 && q.origins.every(covers),
+        request: async (q) => { window.__calls.push(['permissions.request', q]); if (!${allowGrant}) return false; for (const o of q.origins || []) st.granted.add(o); for (const x of q.permissions || []) st.perms.add(x); return true; },
+        remove: async (q) => { window.__calls.push(['permissions.remove', q]); for (const o of q.origins || []) st.granted.delete(o); for (const x of q.permissions || []) st.perms.delete(x); return true; },
+      },
+      tabs: { query: async () => [{ id: 7, url: 'https://news.test/a' }], create: async () => ({}),
+        sendMessage: async (id, msg) => {
+          if (msg.type === 'where') return { host: 'news.test' };
+          if (msg.type === 'quell:hidden:list') return { items: Array.from({ length: ${prompts} }, (_, i) => ({ id: 'popup:Sign-up prompt', kind: 'popup', label: 'Sign-up prompt', detail: 'Hidden', rejected: false, kept: false, peeking: false })).slice(0, ${prompts}), active: ['popup'] };
+          if (msg.type === 'quell:links:status') { ${cleaned === null ? "throw new Error('none');" : `return { active: true, cleaned: ${cleaned} };`} }
+          throw new Error('none');
+        } },
+    };`;
+  const open = async (o) => {
+    const pg = await ctx.newPage();
+    await pg.route('http://popup74.test/**', (r) => {
+      const u = new URL(r.request().url());
+      const f = (n, t) => r.fulfill({ contentType: t, body: readFileSync(path.join(EXT, n), 'utf8') });
+      if (u.pathname.endsWith('popup.js')) return r.fulfill({ contentType: 'text/javascript', body: js });
+      if (u.pathname.endsWith('popup.css')) return r.fulfill({ contentType: 'text/css', body: css });
+      for (const n of ['settings', 'report-host', 'config', 'browser']) if (u.pathname.endsWith(`/shared/${n}.js`)) return f(`src/shared/${n}.js`, 'text/javascript');
+      return r.fulfill({ contentType: 'text/html', body: html });
+    });
+    await pg.addInitScript({ content: fake(o) });
+    await pg.goto('http://popup74.test/popup.html');
+    await pg.waitForTimeout(400);
+    return pg;
+  };
+  const txt = (pg, id) => pg.evaluate((i) => document.getElementById(i).textContent, id);
+  const calls = (pg) => pg.evaluate(() => window.__calls);
+
+  const d = await open({});
+  ok(await d.evaluate(() => document.getElementById('pSignup').checked === true), 'popup: "Sign-up and log-in prompts" is on by default');
+  ok(await d.evaluate(() => document.querySelector('label[for="pSignup"]').textContent.includes('Sign-up and log-in prompts') && !!document.getElementById('popupBody').contains(document.getElementById('pSignup'))), 'popup: the switch sits under Pop-ups');
+  ok(await d.evaluate(() => document.getElementById('links').checked === false && document.getElementById('linkWarn').checked === false), 'popup: Links and the affiliate warning start off until the all-sites grant exists (the background turns Links on)');
+  ok(/Remove tracking from links/.test(await txt(d, 'gLinks')) && /Warn me if a site swaps an affiliate code/.test(await d.evaluate(() => document.querySelector('label[for="linkWarn"]').textContent)), 'popup: the Links group and the affiliate switch carry the requested labels');
+  ok(await d.evaluate(() => document.getElementById('linkBody').hidden === true), 'popup: the Links options are collapsed by default (the default popup keeps its height)');
+  await d.close();
+
+  const st1 = await open({ local: { popupsEnabled: true, linksEnabled: true }, granted: ['<all_urls>'], prompts: 1, cleaned: 3 });
+  ok(await txt(st1, 'pSignupD') === 'Closed 1 sign-up prompt', `popup status: "${await txt(st1, 'pSignupD')}"`);
+  ok(await txt(st1, 'linksD') === 'Cleaned 3 links here', `popup status: "${await txt(st1, 'linksD')}"`);
+  await st1.close();
+  const st2 = await open({ local: { popupsEnabled: true, linksEnabled: true }, granted: ['<all_urls>'], prompts: 2, cleaned: 1 });
+  ok(await txt(st2, 'pSignupD') === 'Closed 2 sign-up prompts' && await txt(st2, 'linksD') === 'Cleaned 1 link here', 'popup status: plural and singular read right');
+  await st2.close();
+  const st3 = await open({ local: { popupsEnabled: true, linksEnabled: true }, granted: ['<all_urls>'], prompts: 0, cleaned: 0 });
+  ok(await txt(st3, 'pSignupD') === '' && /Nothing to clean here/.test(await txt(st3, 'linksD')), 'popup status: nothing closed, nothing to clean reads calmly');
+  await st3.close();
+
+  // Links on: asks for all-sites access first, stores after the grant.
+  const on = await open({ allowGrant: true });
+  await on.click('#links');
+  await on.waitForTimeout(300);
+  const c1 = await calls(on);
+  const req = c1.findIndex(([n, a]) => n === 'permissions.request' && JSON.stringify(a.origins) === '["<all_urls>"]');
+  const set = c1.findIndex(([n, o]) => n === 'storage.set' && o.linksEnabled === true);
+  ok(req >= 0 && set > req, 'popup: Links on asks for all-sites access, then stores the switch (after the grant)');
+  await on.close();
+  const refused = await open({ allowGrant: false });
+  await refused.click('#links');
+  await refused.waitForTimeout(300);
+  ok(await refused.evaluate(() => !document.getElementById('links').checked) && !(await calls(refused)).some(([n, o]) => n === 'storage.set' && 'linksEnabled' in o), 'popup: a refused grant leaves Links off and stores nothing');
+  await refused.close();
+  // Links off, nothing else using the grant: access goes back. With cookies on, it stays.
+  const off = await open({ local: { linksEnabled: true }, granted: ['<all_urls>'] });
+  await off.click('#links');
+  await off.waitForTimeout(300);
+  ok((await calls(off)).some(([n, a]) => n === 'permissions.remove' && JSON.stringify(a.origins) === '["<all_urls>"]'), 'popup: Links off as the last user of all-sites access gives the access back');
+  await off.close();
+  const keep = await open({ local: { linksEnabled: true, cookieEnabled: true }, granted: ['<all_urls>'] });
+  await keep.click('#links');
+  await keep.waitForTimeout(300);
+  ok(!(await calls(keep)).some(([n]) => n === 'permissions.remove'), 'popup: Links off while Cookie banners still use the access keeps it');
+  await keep.close();
+
+  // The affiliate warning asks for webNavigation, on the click, and gives it back.
+  const w = await open({ local: { linksEnabled: true }, granted: ['<all_urls>'], allowGrant: true });
+  await w.click('#linkExpand');
+  await w.click('#linkWarn');
+  await w.waitForTimeout(300);
+  const c2 = await calls(w);
+  const wreq = c2.findIndex(([n, a]) => n === 'permissions.request' && JSON.stringify(a.permissions) === '["webNavigation"]');
+  ok(wreq >= 0 && c2.findIndex(([n, o]) => n === 'storage.set' && o.linksWarnAffiliate === true) > wreq, 'popup: the affiliate warning asks for webNavigation, then stores the switch');
+  await w.click('#linkWarn');
+  await w.waitForTimeout(300);
+  const c3 = await calls(w);
+  ok(c3.some(([n, a]) => n === 'permissions.remove' && JSON.stringify(a.permissions) === '["webNavigation"]') && c3.some(([n, o]) => n === 'storage.set' && o.linksWarnAffiliate === false), 'popup: switching the warning off stores it off and gives webNavigation back');
+  await w.close();
+  const wr = await open({ local: { linksEnabled: true }, granted: ['<all_urls>'], allowGrant: false });
+  await wr.click('#linkExpand');
+  await wr.click('#linkWarn');
+  await wr.waitForTimeout(300);
+  ok(await wr.evaluate(() => !document.getElementById('linkWarn').checked) && !(await calls(wr)).some(([n, o]) => n === 'storage.set' && 'linksWarnAffiliate' in o), 'popup: a refused webNavigation leaves the warning off and stores nothing');
+  await wr.close();
 }
 
 await ctx.close();
