@@ -60,6 +60,9 @@
       block: '#llm-snippet, .snippet',
       organic: '#mixed-main',
       cleanParam: ['summary', '0'],
+      // Brave's "Ask" tab in the top nav is its AI chat mode: it goes with the
+      // AI answer. Found by what it is (a link to /ask that says "Ask").
+      askTab: 'a[href^="/ask"]',
       // Brave's web results live at /search. /images, /videos, /news and
       // especially /ask (its explicit AI page) are not ours to rewrite.
       cleanPath: (u) => u.pathname === '/search',
@@ -179,6 +182,22 @@
         if (!alreadyCounted(block)) { block.dataset.quellCounted = '1'; hidden++; }
       }
     }
+    if (cfg.askTab) {
+      for (const a of document.querySelectorAll(cfg.askTab)) {
+        if (isOrganic(a) || a.dataset.quellHidden === '1') continue;
+        if ((a.textContent || '').trim().toLowerCase() !== 'ask') continue;
+        const tabEl = a.closest('[role="tab"], li') || a;
+        tabEl.style.setProperty('display', 'none', 'important');
+        tabEl.dataset.quellHidden = '1';
+        tabEl.dataset.quellLabel = 'Ask tab';
+        if (!alreadyCounted(tabEl)) { tabEl.dataset.quellCounted = '1'; hidden++; }
+      }
+    }
+    // Wrappers a hidden block left empty go too (never one holding a result).
+    for (const el of document.querySelectorAll('[data-quell-hidden="1"]')) {
+      const w = window.Quell.emptyAncestor(el, { safe: cfg.organic || '' });
+      if (w) window.Quell.collapse(w, el.dataset.quellLabel || 'AI answer');
+    }
     window.Quell.report(hidden);
   }
 
@@ -210,7 +229,9 @@
     for (const el of document.querySelectorAll('[data-quell-hidden="1"]')) {
       el.style.removeProperty('display');
       delete el.dataset.quellHidden;
+      delete el.dataset.quellLabel;
     }
+    window.Quell.uncollapseAll();
   }
 
   // Clean mode adds the engine's own no-AI parameter. It may only ever ADD it.
@@ -269,8 +290,9 @@
   window.QuellSettings.hidden.register('search', () => {
     if (!active) return [];
     const els = new Set([...document.querySelectorAll(cfg.css.join(',')), ...document.querySelectorAll('[data-quell-hidden="1"]')]);
+    for (const el of document.querySelectorAll('[data-quell-collapsed="1"]')) els.add(el);
     return [...els].filter((el) => !isOrganic(el))
-      .map((el) => ({ el, label: 'AI answer', detail: engineName + ' · hidden' }));
+      .map((el) => ({ el, label: el.dataset.quellLabel || 'AI answer', detail: engineName + ' · hidden' }));
   }, () => active);
   window.Quell.onSettingsChange(['enabled', 'aiEnabled', 'aiAllowlist', cfg.key], (next) => applyState(next, true));
   // Cut off from the extension: stop hiding (see onGone in settings.js).

@@ -52,6 +52,13 @@
     hideChat: true,
     hideAppBanners: true,
     popupAllowlist: [],     // hostnames where the pop-ups layer is paused
+    // --- AI on websites (0.7.4) ---
+    aiWebOn: true,          // group master
+    aiWebButtons: true,     // cosmetic: "Ask AI" buttons and panels on known sites
+    aiWebChat: true,        // AI chat assistants (network + cosmetic, vendors whose product is the agent)
+    aiWebSupport: false,    // support chats that use AI (opt-in: can remove a site's support chat)
+    aiWebReplay: false,     // AI session recording (opt-in)
+    aiWebAllowlist: [],     // hostnames where this group is paused
   };
 
   const LOCAL_DEFAULTS = {
@@ -59,6 +66,9 @@
     cookieEnabled: false,   // grant-bound: <all_urls>
     popupsEnabled: false,   // grant-bound: <all_urls>; OFF by default
     totalBlocked: 0,
+    // The page-level part of "AI on websites" runs on every site, so it needs the
+    // all-sites grant like Cookie banners do; this is the user's ask for it.
+    aiWebAccess: false,
     // Anonymous usage counts: 'unset' (never answered: nothing is sent) | 'on' | 'off'.
     // Per device, like the Firefox data-collection permission it mirrors.
     analytics: 'unset',
@@ -79,7 +89,7 @@
   // value that can grow toward it; refuse to write past this budget rather
   // than let the browser reject the whole write.
   const LIST_BYTE_BUDGET = 7000;
-  const LIST_KEYS = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist'];
+  const LIST_KEYS = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist', 'aiWebAllowlist'];
 
   const DEFAULTS = { ...SYNC_DEFAULTS, ...LOCAL_DEFAULTS };
   const home = (k) => (k in LOCAL_DEFAULTS ? 'local' : 'sync');
@@ -241,8 +251,8 @@
   // themselves before the pause are never removed by it. Run by the background
   // (startup, each navigation) and by the popup when it opens.
   async function sweepPauses(now = Date.now()) {
-    const keys = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist'];
-    const cur = await get({ sitePauses: {}, aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [] });
+    const keys = ['aiAllowlist', 'cookieAllowlist', 'popupAllowlist', 'aiWebAllowlist'];
+    const cur = await get({ sitePauses: {}, aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [], aiWebAllowlist: [] });
     const pauses = cur.sitePauses && typeof cur.sitePauses === 'object' ? cur.sitePauses : {};
     const patch = {};
     const left = {};
@@ -307,6 +317,12 @@
     // to the page's default display rather than guessing a value.
     el.style.setProperty('display', 'revert', 'important');
     if (mode === 'peek') st.timer = setTimeout(() => restoreEl(el), PEEK_MS);
+    // A wrapper Quell collapsed (or another block Quell hid) around this one
+    // comes back with it, or the thing could not be seen (it may hold more than one hidden thing; it goes back to
+    // hidden when the last of them does).
+    for (let a = el.parentElement; a; a = a.parentElement) {
+      if (a.dataset && (a.dataset.quellCollapsed === '1' || a.dataset.quellHidden === '1') && !revealed.has(a)) revealEl(a, mode);
+    }
   }
   function restoreEl(el) {
     const st = revealed.get(el);
@@ -315,6 +331,10 @@
     if (st.prev) el.style.setProperty('display', st.prev, st.prio); else el.style.removeProperty('display');
     if (!st.hadKeep) el.removeAttribute(KEEP_ATTR);
     revealed.delete(el);
+    for (let a = el.parentElement; a; a = a.parentElement) {
+      if (a.dataset && (a.dataset.quellCollapsed === '1' || a.dataset.quellHidden === '1') && revealed.has(a)
+        && ![...a.querySelectorAll('*')].some((x) => revealed.has(x))) restoreEl(a);
+    }
   }
   const modeOf = (grp) => grp.els.some((e) => revealed.get(e)?.mode === 'keep') ? 'keep'
     : grp.els.some((e) => revealed.get(e)?.mode === 'peek') ? 'peek' : null;

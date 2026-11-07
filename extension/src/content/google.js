@@ -171,8 +171,59 @@
         }
       }
     }
+    hidden += hideAiModeChrome();
+    collapseEmptied();
     window.Quell.report(hidden);
   }
+
+  // The "AI Mode" tab in Google's top nav and the "Ask anything" AI Mode
+  // follow-up box that floats at the bottom belong to the AI Mode surface:
+  // they go when AI Mode is hidden. The tab is found by what it is (a link to
+  // udm=50 that says "AI Mode", outside the results) and its tab wrapper goes
+  // with it, so the remaining tabs close up with no blank slot. The box is
+  // found by its own label, and climbs to the highest wrapper that holds
+  // nothing but the box (never the results, never the search box).
+  const CHROME_SAFE = '#rso, #search, #tsf, #center_col, #botstuff';
+  function hideAiModeChrome() {
+    if (!surfaces.aiMode) return 0;
+    let n = 0;
+    const take = (el, label) => {
+      if (!el || el.dataset.quellHidden === '1') return;
+      el.style.setProperty('display', 'none', 'important');
+      el.dataset.quellHidden = '1';
+      el.dataset.quellSurface = 'aiMode';
+      el.dataset.quellLabel = label;
+      if (!alreadyCounted(el)) { el.dataset.quellCounted = '1'; n++; }
+    };
+    for (const a of document.querySelectorAll('a[href*="udm=50"]')) {
+      if (a.closest(CHROME_SAFE)) continue;
+      if ((a.textContent || '').trim().toLowerCase() !== 'ai mode') continue;
+      take(a.closest('[role="listitem"], [role="tab"], li') || a, 'AI Mode tab');
+    }
+    for (const ta of document.querySelectorAll('textarea[aria-label="Ask anything" i]')) {
+      if (ta.closest(CHROME_SAFE)) continue;
+      let box = ta;
+      while (box.parentElement && box.parentElement !== document.body && !box.parentElement.matches(CHROME_SAFE)
+        && !box.parentElement.querySelector(CHROME_SAFE + ', a h3, #hdtb, [role="navigation"]')) box = box.parentElement;
+      take(box, 'AI Mode follow-up box');
+    }
+    return n;
+  }
+
+  // Whatever a hidden block wrapped and left empty goes too.
+  function collapseEmptied() {
+    const sel = blockSelectors().join(',');
+    const hidden = new Set(document.querySelectorAll('[data-quell-hidden="1"]'));
+    if (sel) for (const el of document.querySelectorAll(sel)) hidden.add(el);
+    for (const el of hidden) {
+      const w = window.Quell.emptyAncestor(el, { stop: document.getElementById('rcnt') || document.getElementById('main'), safe: CHROME_SAFE });
+      if (w) window.Quell.collapse(w, el.dataset.quellLabel || labelOf(el));
+    }
+  }
+  const labelOf = (el) => {
+    const sf = el.dataset.quellSurface;
+    return sf === 'aiMode' ? 'AI Mode' : sf === 'paa' ? 'People also ask answer' : 'AI Overview';
+  };
 
   // Google SERPs mutate constantly — coalesce observer callbacks into one
   // sweep per frame instead of a full-document scan on every mutation.
@@ -194,8 +245,11 @@
         el.style.removeProperty('display');
         delete el.dataset.quellHidden;
         delete el.dataset.quellSurface;
+        delete el.dataset.quellLabel;
       }
     }
+    window.Quell.uncollapseAll();
+    collapseEmptied();
   }
 
   // CSS goes in immediately (document_start, before <body> exists) so the AI
@@ -232,7 +286,9 @@
       el.style.removeProperty('display');
       delete el.dataset.quellHidden;
       delete el.dataset.quellSurface;
+      delete el.dataset.quellLabel;
     }
+    window.Quell.uncollapseAll();
   }
 
   function applyCleanWeb() {
@@ -300,14 +356,10 @@
     if (!hideActive) return [];
     const out = [];
     const sel = blockSelectors().join(',');
-    const nameOf = (el) => {
-      const sf = el.dataset.quellSurface;
-      if (sf === 'aiMode') return 'AI Mode';
-      if (sf === 'paa') return 'People also ask answer';
-      return 'AI Overview';
-    };
+    const nameOf = (el) => el.dataset.quellLabel || labelOf(el);
     if (sel) for (const el of document.querySelectorAll(sel)) out.push({ el, label: nameOf(el), detail: 'Google · hidden' });
     for (const el of document.querySelectorAll('[data-quell-hidden="1"]')) out.push({ el, label: nameOf(el), detail: 'Google · hidden' });
+    for (const el of document.querySelectorAll('[data-quell-collapsed="1"]')) out.push({ el, label: el.dataset.quellLabel || 'AI Overview', detail: 'Google · hidden' });
     if (surfaces.gemini) for (const el of document.querySelectorAll(GEMINI_SEL.join(','))) out.push({ el, label: 'Gemini promo', detail: 'Google · hidden' });
     return out;
   };
