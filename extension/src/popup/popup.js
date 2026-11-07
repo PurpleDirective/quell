@@ -199,6 +199,10 @@ function pauseKeys(s) {
   if (s.popupsEnabled) k.push('popupAllowlist');
   return k;
 }
+// "Paused" means Pause here was used on this site (it left a record) and every
+// feature that is on still has the site in its allowlist. An allow the user
+// made themselves through "Choose per feature" is not a pause.
+const isPaused = (s) => !!(host && s.sitePauses && s.sitePauses[host]) && pausedHere(s);
 const pausedHere = (s) => {
   const k = host ? pauseKeys(s) : [];
   return k.length > 0 && k.every((key) => (s[key] || []).includes(host));
@@ -209,7 +213,7 @@ function firstRunOn(s) { return !s.firstRunDone; }
 
 function renderHero(s) {
   const app = $('app');
-  const paused = !!host && s.enabled && pausedHere(s);
+  const paused = !!host && s.enabled && isPaused(s);
   const first = firstRunOn(s);
   const n = Math.max(tab.items.length, tab.session);
   const total = Number(s.totalBlocked || 0);
@@ -217,9 +221,8 @@ function renderHero(s) {
   app.dataset.state = state;
   document.body.classList.toggle('is-off', !s.enabled && !first);
   $('enabled').checked = !!s.enabled;
-  $('enabled').disabled = paused;
   const h = $('pageStatus'), sub = $('subLine'), copy = $('heroCopy');
-  copy.hidden = true; $('resumeBtn').hidden = true; sub.hidden = false;
+  copy.hidden = true; sub.hidden = false;
   const since = `${total.toLocaleString()} hidden since you installed it`;
   if (first) {
     const both = !!(s.cookieEnabled && s.popupsEnabled);
@@ -230,8 +233,7 @@ function renderHero(s) {
   } else if (paused) {
     h.textContent = `Paused on ${host.replace(/^www\./, '')}`;
     const until = s.sitePauses?.[host]?.until;
-    sub.textContent = until > 0 ? `Until ${timeWord(until)}. Nothing is hidden here until then.` : 'Until you resume. Nothing is hidden here.';
-    $('resumeBtn').hidden = false;
+    sub.textContent = until > 0 ? `Until ${timeWord(until)}` : 'Until you resume';
   } else if (!s.enabled) {
     h.textContent = 'Quell is off.';
     sub.textContent = 'Nothing is hidden anywhere. Click the moon to turn it on.';
@@ -245,13 +247,13 @@ function renderHero(s) {
     h.textContent = n > 0 ? `Hid ${n} ${n === 1 ? 'thing' : 'things'} on this page.` : 'Nothing to hide on this page.';
     sub.textContent = `Quell is on · ${since}`;
   }
-  $('tryIt').hidden = !first;
   $('featCard').hidden = first;
+  $('mainCard').hidden = first;
 }
 
 function renderItems(s) {
   const card = $('itemsCard');
-  const show = !firstRunOn(s) && s.enabled && !!host && tab.items.length > 0 && !pausedHere(s);
+  const show = !firstRunOn(s) && s.enabled && !!host && tab.items.length > 0 && !isPaused(s);
   card.hidden = !show;
   if (!show) return;
   const list = $('itemList');
@@ -264,7 +266,7 @@ function renderItems(s) {
     li.dataset.id = it.id;
     li.innerHTML = '<div class="line"><span class="ii"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"></svg></span>'
       + '<span class="il"><b></b><small></small></span>'
-      + '<span class="acts"><button type="button" class="lk" data-peek>Peek</button><button type="button" class="lk" data-undo>Undo</button></span></div>'
+      + '<span class="acts"><button type="button" class="ghost" data-peek>Peek</button><button type="button" class="ghost" data-undo>Undo</button></span></div>'
       + '<p class="ex" hidden></p>';
     li.querySelector('svg').innerHTML = iconFor(it);
     li.querySelector('b').textContent = it.label;
@@ -329,7 +331,7 @@ function rowStatus(kind, s, paused) {
   return `Hid ${mine.length} here`;
 }
 function renderRows(s) {
-  const paused = !!host && s.enabled && pausedHere(s);
+  const paused = !!host && s.enabled && isPaused(s);
   $('gSearchD').textContent = rowStatus('search', s, paused && AI_HOST_RE.test(host) );
   $('cookiesD').textContent = rowStatus('cookie', s, paused);
   $('popupsD').textContent = rowStatus('popup', s, paused);
@@ -401,9 +403,10 @@ function renderSite(s) {
   card.hidden = false;
   $('siteHost').textContent = host;
   const keys = pauseKeys(s);
-  const paused = pausedHere(s);
+  const paused = isPaused(s);
   // Pause here: only where there is something to pause, and not while Quell is off.
   $('pauseRow').hidden = !(s.enabled && keys.length > 0 && !paused);
+  $('resumeRow').hidden = !paused;
   $('siteMore').hidden = keys.length === 0;
   $('siteAiRow').hidden = !(AI_HOST_RE.test(host) && s.aiEnabled);
   $('siteAi').checked = (s.aiAllowlist || []).includes(host);
@@ -416,6 +419,7 @@ function renderSite(s) {
   // src/shared/report-host.js) — an IP address, localhost or a .local name
   // would only earn the user a "failed" message.
   $('reportBtn').hidden = !reportable(host);
+  $('siteMenuBtn').hidden = $('reportBtn').hidden && $('siteMore').hidden;
 }
 
 function reportable(h) {
@@ -460,6 +464,7 @@ async function render() {
     globalThis.QuellFirstRun.mount($('firstRun'), {
       grantInTab: GRANT_IN_TAB, openTab: openPageView,
       onDone: () => render(),
+      onChange: () => { $('app').classList.toggle('sent-open', !$('frSent').hidden); },
     }).catch(() => { frMounted = false; });
   }
 }
@@ -654,7 +659,7 @@ $('grantBase').addEventListener('click', async () => {
 // what the pause itself added (settings.js sweepPauses).
 $('pauseBtn').addEventListener('click', async () => {
   if (!host) return;
-  const dur = document.querySelector('input[name="pdur"]:checked')?.value || 'hour';
+  const dur = $('pauseDur').value || 'hour';
   const now = new Date();
   const until = dur === 'hour' ? Date.now() + 3600e3
     : dur === 'today' ? new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime() : 0;
@@ -665,7 +670,7 @@ $('pauseBtn').addEventListener('click', async () => {
     if (!list.includes(host)) { patch[key] = [...list, host]; added.push(key); }
   }
   const pauses = { ...(current.sitePauses || {}) };
-  if (until > 0) pauses[host] = { until, added }; else delete pauses[host];
+  pauses[host] = { until, added }; // until 0 = until resumed; the record says what to take back
   patch.sitePauses = pauses;
   if (await save(patch)) T('pause');
   await render();
@@ -673,7 +678,10 @@ $('pauseBtn').addEventListener('click', async () => {
 $('resumeBtn').addEventListener('click', async () => {
   if (!host) return;
   const patch = {};
-  for (const key of AI_KEYS) if ((current[key] || []).includes(host)) patch[key] = current[key].filter((h) => h !== host);
+  // Only what the pause itself added: an allow the user made earlier stays.
+  for (const key of (current.sitePauses?.[host]?.added || [])) {
+    if (AI_KEYS.includes(key) && (current[key] || []).includes(host)) patch[key] = current[key].filter((h) => h !== host);
+  }
   const pauses = { ...(current.sitePauses || {}) };
   delete pauses[host];
   patch.sitePauses = pauses;
@@ -687,7 +695,16 @@ function toggler(btn, onFlip) {
 toggler($('searchExpand'), (o) => { expanded.search = o; render(); });
 toggler($('cookieExpand'), (o) => { expanded.cookie = o; render(); });
 toggler($('popupExpand'), (o) => { expanded.popup = o; render(); });
-toggler($('siteMore'), (o) => { $('siteMore').setAttribute('aria-expanded', String(o)); $('siteDetail').hidden = !o; });
+toggler($('siteMore'), (o) => { $('siteMore').setAttribute('aria-expanded', String(o)); $('siteDetail').hidden = !o; closeMenu(); });
+function closeMenu() { $('siteMenu').hidden = true; $('siteMenuBtn').setAttribute('aria-expanded', 'false'); }
+$('siteMenuBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = $('siteMenu').hidden;
+  $('siteMenu').hidden = !open;
+  $('siteMenuBtn').setAttribute('aria-expanded', String(open));
+});
+document.addEventListener('click', (e) => { if (!e.target.closest?.('.menuwrap')) closeMenu(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('siteMenu').hidden) { closeMenu(); $('siteMenuBtn').focus(); } });
 $('itemsMore').addEventListener('click', () => { itemsExpanded = !itemsExpanded; renderItems(current); });
 $('gearBtn').addEventListener('click', () => {
   const open = $('gearBtn').getAttribute('aria-expanded') !== 'true';
@@ -753,7 +770,7 @@ function reportError(status) {
   return 'Couldn’t send it just now. Please try again later.';
 }
 
-$('reportBtn').addEventListener('click', () => { if (reportable(host)) openReport(host); });
+$('reportBtn').addEventListener('click', () => { closeMenu(); if (reportable(host)) openReport(host); });
 $('reportCancel').addEventListener('click', () => $('reportDlg').close());
 $('reportSend').addEventListener('click', async () => {
   const h = $('reportDlg').dataset.host;
