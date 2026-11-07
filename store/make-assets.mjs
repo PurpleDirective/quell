@@ -25,9 +25,9 @@ const FIXTURE = readFileSync(path.join(HERE, '..', 'tests', 'fixtures', 'google-
 const FONT64 = readFileSync(path.join(EXT, 'fonts', 'atkinson-hyperlegible-next-var.woff2')).toString('base64');
 
 // ---------------------------------------------------------------- captures --
-// Extensions load only in the full browser: new headless first, headed as the fallback.
+// Extensions load in new headless (channel 'chromium'); no visible window is ever opened.
 async function launch() {
-  for (const opts of [{ channel: 'chromium', headless: true }, { headless: true }, { headless: false }]) {
+  for (const opts of [{ channel: 'chromium', headless: true }]) { // never a visible window
     const c = await chromium.launchPersistentContext('', {
       ...opts, deviceScaleFactor: 2, colorScheme: 'dark',
       args: [`--disable-extensions-except=${EXT}`, `--load-extension=${EXT}`],
