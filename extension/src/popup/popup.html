@@ -30,61 +30,67 @@
               <path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" fill="none" stroke="rgba(255,255,255,.55)" stroke-width=".7"/></g>
             <path class="rim" d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>
           </svg>
-          <span class="tick" aria-hidden="true">||</span>
+          <span class="tick" aria-hidden="true"><svg width="8" height="9" viewBox="0 0 8 9"><rect x="0" y="0" width="2.6" height="9" rx="1" fill="currentColor"/><rect x="5" y="0" width="2.6" height="9" rx="1" fill="currentColor"/></svg></span>
         </label>
         <h1 class="h" id="pageStatus" role="status" aria-live="polite">Quell</h1>
         <p class="sub" id="subLine"></p>
         <p class="copy" id="heroCopy" hidden></p>
-        <button type="button" class="btn pri" id="resumeBtn" hidden>Resume</button>
       </section>
 
       <!-- Firefox can install Quell without its Google/Bing access granted; say
            so plainly instead of silently doing nothing. Hidden where granted. -->
-      <div class="pnl notice" id="accessNotice" hidden>
+      <div class="card notice" id="accessNotice" hidden>
         <span>Quell needs your OK to work on Google and Bing.</span>
-        <button type="button" class="btn small" id="grantBase">Allow</button>
+        <button type="button" class="btn pri small" id="grantBase">Allow</button>
       </div>
 
       <!-- First run: shown once, here and on the welcome page. -->
-      <section class="pnl frc" id="firstRun" hidden aria-labelledby="frT">
+      <section class="card frc" id="firstRun" hidden aria-labelledby="frT">
         <p class="fr-def" id="frT"><strong>Cookie banners</strong> hides “we use cookies” notices and can say “reject all” for you. <strong>Pop-ups</strong> hides newsletter boxes, chat bubbles and “open in app” banners.</p>
-        <div class="two" data-fr-ask>
-          <button type="button" class="btn pri" data-fr="turn">Turn both on</button>
-          <button type="button" class="btn" data-fr="skip">Skip</button>
-        </div>
-        <div class="two" data-fr-done hidden>
-          <button type="button" class="btn pri" data-fr="done">Done</button>
-        </div>
-        <p class="fine" data-fr="note" role="status" aria-live="polite">Your browser will ask to let Quell run on all sites, once. Quell never records the pages you visit.</p>
-        <hr class="hr" />
         <div class="ana">
           <label class="ck"><input type="checkbox" data-fr="analytics" /><span>Share anonymous usage counts to help improve Quell</span></label>
-          <button type="button" class="lk inl" data-fr="sentBtn" aria-expanded="false" aria-controls="frSent">What’s sent</button>
+          <button type="button" class="tbtn" data-fr="sentBtn" aria-expanded="false" aria-controls="frSent">What’s sent</button>
           <p class="sentp" id="frSent" hidden>A random install ID, Quell version and browser, which switches are on, how many items each feature hid, popup opens and button clicks, and error messages. Never the pages you visit, your searches or your browsing history.</p>
         </div>
+        <div class="two" data-fr-ask>
+          <button type="button" class="btn pri" data-fr="turn">Turn both on</button>
+          <button type="button" class="btn ghostb" data-fr="skip">Not now</button>
+        </div>
+        <div class="two" data-fr-done hidden>
+          <button type="button" class="btn pri" data-fr="done">Save</button>
+        </div>
+        <p class="fine" data-fr="note" role="status" aria-live="polite">Either button saves your choice above. Turning both on asks your browser once for access to all sites; Quell never records the pages you visit.</p>
       </section>
 
+      <div class="card" id="mainCard">
       <!-- What Quell hid on the page the user is looking at. -->
-      <section class="pnl items" id="itemsCard" hidden aria-label="Hidden on this page">
+      <section class="items" id="itemsCard" hidden aria-label="Hidden on this page">
         <ul id="itemList"></ul>
-        <button type="button" class="lk inl more" id="itemsMore" hidden aria-expanded="false"></button>
+        <button type="button" class="tbtn more" id="itemsMore" hidden aria-expanded="false"></button>
       </section>
 
       <!-- This site: pause for a while, and every per-site control. -->
-      <section class="pnl site" id="siteCard" hidden aria-labelledby="siteHost">
+      <section class="site" id="siteCard" hidden aria-labelledby="siteHost">
         <div class="srow">
           <span class="host" id="siteHost"></span>
-          <button type="button" class="lw" id="reportBtn">This site looks broken</button>
+          <span class="menuwrap">
+            <button type="button" class="ghost ic-btn" id="siteMenuBtn" aria-label="More for this site" aria-haspopup="true" aria-expanded="false" aria-controls="siteMenu">
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="8" r="1.3" fill="currentColor"/><circle cx="8" cy="8" r="1.3" fill="currentColor"/><circle cx="13" cy="8" r="1.3" fill="currentColor"/></svg>
+            </button>
+            <div class="menu" id="siteMenu" hidden>
+              <button type="button" class="mi" id="siteMore" aria-expanded="false" aria-controls="siteDetail">Choose per feature</button>
+              <button type="button" class="mi" id="reportBtn">This site looks broken</button>
+            </div>
+          </span>
         </div>
         <div class="pause" id="pauseRow">
-          <div class="seg" role="radiogroup" aria-label="Pause for">
-            <label class="seg-o"><input type="radio" name="pdur" value="hour" checked /><span>1 hour</span></label>
-            <label class="seg-o"><input type="radio" name="pdur" value="today" /><span>Today</span></label>
-            <label class="seg-o"><input type="radio" name="pdur" value="always" /><span>Always</span></label>
-          </div>
           <button type="button" class="btn" id="pauseBtn">Pause here</button>
+          <label class="for" for="pauseDur">for</label>
+          <select class="mode" id="pauseDur"><option value="hour">1 hour</option><option value="today">Today</option><option value="always">Always</option></select>
         </div>
-        <button type="button" class="lk inl" id="siteMore" aria-expanded="false" aria-controls="siteDetail" hidden>Choose per feature</button>
+        <div class="pause" id="resumeRow" hidden>
+          <button type="button" class="btn pri block" id="resumeBtn">Resume on this site</button>
+        </div>
         <div class="opts" id="siteDetail" hidden>
           <div class="orow" id="siteAiRow" hidden>
             <label class="olabel" for="siteAi">Keep AI on this site</label>
@@ -102,7 +108,7 @@
       </section>
 
       <!-- The three features. -->
-      <section class="pnl feat" id="featCard" aria-label="What Quell does">
+      <section class="feat" id="featCard" aria-label="What Quell does">
         <!-- SEARCH -->
         <div class="frow">
           <label class="rs" for="aiEnabled">
@@ -208,19 +214,20 @@
         </div>
       </section>
 
+      </div>
+
       <p class="error" id="saveError" role="alert" hidden></p>
       <p class="info" id="infoLine" role="status" aria-live="polite" hidden></p>
-      <p class="tryit" id="tryIt" hidden>Then try a search on Google.</p>
     </main>
 
     <!-- Quiet settings: opened from the gear. -->
     <section class="settings" id="settings" hidden aria-label="Settings">
-      <div class="pnl feat">
+      <div class="card settingscard">
         <div class="orow first">
           <label class="olabel" for="analyticsSwitch">Anonymous usage counts<small id="analyticsD">Counts only, to help improve Quell. Never the pages you visit.</small></label>
           <label class="sw"><input type="checkbox" role="switch" id="analyticsSwitch" aria-describedby="analyticsD" /><span class="knob"></span></label>
         </div>
-        <button type="button" class="lk inl" id="sentBtn2" aria-expanded="false" aria-controls="sent2">What’s sent</button>
+        <button type="button" class="tbtn" id="sentBtn2" aria-expanded="false" aria-controls="sent2">What’s sent</button>
         <p class="sentp wide" id="sent2" hidden>A random install ID, Quell version and browser, which switches are on, how many items each feature hid, popup opens and button clicks, and error messages. Never the pages you visit, your searches or your browsing history.</p>
       </div>
       <nav class="links" aria-label="More">
@@ -245,7 +252,7 @@
     <h2 id="confirmT"></h2>
     <p id="confirmB"></p>
     <div class="dlg-actions">
-      <button type="button" class="btn" id="confirmNo">Keep hidden</button>
+      <button type="button" class="btn ghostb" id="confirmNo">Keep hidden</button>
       <button type="button" class="btn pri" id="confirmYes">Show it</button>
     </div>
   </dialog>
@@ -259,7 +266,7 @@
     <p class="fine">Need it fixed right now? Use Pause here, or the switches under <em>Choose per feature</em>.</p>
     <p class="report-status" id="reportStatus" role="status" aria-live="polite"></p>
     <div class="dlg-actions">
-      <button type="button" class="btn" id="reportCancel">Cancel</button>
+      <button type="button" class="btn ghostb" id="reportCancel">Cancel</button>
       <button type="button" class="btn pri" id="reportSend">Send report</button>
     </div>
   </dialog>

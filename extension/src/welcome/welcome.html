@@ -28,46 +28,45 @@
       <p class="lead">It hides the AI answers you didn’t ask for and leaves everything else alone.</p>
     </header>
 
-    <div class="pnl notice" id="accessNotice" hidden>
+    <div class="card notice" id="accessNotice" hidden>
       <span>Your browser hasn’t let Quell work on Google and Bing yet.</span>
       <button type="button" class="btn" id="grantBase">Allow on Google and Bing</button>
     </div>
 
-    <ul class="fcs" aria-label="What Quell does">
-      <li class="pnl fc">
+    <ul class="card fcs" aria-label="What Quell does">
+      <li class="fc">
         <h2>Search <span class="chip on">On</span></h2>
         <p>Hides the AI Overview above Google results, AI Mode, Gemini and Bing Copilot. Answers you open yourself in “People also ask” stay. DuckDuckGo, Brave and Yahoo are one switch away.</p>
       </li>
-      <li class="pnl fc">
+      <li class="fc">
         <h2>Cookie banners <span class="chip" id="chipCookies">Off</span></h2>
         <p>Hides “we use cookies” notices, and says “reject all” for you where the site uses a consent tool Quell knows.</p>
       </li>
-      <li class="pnl fc">
+      <li class="fc">
         <h2>Pop-ups <span class="chip" id="chipPopups">Off</span></h2>
         <p>Newsletter sign-up boxes, chat bubbles and “open in app” banners.</p>
       </li>
     </ul>
 
     <div class="duo">
-      <section class="pnl card" id="firstRun" aria-labelledby="frH">
+      <section class="card pad" id="firstRun" aria-labelledby="frH">
         <h2 id="frH">Turn on cookie banners and pop-ups?</h2>
         <p id="frP">They need access to all sites. Your browser asks once. Quell never records the pages you visit, and gives the access back if you turn both off.</p>
-        <div class="btns" data-fr-ask>
-          <button type="button" class="btn pri" data-fr="turn">Turn both on</button>
-          <button type="button" class="btn" data-fr="skip">Skip for now</button>
-        </div>
-        <div class="btns" data-fr-done hidden>
-          <button type="button" class="btn pri" data-fr="done">Done</button>
-        </div>
-        <p class="fine" data-fr="note" role="status" aria-live="polite"></p>
-        <hr class="hr" />
         <div class="ana">
           <label class="ck"><input type="checkbox" data-fr="analytics" /><span>Share anonymous usage counts to help improve Quell</span></label>
           <button type="button" class="lk" data-fr="sentBtn" aria-expanded="false" aria-controls="frSent">What’s sent</button>
           <p class="sentp" id="frSent" hidden>A random install ID, Quell version and browser, which switches are on, how many items each feature hid, popup opens and button clicks, and error messages. Never the pages you visit, your searches or your browsing history.</p>
         </div>
+        <div class="btns" data-fr-ask>
+          <button type="button" class="btn pri" data-fr="turn">Turn both on</button>
+          <button type="button" class="btn" data-fr="skip">Not now</button>
+        </div>
+        <div class="btns" data-fr-done hidden>
+          <button type="button" class="btn pri" data-fr="done">Save</button>
+        </div>
+        <p class="fine" data-fr="note" role="status" aria-live="polite">Either button saves your choice above.</p>
       </section>
-      <section class="pnl card" aria-labelledby="pinH">
+      <section class="card pad" aria-labelledby="pinH">
         <h2 id="pinH">Pin Quell to your toolbar</h2>
         <div class="tb" aria-hidden="true"><span class="url">example.com</span>
           <span class="cr"><svg width="22" height="22" viewBox="26 20 80 88"><path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" fill="currentColor"/></svg></span></div>

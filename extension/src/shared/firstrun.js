@@ -91,10 +91,19 @@
       onChange();
     });
 
+    // Ticking or unticking is only a choice on screen until a button is pressed:
+    // nothing is stored (and nothing can start) on the checkbox alone. The one
+    // exception is Firefox, where the tick itself is the browser's own
+    // data-collection prompt; even then 'analytics' is written by the button.
     box.addEventListener('change', async () => {
       const want = box.checked;
-      if (grantInTab && await dataApi()) { box.checked = !want; openTab({ grant: 'analytics' }); return; }
-      box.checked = await setAnalytics(want);
+      if (await dataApi()) {
+        if (grantInTab) { box.checked = !want; openTab({ grant: 'analytics' }); return; }
+        box.checked = want
+          ? !!(await chrome.permissions.request({ data_collection: DATA }).catch(() => false))
+          : (await chrome.permissions.remove({ data_collection: DATA }).catch(() => false), false);
+      }
+      onChange();
     });
 
     // The analytics answer that goes with a button press.
@@ -120,7 +129,7 @@
       await finish({ cookieEnabled: true, popupsEnabled: true });
     });
     q('skip').addEventListener('click', async () => { track('firstrun_skip'); await finish({}); });
-    q('done').addEventListener('click', async () => { track('firstrun_skip'); await finish({}); });
+    q('done').addEventListener('click', async () => { track('firstrun_done'); await finish({}); });
     return { both };
   }
 
