@@ -516,10 +516,12 @@
     const layer = (el, cs) => {
       if (el.matches(CMP)) return true;
       if (cs.position !== 'fixed' && cs.position !== 'sticky') return false;
-      if (el.matches(NAMED)) return true;
+      // Landmarks first: a consent-named shell that holds the page is the page.
       if (el.matches(LANDMARK) || el.querySelector(LANDMARK)) return false;
+      if (el.matches(NAMED)) return true;
+      // 90%, not 98%: an app pane under a fixed top bar still fills the window.
       const r = el.getBoundingClientRect();
-      return !(r.width >= innerWidth * 0.98 && r.height >= innerHeight * 0.98);
+      return !(r.width >= innerWidth * 0.9 && r.height >= innerHeight * 0.9);
     };
     const flowText = () => {
       let n = 0, seen = 0;

@@ -818,6 +818,10 @@ console.log('Review fixes: safety net, user gestures, columns, login pages, What
       ['A4 fixed .app shell', `<div class="app" style="position:fixed;inset:0"><div id="t"><p>${LONGX}</p></div></div>`, '#t'],
       ['A5 cookie-policy page', `<div id="cookie-policy"><section id="t"><h1>Cookie policy</h1><p>${LONGX}</p></section></div>`, '#t'],
       ['A6 consent-settings page', `<div class="consent-settings-page"><section id="t"><p>${LONGX}</p></section></div>`, '#t'],
+      ['N1 fixed full-window #cookie-wrapper holding <main>', `<div id="cookie-wrapper" style="position:fixed;inset:0;overflow:auto"><main><div id="t"><h1>Title</h1><p>${LONGX}</p></div></main></div>`, '#t'],
+      ['N1b fixed full-window .consent-shell holding <main>', `<div class="consent-shell" style="position:fixed;inset:0;overflow:auto"><main id="t"><h1>Title</h1><p>${LONGX}</p></main></div>`, '#t'],
+      ['N2 fixed app pane at 97% of the window', `<div class="shell" style="position:fixed;left:0;top:0;width:97vw;height:97vh"><div id="t" class="editor"><p>${LONGX}</p></div></div>`, '#t'],
+      ['N2c fixed app pane under a 60px top bar', `<div style="height:60px">bar</div><div class="shell" style="position:fixed;top:60px;left:0;right:0;bottom:0"><div id="t" class="editor"><p>${LONGX}</p></div></div>`, '#t'],
     ];
     for (const [name, body, sel] of CASES) {
       const html = `<!doctype html><html><body>${body}</body></html>`;
