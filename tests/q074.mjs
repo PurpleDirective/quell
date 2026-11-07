@@ -755,6 +755,28 @@ console.log('Review fixes: safety net, user gestures, columns, login pages, What
     await pg.close();
   }
 
+  // 1d. A stylesheet that hides only an overlay never trips the net, however much of a sparse page's text it holds.
+  {
+    const wordy = 'We and our partners store and access information on your device to personalise content and measure performance. '.repeat(16);
+    const sparse = (banner) => `<!doctype html><html><body><main><h1>Home</h1><p>Short page with little text of its own, a few lines only.</p></main>${banner}</body></html>`;
+    const rule = (sel) => `if(m.type==='aiWebRules') return {rules:[{sel:[${JSON.stringify(sel)}],what:'x'}]};`;
+    const COOKIES = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/cookies.js'), 'utf8');
+    for (const [name, banner, host] of [
+      ['OneTrust', `<div id="onetrust-consent-sdk"><div id="onetrust-banner-sdk" style="position:fixed;bottom:0;left:0;right:0;background:#fff"><p>${wordy}</p><button>Accept</button></div></div>`, 'ot.test'],
+      ['Didomi-style fixed banner', `<div id="didomi-host"><div class="didomi-popup-container" style="position:fixed;bottom:0;left:0;right:0;background:#fff"><p>${wordy}</p></div></div>`, 'dd.test'],
+      ['Sourcepoint-style', `<div id="sp_message_container_1"><div role="dialog" style="position:fixed;left:10%;top:10%;width:80%;background:#fff"><p>${wordy}</p></div></div>`, 'sp.test'],
+    ]) {
+      const pg = await openAt(host, '/', sparse(banner), COOKIES, { enabled: true, cookieEnabled: true }, 2600);
+      ok(await pg.evaluate(() => !document.documentElement.hasAttribute('data-quell-safety')), `${name} banner on a sparse page: the net does not trip`);
+      ok(await pg.evaluate(() => [...document.querySelectorAll('#onetrust-banner-sdk, .didomi-popup-container, [role=dialog]')].every((e) => e.getClientRects().length === 0)), `${name}: the banner is hidden`);
+      await pg.close();
+    }
+    const flow = `<!doctype html><html><body><main><p class="c">${'Placeholder article sentence with several words in it. '.repeat(50)}</p></main></body></html>`;
+    const pg = await openAt('flow.test', '/', flow, AIW, { enabled: true, aiWebOn: true, aiWebAccess: true }, 2200, rule('p.c'));
+    ok(await pg.evaluate(() => document.documentElement.getAttribute('data-quell-safety') === '1' && document.body.innerText.length > 2600), 'a rule that blanks in-flow content still trips and the text comes back');
+    await pg.close();
+  }
+
   // 2. A login dialog that appears some seconds after the user's own click is theirs; one with no click behind it is hidden.
   {
     const mk = (delay) => `<!doctype html><html><body><main><h1>Story</h1><p>${LONGP}</p><button id="follow">Follow</button></main>
@@ -928,6 +950,8 @@ console.log('Review fixes: safety net, user gestures, columns, login pages, What
     await p.waitForTimeout(200);
     f = await fits(p);
     ok(f.over <= 0 && f.body <= 560, `and with What\u2019s sent open (overflow ${f.over})`);
+    ok(await p.evaluate(() => { const e = document.getElementById('wnSum'); return e.getClientRects().length > 0 && e.textContent === 'Turns on: cookie banners, pop-ups, AI on websites, link cleaning.'; }), 'with What\u2019s sent open, a one-line summary of what Turn these on does stays visible');
+    await p.screenshot({ path: '/tmp/quell-review/whats-new-card-sent-open.png' }).catch(() => {});
     await p.close();
 
     // Not now: nothing turns on, the card does not come back.

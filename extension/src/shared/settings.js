@@ -497,6 +497,29 @@
     const state = { tripped: false, before: 0, after: 0 };
     const textLen = () => ((document.body && document.body.innerText) || '').length;
     const ROOTS = 'html, body, main, [role="main"], #root, #app, #__next, #__nuxt, #app-root';
+    // Text of the page itself, for judging a stylesheet: what a visible
+    // overlay holds (a fixed or sticky layer, a dialog, a consent tool) is not
+    // counted, so a sheet that hides only a banner can never look like a
+    // blanked page, however much of a sparse page's text the banner holds.
+    const OVERLAY = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], dialog, #onetrust-consent-sdk, #onetrust-banner-sdk, '
+      + '#CybotCookiebotDialog, #didomi-host, .didomi-popup-container, [id^="sp_message_container"], #usercentrics-root, #cmpwrapper, '
+      + '#qc-cmp2-container, .cc-window, [id*="cookie" i], [id*="consent" i], [class*="cookie-banner" i], [class*="consent" i]';
+    const flowText = () => {
+      let n = 0, seen = 0;
+      const walk = (el) => {
+        for (let c = el.firstChild; c; c = c.nextSibling) {
+          if (c.nodeType === 3) { n += c.nodeValue.replace(/\s+/g, ' ').trim().length; continue; }
+          if (c.nodeType !== 1 || ++seen > 8000) continue;
+          if (/^(SCRIPT|STYLE|NOSCRIPT|TEMPLATE)$/.test(c.tagName)) continue;
+          const cs = getComputedStyle(c);
+          if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+          if (cs.position === 'fixed' || cs.position === 'sticky' || c.matches(OVERLAY)) continue;
+          walk(c);
+        }
+      };
+      walk(document.body);
+      return n;
+    };
     const trip = (was, now) => {
       state.tripped = true; state.before = was; state.after = now;
       trips++; tripUrl = location.href; trippedAt = Date.now();
@@ -543,9 +566,9 @@
         const sheets = ids.map((i) => document.getElementById(i)).filter((e) => e && e.sheet);
         if (!sheets.length) return false;
         for (const s of sheets) s.sheet.disabled = true;
-        const before = textLen();
+        const before = flowText();
         for (const s of sheets) s.sheet.disabled = false;
-        const after = textLen();
+        const after = flowText();
         if (before < 800 || after >= before * 0.5) return false;
         return trip(before, after);
       },

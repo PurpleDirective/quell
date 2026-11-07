@@ -247,5 +247,8 @@ dialog .fine { font-size: 12px; margin: 0 0 8px; }
 .wn-list { margin: 0 0 16px; padding: 0 0 0 16px; font-size: 12px; color: var(--muted); display: grid; gap: 4px; }
 .wn-x { position: absolute; top: 8px; right: 8px; }
 .sent-open .wn-list { display: none; }
+.wn-sum { display: none; margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+.sent-open .wn-sum { display: block; margin-bottom: 8px; }
+.sent-open .wn-t { margin-bottom: 8px; }
 .frc .two { margin-top: 16px; }
 .frc .ana + .two { margin-top: 16px; }

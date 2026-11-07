@@ -243,11 +243,15 @@ function whatsNewPlan(s) {
   else if (s.popupsEnabled && s.hideSignupPrompts !== false) lines.push('Sign-up and log-in prompts can be hidden.');
   if (ai) lines.push('AI buttons and chat assistants on other websites.');
   if (links) lines.push('Tracking removed from links.');
+  const names = [];
+  if (cp) names.push('cookie banners', 'pop-ups');
+  if (ai) names.push('AI on websites');
+  if (links) names.push('link cleaning');
   const patch = {};
   if (cp) { patch.cookieEnabled = true; patch.popupsEnabled = true; }
   if (ai) { patch.aiWebOn = true; patch.aiWebAccess = true; }
   if (links) patch.linksEnabled = true;
-  return { lines, patch };
+  return { lines, patch, sum: names.length ? 'Turns on: ' + names.join(', ') + '.' : '' };
 }
 function whatsNewOn(s) { return !!s.firstRunDone && verLess(s.whatsNewSeen, WHATS_NEW); }
 
@@ -559,6 +563,7 @@ async function render() {
   if (wnShow) {
     const ul = $('wnList');
     ul.textContent = '';
+    $('wnSum').textContent = wnPlan.sum;
     for (const line of wnPlan.lines) { const li = document.createElement('li'); li.textContent = line; ul.appendChild(li); }
   }
   if (wnShow && !wnMounted && globalThis.QuellFirstRun) {
