@@ -50,7 +50,13 @@
 
   const MARK = 'data-quell-prompt';       // set on a prompt (or its dim layer) Quell hid
   const KEEP = 'data-quell-prompt-keep';  // set on a layer that is the user's own
-  const NAV_SEL = 'header, nav, [role="banner"], [role="navigation"]';
+  // Navigation is never a prompt: the site's header, footer, menus and drawers.
+  const NAV_SEL = 'header, footer, nav, [role="banner"], [role="navigation"], [role="contentinfo"], [role="menu"], [role="menubar"]';
+  const NAV_INNER = 'nav, [role="navigation"], [role="menu"], [role="menubar"]';
+  // A real prompt is one call to action; a panel with more than this many links
+  // is navigation with a Sign in item among many.
+  const MANY_LINKS = 8;
+  const USER_WINDOW_MS = 2500; // the scan is throttled to 1.2 s, so a drawer opened by a click is seen up to that late
   const DIALOG_SEL = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], dialog[open]';
   const CONTENT_SEL = 'main, article, [role="main"]';
   const PROMPT_RE = /\b(sign[\s-]?up|sign[\s-]?in|log[\s-]?in|log into|create (?:a |an |your )?(?:free )?account|continue with (?:google|apple|facebook|email|phone)|join (?:now|free|for free|today)|register (?:now|for free)|already have an account)\b/i;
@@ -66,6 +72,8 @@
   let observer = null, lockObserver = null;
   let scheduled = false, lastScan = 0;
   let lastAsk = 0;
+  let lastUser = 0;                       // last trusted pointer / key / touch event
+  const firstSeen = new WeakMap();        // layer -> when it first showed
   let hiddenCount = 0;
   let unlockStyle = null;
   const kept = new WeakSet();
@@ -98,6 +106,7 @@
     if (ASKED_RE.test(label.slice(0, 300))) lastAsk = Date.now();
   };
   const onKey = (e) => { if (e.key === 'Enter') onAsk(e); };
+  const onUser = (e) => { if (e.isTrusted) lastUser = Date.now(); };
   const askedRecently = () => Date.now() - lastAsk < ASK_WINDOW_MS;
 
   // The address says the user is on a login or account page.
@@ -132,6 +141,29 @@
     while (r.parentElement && r.parentElement !== document.body && r.parentElement !== document.documentElement
       && getComputedStyle(r.parentElement).position === 'fixed') r = r.parentElement;
     return r;
+  };
+
+  // Is this layer navigation? Itself or inside a nav / menu / header / footer,
+  // or it holds a nav or menu, or it is a panel of many links (a slide-out menu
+  // with Sign in as one item). A menu is never a prompt, whatever its words.
+  const isNavLike = (layer) => {
+    if (layer.closest(NAV_SEL) || layer.querySelector(NAV_INNER)) return true;
+    let links = 0;
+    for (const a of layer.querySelectorAll('a[href]')) { if (++links > MANY_LINKS) return true; }
+    return false;
+  };
+  // Opened by the user: a button that controls it says it is expanded, or it
+  // first showed within a moment of the user's own click, tap or key press. A
+  // prompt appears by itself; a drawer opens because someone asked.
+  const openedByUser = (layer, seenAt) => {
+    const ids = [layer.id, ...[...layer.querySelectorAll('[id]')].slice(0, 20).map((e) => e.id)].filter(Boolean);
+    for (const id of ids) {
+      let ctl = null;
+      try { ctl = document.querySelector('[aria-controls~="' + CSS.escape(id) + '"][aria-expanded="true"]'); } catch (_) { /* odd id */ }
+      if (ctl) return true;
+    }
+    if (layer.closest('[aria-expanded="true"]') || layer.querySelector('[aria-expanded="true"][aria-controls]')) return true;
+    return lastUser > 0 && seenAt - lastUser >= 0 && seenAt - lastUser < USER_WINDOW_MS;
   };
 
   // A dialog is a prompt candidate at any size above a card; an untagged fixed
@@ -269,6 +301,11 @@
       let rect = shown(layer);
       if (!rect) { for (const d of layer.querySelectorAll('*')) { if ((rect = shown(d))) break; } }
       if (!rect) continue;
+      // Navigation and anything the user opened is never a prompt; it stays
+      // theirs for good.
+      if (isNavLike(layer)) continue;
+      if (!firstSeen.has(layer)) firstSeen.set(layer, Date.now());
+      if (openedByUser(layer, firstSeen.get(layer))) { kept.add(layer); layer.setAttribute(KEEP, '1'); continue; }
       // A login the user asked for stays, for good: the layer is theirs.
       if (askedRecently()) { kept.add(layer); layer.setAttribute(KEEP, '1'); continue; }
       if (loginFormOutside(layer)) continue;
@@ -309,6 +346,7 @@
     addStyle();
     document.addEventListener('click', onAsk, true);
     document.addEventListener('keydown', onKey, true);
+    for (const t of ['pointerdown', 'keydown', 'touchstart', 'click']) document.addEventListener(t, onUser, true);
     const attach = () => {
       if (!active || observer || !document.documentElement) return;
       observer = new MutationObserver(schedule);
@@ -329,6 +367,7 @@
     if (lockObserver) { lockObserver.disconnect(); lockObserver = null; }
     document.removeEventListener('click', onAsk, true);
     document.removeEventListener('keydown', onKey, true);
+    for (const t of ['pointerdown', 'keydown', 'touchstart', 'click']) document.removeEventListener(t, onUser, true);
     notFixed = new WeakSet();
     for (const el of document.querySelectorAll(`[${MARK}]`)) el.removeAttribute(MARK);
     for (const a of ['data-quell-unblur', 'data-quell-unclamp']) {

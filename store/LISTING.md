@@ -42,7 +42,7 @@ Cookie banners, pop-ups and links need your browser's all-sites access. Quell as
 
 AI ON OTHER WEBSITES
 Quell can also hide "Ask AI" buttons and panels on sites such as docs and shops, and stop AI chat widgets from loading. Four switches: AI buttons and panels, AI chat assistants, support chats that use AI (off by default, because it can remove a site's support chat), and AI session recording (off by default). Hiding buttons and panels needs your browser's all-sites access, asked once; stopping chat scripts needs none. Pause it for a site any time.
-Covered today: YouTube (Ask buttons, AI summaries, Ask questions), Amazon (Rufus / Alexa for shopping, AI highlights and review summaries), X (Grok buttons and drawer, Today's News), many documentation and shopping sites, and the chat launchers of many AI chat services. Not covered: Quora. Reddit's AI features did not appear for our test account, so we do not claim them.
+Covered today: YouTube (Ask buttons, AI summaries, Ask questions), Amazon (Rufus / Alexa for shopping, AI highlights and review summaries), X (Grok buttons and drawer, Today's News), Airbnb (the AI search bar), many documentation and shopping sites, and the chat launchers of many AI chat services. Not covered: Quora. Reddit's AI features did not appear for our test account, so we do not claim them.
 What it does not do: AI crawlers work on servers and AI built into your browser is out of reach, and features that only some accounts or regions see may be missed.
 
 SEE WHAT IT HID

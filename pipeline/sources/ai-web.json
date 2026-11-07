@@ -186,7 +186,8 @@
    "selectors": [
     "button.home-ai-btn",
     "button.conv-search-float-btn",
-    "button[title='Ask AI']"
+    "button[title='Ask AI']",
+    ".home-ai-divider"
    ],
    "hide": "element",
    "what": "Ask AI buttons"
@@ -617,6 +618,31 @@
    ],
    "hide": "element",
    "what": "\"Today's News\" AI-generated headlines"
+  },
+  {
+   "id": "airbnb-ai-search",
+   "group": "buttons",
+   "hosts": [
+    "www.airbnb.com"
+   ],
+   "selectors": [
+    "div:has(> div > #unified-search-microphone-prompt)"
+   ],
+   "hide": "element",
+   "what": "\"New AI search\" bar at the top"
+  },
+  {
+   "id": "onemind-chat",
+   "group": "chat",
+   "hosts": [
+    "*"
+   ],
+   "selectors": [
+    "#onemind-widget",
+    "iframe#onemind-iframe"
+   ],
+   "hide": "element",
+   "what": "AI assistant chat (1mind)"
   }
  ],
  "network": [

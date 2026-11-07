@@ -37,43 +37,33 @@
     root.appendChild(st);
   }
 
-  // The highest ancestor left with nothing visible (text, media, controls),
-  // never one holding the page's search box or a landmark region.
-  const SAFE = 'input:not([type="hidden"]), textarea, [role="search"], nav, main, article, h1';
-  const MEDIA = 'img,video,canvas,iframe,object,embed,input:not([type="hidden"]),textarea,select,button,svg';
-  function hasContent(root) {
-    let budget = 1500;
-    const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
-      acceptNode(n) {
-        if (n.nodeType === 1) {
-          const cs = getComputedStyle(n);
-          if (cs.display === 'none' || cs.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
-        }
-        return NodeFilter.FILTER_ACCEPT;
-      },
-    });
-    for (let n = w.nextNode(); n; n = w.nextNode()) {
-      if (--budget < 0) return true;
-      if (n.nodeType === 3) {
-        if (n.nodeValue.trim() && n.parentElement && n.parentElement.getClientRects().length) return true;
-      } else if (n.matches(MEDIA)) {
-        const r = n.getBoundingClientRect();
-        if (r.width > 1 && r.height > 1) return true;
+  // What a hidden thing leaves empty goes with it (QuellSettings.emptied: the
+  // highest ancestor with nothing visible left, never a landmark such as a nav,
+  // header or article, never one that still holds other content). A separator
+  // that sat beside it ("or", a bar, a slash) goes too, so none is left dangling.
+  const SEP = /^(or|and|\||\/|·|•|-|–|—)$/i;
+  const OWNER = 'aiweb';
+  function hideSeparator(el, what) {
+    const E = S.emptied;
+    for (const dir of ['previous', 'next']) {
+      let sib = el[dir + 'Sibling'];
+      while (sib && sib.nodeType === 3 && !sib.nodeValue.trim()) sib = sib[dir + 'Sibling'];
+      if (!sib) continue;
+      if (sib.nodeType === 3 && SEP.test(sib.nodeValue.trim())) {
+        const span = document.createElement('span');
+        sib.parentNode.replaceChild(span, sib);
+        span.appendChild(sib);
+        E.collapse(span, what, OWNER);
+      } else if (sib.nodeType === 1 && !sib.matches('input, button, a, select, textarea') && !sib.querySelector('input, button, a, select, textarea, img, svg')
+        && SEP.test((sib.textContent || '').trim())) {
+        E.collapse(sib, what, OWNER);
       }
     }
-    return false;
-  }
-  function emptyAncestor(el) {
-    let top = null;
-    for (let cur = el.parentElement; cur && cur !== document.body && cur !== document.documentElement; cur = cur.parentElement) {
-      if (cur.matches(SAFE) || cur.querySelector(SAFE) || hasContent(cur)) break;
-      top = cur;
-    }
-    return top;
   }
 
   function sweep() {
     let n = 0;
+    S.emptied.recheckCollapsed(OWNER, (el) => el.hasAttribute(MARK));
     for (const r of rules) {
       let found = [];
       try { found = document.querySelectorAll(r.sel.join(',')); } catch (_) { continue; }
@@ -81,12 +71,9 @@
         if (el.getAttribute(MARK) !== null) continue;
         el.setAttribute(MARK, r.what);
         n++;
-        const w = emptyAncestor(el);
-        if (w && w.dataset.quellCollapsed !== '1') {
-          w.dataset.quellCollapsed = '1';
-          w.dataset.quellLabel = r.what;
-          w.style.setProperty('display', 'none', 'important');
-        }
+        hideSeparator(el, r.what);
+        const w = S.emptied.emptyAncestor(el);
+        if (w) S.emptied.collapse(w, r.what, OWNER);
       }
     }
     if (n > 0) { try { chrome.runtime.sendMessage({ type: 'blocked', count: n }); } catch (_) { /* sw asleep */ } }
@@ -119,13 +106,7 @@
     rules = [];
     if (observer) { observer.disconnect(); observer = null; }
     dropStyle();
-    for (const w of document.querySelectorAll('[data-quell-collapsed="1"][data-quell-label]')) {
-      if (w.querySelector('[' + MARK + ']')) {
-        w.style.removeProperty('display');
-        delete w.dataset.quellCollapsed;
-        delete w.dataset.quellLabel;
-      }
-    }
+    S.emptied.uncollapseAll(OWNER);
     for (const el of document.querySelectorAll('[' + MARK + ']')) el.removeAttribute(MARK);
   }
   const apply = (s) => {
@@ -141,8 +122,8 @@
       for (const el of document.querySelectorAll('[' + MARK + ']')) {
         out.push({ el, label: el.getAttribute(MARK) || 'AI feature', detail: 'Hidden on this page' });
       }
-      for (const el of document.querySelectorAll('[data-quell-collapsed="1"][data-quell-label]')) {
-        if (el.querySelector('[' + MARK + ']')) out.push({ el, label: el.dataset.quellLabel, detail: 'Hidden on this page' });
+      for (const el of document.querySelectorAll('[data-quell-collapsed="1"][data-quell-owner="aiweb"]')) {
+        out.push({ el, label: el.dataset.quellLabel || 'AI feature', detail: 'Hidden on this page' });
       }
       return out;
     }, () => active);

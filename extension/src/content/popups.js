@@ -302,8 +302,23 @@
       n += count(el);
     }
     unlock();
+    collapseEmptied();
     if (n > 0) {
       try { chrome.runtime.sendMessage({ type: 'blocked', count: n, feature: 'popups' }); } catch (_) { /* sw asleep */ }
+    }
+  };
+
+  // A hidden newsletter box can leave its footer cell or strip empty (WebMD,
+  // 0.7.4): whatever it wrapped that now holds nothing goes with it, bounded
+  // by QuellSettings.emptied (never a landmark, never other content).
+  const collapseEmptied = () => {
+    const E = globalThis.QuellSettings.emptied;
+    if (!E) return;
+    E.recheckCollapsed('popups', (n) => n.dataset.quellPopupSeen === '1' || n.hasAttribute('data-quell-pop'));
+    for (const el of document.querySelectorAll('[data-quell-popup-seen="1"]')) {
+      if (el.hasAttribute('data-quell-keep') || el.getBoundingClientRect().width > 0 && getComputedStyle(el).display !== 'none') continue;
+      const w = E.emptyAncestor(el, {});
+      if (w) E.collapse(w, 'Pop-up', 'popups');
     }
   };
 
@@ -376,6 +391,7 @@
     dropStyle('quell-popups');
     relock();
     overlaySeen = false;
+    try { globalThis.QuellSettings.emptied.uncollapseAll('popups'); } catch (_) { /* test context */ }
   }
 
   const applyState = (s) => {

@@ -360,6 +360,150 @@ console.log('AI on websites: YouTube, Amazon and X (fixtures reduced from live-r
     'YouTube 6 rules, Amazon 8, X 5');
 }
 
+// ------------------------------------------------ F. live-retest fixes (0.7.4) ----------
+console.log('Sign-up prompts never hide navigation; emptied cells collapse; more consent platforms:');
+{
+  const FIXD = path.join(HERE, 'fixtures');
+  const read = (n) => readFileSync(path.join(FIXD, n), 'utf8');
+  const PROMPTS = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/signup-prompts.js'), 'utf8');
+  const stub = (st) => `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__sent=[];
+    window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
+      runtime:{sendMessage:async(m)=>{ if(m.type==='blocked') window.__sent.push(m); }}};`;
+  const open = async (host, html, src, st, wait = 1800) => {
+    const pg = await ctx.newPage();
+    await pg.route(`http://${host}/**`, (r) => r.fulfill({ contentType: 'text/html', body: html }));
+    await pg.addInitScript({ content: stub(st) + '\n' + src });
+    await pg.goto(`http://${host}/`);
+    await pg.waitForTimeout(wait);
+    return pg;
+  };
+  const vis = (pg, sel) => pg.evaluate((q) => { const e = document.querySelector(q); return !!e && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none'; }, sel);
+
+  // 1. Wired: a slide-out navigation drawer that holds "Sign In" stays whole.
+  {
+    const pg = await open('drawer.test', read('signup-drawer.html'), PROMPTS, { popupsEnabled: true });
+    ok(!(await vis(pg, '#modal')), 'a real sign-up dialog that appears by itself is still hidden');
+    ok(await vis(pg, '#hdr-signin') && await vis(pg, '#hdr-home'), 'the header with Sign In stays');
+    await pg.click('#hamburger');
+    await pg.waitForTimeout(2600);
+    ok(await vis(pg, '#menu-panel') && await vis(pg, '#drawer-signin') && (await pg.evaluate(() => document.querySelectorAll('#menu-panel a').length)) === 10 && await pg.evaluate(() => [...document.querySelectorAll('#menu-panel a')].every((a) => a.getClientRects().length > 0)),
+      'the hamburger opens the whole drawer: all ten links, Sign In among them (many links, controlled by an expanded button)');
+    await pg.click('#hamburger-lite');
+    await pg.waitForTimeout(2600);
+    ok(await vis(pg, '#menu-lite') && await vis(pg, '#lite-signin'), 'a small drawer opened by a click, with no aria at all, stays (it opened right after the user\'s own click)');
+    ok(await vis(pg, '#main'), 'the page content stays');
+    await pg.close();
+    const off = await open('drawer.test', read('signup-drawer.html'), PROMPTS, { popupsEnabled: true, hideSignupPrompts: false });
+    ok(await vis(off, '#modal'), 'with Sign-up and log-in prompts off, the dialog shows');
+    await off.close();
+  }
+
+  // 2. Microsoft Learn: only the AI buttons go; the header, breadcrumb and page actions stay.
+  {
+    const AIWEB = readFileSync(path.join(EXT, 'src/content/aiweb.js'), 'utf8');
+    const st = { enabled: true, aiWebOn: true, aiWebAccess: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebAllowlist: [] };
+    const rules = COSMETIC.filter((r) => r.h.includes('learn.microsoft.com') && r.g === 'buttons').map((r) => ({ sel: r.sel, what: r.what }));
+    const aiStub = `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__ml=[];
+      window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
+        runtime:{id:'quell',onMessage:{addListener:(f)=>window.__ml.push(f)},sendMessage:async(m)=>{ if(m.type==='aiWebRules') return {rules:${JSON.stringify(rules)}}; }}};`;
+    const pg = await ctx.newPage();
+    await pg.route('https://learn.microsoft.com/**', (r) => r.fulfill({ contentType: 'text/html', body: read('aiweb-learn.html') }));
+    await pg.addInitScript({ content: aiStub + '\n' + SETTINGS_SRC + '\n' + AIWEB });
+    await pg.goto('https://learn.microsoft.com/x');
+    await pg.waitForTimeout(2400);
+    const v = (id) => pg.evaluate((i) => { const e = document.getElementById(i); return !!e && e.getClientRects().length > 0; }, id);
+    ok(!(await v('ai-ask1')) && !(await v('ai-ask2')), 'learn.microsoft.com: both Ask Learn buttons are hidden');
+    ok(await v('keep-breadcrumb') && await v('article-header') && await v('article-header-page-actions') && await v('keep-share') && await v('keep-print'),
+      'learn.microsoft.com: the article header, the breadcrumb (filled in after the first sweep) and the page actions all stay');
+    await pg.close();
+  }
+
+  // 3. Datadog: no dangling "or" beside the search box.
+  {
+    const AIWEB = readFileSync(path.join(EXT, 'src/content/aiweb.js'), 'utf8');
+    const st = { enabled: true, aiWebOn: true, aiWebAccess: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebAllowlist: [] };
+    const rules = COSMETIC.filter((r) => r.h.includes('docs.datadoghq.com')).map((r) => ({ sel: r.sel, what: r.what }));
+    const aiStub = `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__ml=[];
+      window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
+        runtime:{id:'quell',onMessage:{addListener:(f)=>window.__ml.push(f)},sendMessage:async(m)=>{ if(m.type==='aiWebRules') return {rules:${JSON.stringify(rules)}}; }}};`;
+    const pg = await ctx.newPage();
+    await pg.route('https://docs.datadoghq.com/**', (r) => r.fulfill({ contentType: 'text/html', body: read('aiweb-datadog.html') }));
+    await pg.addInitScript({ content: aiStub + '\n' + SETTINGS_SRC + '\n' + AIWEB });
+    await pg.goto('https://docs.datadoghq.com/x');
+    await pg.waitForTimeout(1200);
+    const v = (id) => pg.evaluate((i) => { const e = document.getElementById(i); return !!e && e.getClientRects().length > 0; }, id);
+    ok(!(await v('ai-ask')) && !(await v('ai-ask-b')), 'datadog docs: both Ask AI buttons are hidden');
+    ok(!(await v('sep')), 'datadog docs: the "or" separator element goes with the button');
+    ok(await pg.evaluate(() => !/\bor\b/.test(document.getElementById('hero2').innerText)), 'datadog docs: a bare "or" text next to the button goes too');
+    ok(await v('keep-search') && await v('keep-search2') && await v('keep-main'), 'datadog docs: the search boxes and the page stay');
+    await pg.close();
+  }
+
+  // 4. WebMD: a hidden footer newsletter leaves no empty cell.
+  {
+    const POPUPS = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/popups.js'), 'utf8');
+    const html = `<!doctype html><html><body><main id="main"><h1>Placeholder</h1><p>Placeholder text.</p></main>
+      <footer id="foot"><div id="cols" style="display:flex"><div id="col-links"><a href="/a">About</a> <a href="/b">Privacy</a></div>
+      <div id="cell" data-probe="1" style="width:300px;height:110px;padding:8px"><div class="newsletter-wrapper" id="nl" style="height:90px">Sign up for our free Good Health Newsletter <input placeholder="email"></div></div>
+      <div id="col-social"><a href="/c">Social</a></div></div></footer></body></html>`;
+    const pg = await ctx.newPage();
+    await pg.route('http://www.webmd.test/**', (r) => r.fulfill({ contentType: 'text/html', body: html }));
+    await pg.addInitScript({ content: `window.__state={popupsEnabled:true};window.__cbs=[];window.__sent=[];
+      window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},runtime:{sendMessage:async(m)=>{ if(m.type==='blocked'){window.__sent.push(m);return;} if(m.type==='popupRules') return {generic:['.newsletter-wrapper'],site:[]}; }}};` + '\n' + POPUPS });
+    await pg.goto('http://www.webmd.test/');
+    await pg.waitForTimeout(1500);
+    const v = (id) => pg.evaluate((i) => { const e = document.getElementById(i); return !!e && e.getClientRects().length > 0; }, id);
+    ok(!(await v('nl')), 'webmd: the footer newsletter box is hidden');
+    ok(!(await v('cell')), 'webmd: the empty footer cell around it is collapsed too');
+    ok(await v('col-links') && await v('col-social') && await v('foot') && await v('main'), 'webmd: the other footer columns and the page stay');
+    await pg.close();
+  }
+
+  // 5. Consent platforms: Axeptio (gorgias.com) and a Finsweet banner (forethought.ai).
+  {
+    const COOKIES = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/cookies.js'), 'utf8');
+    for (const [name, html, hidden, kept] of [
+      ['Axeptio', `<!doctype html><html><body><div id="axeptio_overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4)"><div id="dlg" style="position:fixed;left:30%;top:30%;background:#fff;padding:12px">Here's why we use cookies. <button>Ok got it</button></div></div><div id="axeptio_btn" style="position:fixed;left:10px;bottom:10px">Cookies</div><main id="main"><h1>Page</h1><p>Placeholder.</p></main></body></html>`, ['axeptio_overlay', 'axeptio_btn'], ['main']],
+      ['Finsweet banner', `<!doctype html><html><body><div class="consent_opt-out_banner" id="fs-banner" fs-consent-element="banner" style="position:fixed;right:10px;bottom:10px;width:480px;background:#fff;padding:12px">By clicking "Accept", you agree to the storing of cookies on your device. <button>Reject</button><button>Accept</button></div><main id="main"><h1>Page</h1><p>Placeholder.</p></main></body></html>`, ['fs-banner'], ['main']],
+    ]) {
+      const pg = await ctx.newPage();
+      await pg.route('http://consent.test/**', (r) => r.fulfill({ contentType: 'text/html', body: html }));
+      await pg.addInitScript({ content: `window.__state={enabled:true,cookieEnabled:true,cookieReject:false};window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener(){}}},runtime:{sendMessage(){}}};` + '\n' + COOKIES });
+      await pg.goto('http://consent.test/');
+      await pg.waitForTimeout(900);
+      const v = (id) => pg.evaluate((i) => { const e = document.getElementById(i); return !!e && e.getClientRects().length > 0; }, id);
+      ok((await Promise.all(hidden.map((i) => v(i)))).every((x) => !x), `${name}: the consent UI is hidden`);
+      ok((await Promise.all(kept.map((i) => v(i)))).every(Boolean), `${name}: the page stays`);
+      await pg.close();
+    }
+  }
+
+  // 6. New rules: Airbnb's AI search bar and the 1mind AI assistant (Salesloft).
+  {
+    const has = (id) => COSMETIC.some((r) => r.id === id);
+    ok(has('airbnb-ai-search') && has('onemind-chat'), 'rules exist for Airbnb\'s "new AI search" bar and the 1mind AI assistant');
+    const AIWEB = readFileSync(path.join(EXT, 'src/content/aiweb.js'), 'utf8');
+    const st = { enabled: true, aiWebOn: true, aiWebAccess: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebAllowlist: [] };
+    const run = async (host, html, ids) => {
+      const rules = COSMETIC.filter((r) => r.h.some((h) => h === '*' || host === h) && ({ buttons: 1, chat: 1 })[r.g]).map((r) => ({ sel: r.sel, what: r.what }));
+      const pg = await ctx.newPage();
+      await pg.route(`https://${host}/**`, (r) => r.fulfill({ contentType: 'text/html', body: html }));
+      await pg.addInitScript({ content: `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__ml=[];window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},runtime:{id:'quell',onMessage:{addListener:(f)=>window.__ml.push(f)},sendMessage:async(m)=>{ if(m.type==='aiWebRules') return {rules:${JSON.stringify(rules)}}; }}};` + '\n' + SETTINGS_SRC + '\n' + AIWEB });
+      await pg.goto(`https://${host}/x`);
+      await pg.waitForTimeout(900);
+      const out = await pg.evaluate((l) => l.map((i) => { const e = document.getElementById(i); return !!e && e.getClientRects().length > 0; }), ids);
+      await pg.close();
+      return out;
+    };
+    const air = `<!doctype html><html><body><div id="page"><div id="bar" style="height:76px"><div><span id="unified-search-microphone-prompt">Describe what you are looking for with the new AI search</span><button role="switch">Off</button></div></div><header id="keep-header"><input id="keep-search" placeholder="Where"></header><main id="keep-main">Placeholder</main></div></body></html>`;
+    let r = await run('www.airbnb.com', air, ['unified-search-microphone-prompt', 'bar', 'keep-header', 'keep-search', 'keep-main']);
+    ok(!r[0] && !r[1] && r[2] && r[3] && r[4], 'airbnb: the AI search bar is hidden with no empty row; the header, search and page stay');
+    const one = `<!doctype html><html><body><main id="keep-main">Placeholder</main><div id="onemind-widget" style="position:fixed;right:20px;bottom:20px;width:300px;height:400px"><iframe id="onemind-iframe" title="AI assistant" style="width:100%;height:100%"></iframe></div></body></html>`;
+    r = await run('www.salesloft.com', one, ['onemind-widget', 'keep-main']);
+    ok(!r[0] && r[1], 'salesloft: the 1mind AI assistant is hidden, the page stays');
+  }
+}
+
 // ------------------------------------------------ D. Brave: the Ask tab -------------
 console.log('Brave Search: the "Ask" tab goes with the AI answer:');
 {

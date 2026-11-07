@@ -393,9 +393,91 @@
     } catch (_) { /* not an extension context (tests inject files into a plain page) */ }
   }
 
+  // EMPTIED WRAPPERS (content scripts)
+  // Hiding something can leave the box that wrapped it as an empty cell or
+  // strip. emptyAncestor() returns the HIGHEST ancestor of `el` that now holds
+  // nothing a person could see: no text, image, control or frame that is not
+  // itself hidden. It stops at `stop`, never passes a landmark (nav, main,
+  // article, header, footer, a search box), anything matching `safe`, or any
+  // ancestor that still holds other content. Text counts as content whether or
+  // not the browser has laid it out yet, so a page still rendering is never
+  // collapsed by mistake (Microsoft Learn's article header was, in 0.7.4).
+  const LANDMARKS = 'input:not([type="hidden"]), textarea, select, [role="search"], nav, main, article, header, footer, h1, h2, [role="banner"], [role="navigation"], [role="contentinfo"]';
+  const MEDIA = 'img, picture, video, canvas, iframe, object, embed, button, a[href], svg';
+  function hasVisibleContent(root, ignore) {
+    let budget = 2000;
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+      acceptNode(n) {
+        if (n.nodeType === 1) {
+          if (ignore && ignore(n)) return NodeFilter.FILTER_REJECT;
+          const cs = getComputedStyle(n);
+          if (cs.display === 'none' || cs.visibility === 'hidden') return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      if (--budget < 0) return true; // too big to judge: leave it alone
+      if (n.nodeType === 3) { if (n.nodeValue.trim()) return true; } else if (n.matches(MEDIA)) return true;
+    }
+    return false;
+  }
+  // A landmark or control that is itself still showing (not one inside what was
+  // just hidden) inside `root`.
+  function holdsLandmark(root, safe, ignore) {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
+      acceptNode(n) {
+        if (ignore && ignore(n)) return NodeFilter.FILTER_REJECT;
+        const cs = getComputedStyle(n);
+        return cs.display === 'none' || cs.visibility === 'hidden' ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+      },
+    });
+    for (let n = w.nextNode(); n; n = w.nextNode()) if (n.matches(safe)) return true;
+    return false;
+  }
+  function emptyAncestor(el, { stop = null, safe = '', ignore = null } = {}) {
+    const SAFE = [LANDMARKS, safe].filter(Boolean).join(',');
+    let top = null;
+    for (let cur = el.parentElement; cur && cur !== stop && cur !== document.body && cur !== document.documentElement; cur = cur.parentElement) {
+      if (cur.matches(SAFE) || holdsLandmark(cur, SAFE, ignore) || hasVisibleContent(cur, ignore)) break;
+      top = cur;
+    }
+    return top;
+  }
+  function collapseEl(w, label, owner) {
+    if (!w || w.dataset.quellCollapsed === '1') return;
+    w.dataset.quellCollapsed = '1';
+    w.dataset.quellOwner = owner || '';
+    if (label) w.dataset.quellLabel = label;
+    w.style.setProperty('display', 'none', 'important');
+  }
+  // A page that was still rendering when a wrapper was collapsed may fill it
+  // afterwards (Microsoft Learn's header, 0.7.4). Each sweep calls this first:
+  // a collapsed wrapper that now holds visible content of its own is let back.
+  function recheckCollapsed(owner, ignore) {
+    for (const w of document.querySelectorAll('[data-quell-collapsed="1"]')) {
+      if (owner && w.dataset.quellOwner !== owner) continue;
+      if (!hasVisibleContent(w, (n) => n.dataset && (n.dataset.quellCollapsed === '1' || (ignore && ignore(n))))) continue;
+      w.style.removeProperty('display');
+      delete w.dataset.quellCollapsed;
+      delete w.dataset.quellOwner;
+      delete w.dataset.quellLabel;
+    }
+  }
+  function uncollapseAll(owner) {
+    for (const w of document.querySelectorAll('[data-quell-collapsed="1"]')) {
+      if (owner && w.dataset.quellOwner !== owner) continue;
+      w.style.removeProperty('display');
+      delete w.dataset.quellCollapsed;
+      delete w.dataset.quellOwner;
+      delete w.dataset.quellLabel;
+    }
+  }
+
   g.QuellSettings = {
     SYNC_DEFAULTS, LOCAL_DEFAULTS, DEFAULTS, OBSOLETE_KEYS, LIST_BYTE_BUDGET,
     home, get, set, migrate, onChange, onGone, ListFullError, sweepPauses,
     hidden: { register: registerHidden, list: listHidden, listen },
+    emptied: { emptyAncestor, collapse: collapseEl, uncollapseAll, recheckCollapsed, hasVisibleContent },
   };
 })();

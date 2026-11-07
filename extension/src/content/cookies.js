@@ -37,6 +37,10 @@
     '#cookie-law-info-bar', '#cookie-law-info-again',
     '#CookieConsent', '.cc-window.cc-banner', '.cookiecon-container',
     '.cookie-consent-banner', '#cookieConsentContainer',
+    // Axeptio (gorgias.com): the dialog overlay and its floating Cookies button.
+    '#axeptio_overlay', '#axeptio_btn', '#axeptio_main_button',
+    // Finsweet Cookie Consent (Webflow sites such as forethought.ai): the banner.
+    '[fs-consent-element="banner"]',
     // Ketch (live 2026-11-06, drift.com): the whole consent UI — banner, dim
     // backdrop and preference centre — lives under this one root. The banner
     // offers only "Open Preferences" on that site and Ketch's buttons carry no
