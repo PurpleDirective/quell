@@ -45,6 +45,8 @@
     // live, and whatever Bing adds next. The GUARD below keeps an organic
     // result that happens to link to /copilotsearch visible.
     'a[href*="/copilotsearch" i]',
+    // A tab read by its words (Bing News: an "AI MODE" tab); see markTabs().
+    '[data-quell-bing-tab="1"]',
   ].map((s) => s + GUARD);
 
   function blockSelectors() {
@@ -57,7 +59,20 @@
   // Count hidden elements (once each) so the badge reflects Bing too. The
   // seen-flags survive teardown so a toggle off/on doesn't re-inflate the
   // lifetime counter on the same page.
+  // Bing's "AI MODE" tab in the page's own tab bar (seen on Bing News) has no
+  // address we can rely on, so it is found by its words, inside the header or a
+  // tab bar only, never in results. The list item that holds it goes with it, so
+  // nothing shifts.
+  function markTabs() {
+    for (const a of document.querySelectorAll('#b_header a, #b_header [role="tab"], .b_scopebar a, nav a, [role="tablist"] > *')) {
+      if (a.closest('#b_results') || a.hasAttribute('data-quell-bing-tab')) continue;
+      if (!/^\s*AI\s*Mode\s*$/i.test(a.textContent || '')) continue;
+      const li = a.parentElement && a.parentElement.tagName === 'LI' && a.parentElement.children.length === 1 ? a.parentElement : null;
+      (li || a).setAttribute('data-quell-bing-tab', '1');
+    }
+  }
   function sweep() {
+    markTabs();
     const sel = blockSelectors().join(',');
     if (!sel) { window.Quell.report(0); return; }
     let hidden = 0;
@@ -112,6 +127,7 @@
     active = false;
     if (observer) { observer.disconnect(); observer = null; }
     window.Quell.removeCSS('quell-bing');
+    for (const el of document.querySelectorAll('[data-quell-bing-tab]')) el.removeAttribute('data-quell-bing-tab');
     window.QuellSettings.emptied.uncollapseAll('bing');
   }
 

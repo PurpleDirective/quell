@@ -49,7 +49,7 @@ const base = {
   enabled: true, aiEnabled: true, googleMode: 'hide', hideOverview: true, hideAiMode: true, hidePaa: false,
   hideGemini: true, bingEnabled: true, cookieEnabled: false, popupsEnabled: false,
   aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [], sitePauses: {},
-  firstRunDone: true, analytics: 'on', totalBlocked: 1284,
+  firstRunDone: true, whatsNewSeen: '0.7.4', analytics: 'on', totalBlocked: 1284,
 };
 
 const gpage = await ctx.newPage();

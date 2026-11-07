@@ -77,6 +77,9 @@
     analytics: 'unset',
     // The one-time first-run card (popup and welcome page) has been answered.
     firstRunDone: false,
+    // The newest "What's new" card this user has answered or closed (a version
+    // string; '' = none). Fresh installs record the current version at first run.
+    whatsNewSeen: '',
     // Timed per-site pauses: { host: { until: <ms>, added: [allowlist keys the
     // pause itself added] } }. The allowlists stay the one thing every content
     // script and the background read; this only remembers when to take the
@@ -475,37 +478,58 @@
   }
 
   // PAGE SAFETY NET (content scripts)
-  // Quell hides things; it must never blank a page. Every hiding layer reports
-  // here: measure() before it acts, check() after. If the page's visible text
-  // has fallen to under half of the most it held, the page was blanked (Zara,
-  // 0.7.4 retest), so every layer takes its hides back, stays off for this
-  // page load and the page is marked data-quell-safety. protects() names what
-  // may never be hidden or collapsed: the document, main, the app root, or an
-  // element that holds most of the page's text.
+  // Quell hides things; it must never blank a page. Every hiding layer calls
+  // measure() at the start of a sweep and check() at its end. The sweep is
+  // synchronous, so the text held just before and just after it differs only
+  // by what Quell itself did: if a sweep that hid something left under half of
+  // the text it started with, the page was blanked (Zara, 0.7.4 retest), so
+  // every layer takes its hides back and the page is marked data-quell-safety.
+  // A page's own content swap (a single-page app showing a spinner, then
+  // re-rendering) is never compared with anything, so it cannot trip this.
+  // The net re-arms on a URL change, or after 10 s (at most twice per
+  // address, so a real blanking cannot flicker forever): layers listen for
+  // the quell:rearm event and start again. protects() names what may never
+  // be hidden or collapsed: the document, main, the app root, or an element
+  // that holds most of the page's text.
   const guard = (() => {
-    let peak = 0, acted = false, last = 0;
+    let base = 0, acted = false, tripUrl = '', trips = 0, timer = null, trippedAt = 0;
     const undos = [];
     const state = { tripped: false, before: 0, after: 0 };
     const textLen = () => ((document.body && document.body.innerText) || '').length;
     const ROOTS = 'html, body, main, [role="main"], #root, #app, #__next, #__nuxt, #app-root';
+    const rearm = () => {
+      if (timer) { clearInterval(timer); timer = null; }
+      state.tripped = false; base = 0; acted = false;
+      try { document.documentElement.removeAttribute('data-quell-safety'); } catch (_) { /* no root */ }
+      try { document.dispatchEvent(new Event('quell:rearm')); } catch (_) { /* no document */ }
+    };
+    const watch = () => {
+      if (timer) return;
+      timer = setInterval(() => {
+        if (!state.tripped) { clearInterval(timer); timer = null; return; }
+        if (location.href !== tripUrl) { trips = 0; rearm(); return; }
+        if (Date.now() - trippedAt >= 10000 && trips < 2) rearm();
+      }, 1000);
+    };
     return {
       state,
       register(fn) { undos.push(fn); },
       acted() { acted = true; },
-      measure(force) {
+      measure() {
         if (state.tripped || typeof document === 'undefined' || !document.body) return;
-        const now = Date.now();
-        if (!force && now - last < 800) return;
-        last = now;
-        peak = Math.max(peak, textLen());
+        acted = false;
+        base = textLen();
       },
       check() {
-        if (state.tripped || !acted || peak < 800 || !document.body) return false;
+        if (state.tripped || !acted || base < 800 || !document.body) return false;
+        acted = false;
         const now = textLen();
-        if (now >= peak * 0.5) return false;
-        state.tripped = true; state.before = peak; state.after = now;
+        if (now >= base * 0.5) return false;
+        state.tripped = true; state.before = base; state.after = now;
+        trips++; tripUrl = location.href; trippedAt = Date.now();
         for (const fn of undos) { try { fn(); } catch (_) { /* the rest still run */ } }
         try { document.documentElement.setAttribute('data-quell-safety', '1'); } catch (_) { /* no root */ }
+        watch();
         return true;
       },
       protects(el) {

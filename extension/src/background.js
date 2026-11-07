@@ -533,7 +533,22 @@ async function healOpenTabsAfterUpdate() {
 // The welcome page opens ONCE, on a fresh install — never on an update, which
 // would be an unasked-for tab for every existing user on every release.
 const WELCOME_PAGE = 'src/welcome/welcome.html';
+// An update from before 0.7.4 must not switch on what the user never asked for:
+// "Remove tracking from links" and "AI on websites" start OFF, and the popup shows
+// the one-time "What's new" card with a button that turns them on. The first-run
+// card is replaced by that card for these users (firstRunDone), and fresh installs
+// are untouched. Runs before init() so no ruleset or script is set up first.
+const verParts = (v) => String(v || '').split('.').map((x) => parseInt(x, 10) || 0);
+const verBefore = (a, b) => { const x = verParts(a), y = verParts(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
+async function holdBackNewFeaturesOnUpdate(details) {
+  if (!details || details.reason !== 'update' || !details.previousVersion) return;
+  if (!verBefore(details.previousVersion, '0.7.4')) return;
+  const seen = await chrome.storage.local.get('whatsNewSeen').catch(() => ({}));
+  if (seen && seen.whatsNewSeen) return;
+  await QuellSettings.set({ linksEnabled: false, aiWebOn: false, aiWebAccess: false, firstRunDone: true }).catch(() => {});
+}
 chrome.runtime.onInstalled.addListener(async (details) => {
+  await holdBackNewFeaturesOnUpdate(details);
   await init();
   if (details && details.reason === 'install') {
     chrome.tabs.create({ url: chrome.runtime.getURL(WELCOME_PAGE) }).catch(() => {});

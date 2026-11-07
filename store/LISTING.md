@@ -36,12 +36,12 @@ WHAT IT DOES
 • DuckDuckGo, Brave and Yahoo: hides their AI answers too. Off until you switch it on; your browser then asks once for access to those three sites and nothing else.
 • Cookie banners: hides "we use cookies" notices. Off until you switch it on. Optionally says "reject all" for you on the consent tools Quell recognises. That is a separate switch, off by default, and Quell never overrides a choice you already made.
 • Pop-ups: newsletter sign-up boxes, chat bubbles, "open in app" banners, and the "sign up or log in to keep reading" boxes that cover a page whose text is already there, each with its own switch. Off until you switch it on. It hides them and lets the page scroll again; it never blocks a page, never gets around a paywall, and never touches the sign-in button a site gives you or a login you opened yourself.
-• Links: takes tracking codes (utm_, fbclid, gclid and the like) off links, and sends a Google or Bing result straight to its site. On once you have allowed all-sites access. Affiliate codes are never touched. A separate switch, off by default, warns you if a shopping page swaps its affiliate code; it only warns, and your browser asks once for one more permission when you turn it on.
+• Links: takes tracking codes (utm_, fbclid, gclid and the like) off links, and sends a Google or Bing result straight to its site. On once you have allowed all-sites access on a new install; if you update from an earlier version it stays off until you turn it on from a one-time card in the popup. Affiliate codes are never touched. A separate switch, off by default, warns you if a shopping page swaps its affiliate code; it only warns, and your browser asks once for one more permission when you turn it on.
 
 Cookie banners, pop-ups and links need your browser's all-sites access. Quell asks once, only when you turn one on, and gives it back when you turn all of them off.
 
 AI ON OTHER WEBSITES
-Quell can also hide "Ask AI" buttons and panels on sites such as docs and shops, and stop AI chat widgets from loading. Four switches: AI buttons and panels, AI chat assistants, support chats that use AI (off by default, because it can remove a site's support chat), and AI session recording (off by default). Hiding buttons and panels needs your browser's all-sites access, asked once; stopping chat scripts needs none. Pause it for a site any time.
+Quell can also hide "Ask AI" buttons and panels on sites such as docs and shops, and stop AI chat widgets from loading. Off after an update until you turn it on. Four switches: AI buttons and panels, AI chat assistants, support chats that use AI (off by default, because it can remove a site's support chat), and AI session recording (off by default). Hiding buttons and panels needs your browser's all-sites access, asked once; stopping chat scripts needs none. Pause it for a site any time.
 Covered today: YouTube (Ask buttons, AI summaries, Ask questions), Amazon (Rufus / Alexa for shopping, AI highlights and review summaries), X (Grok buttons and drawer, Today's News), Airbnb (the AI search bar), many documentation and shopping sites, and the chat launchers of many AI chat services. Not covered: Quora. Reddit's AI features did not appear for our test account, so we do not claim them.
 What it does not do: AI crawlers work on servers and AI built into your browser is out of reach, and features that only some accounts or regions see may be missed.
 
@@ -62,9 +62,7 @@ What it is not: Quell does not block ads (uBlock Origin does that well), and it 
 ## Privacy tab
 
 **Single purpose:**
-Quell removes unwanted content from web pages — AI feature blocks on search
-engines, cookie-consent banners and (optionally) sign-up pop-ups, chat widgets
-and app banners — in the user's browser.
+Quell removes unwanted content from web pages — AI features in search engines and on websites, cookie banners, sign-up prompts and pop-ups — and removes tracking codes from links, in the user's browser.
 
 **Permission justifications:**
 - `storage` — saves the user's settings (in `storage.sync`, so the browser can
@@ -100,7 +98,7 @@ and app banners — in the user's browser.
   same job as the Google and Bing host permissions. Optional so that existing
   users are not disabled on update.
 - `<all_urls>` (OPTIONAL) — requested at runtime only when the user enables
-  Cookie banners, Pop-ups, Links (on by default once access exists), or the
+  Cookie banners, Pop-ups, Links (on by default once access exists on a new install; off after an update until turned on), or the
   page-level part of AI on websites (hiding AI buttons and chat launchers from
   rules shipped inside the extension), and **given back** (`permissions.remove`)
   as soon as none of them is in use — Quell does not keep all-sites access it is
@@ -119,7 +117,7 @@ and app banners — in the user's browser.
   https://purpledirective.com/quell/goodbye?v=<version>&b=<browser> when Quell
   is removed; `&i=<install id>` is added only while usage counts are on.
 
-**Data usage — the dashboard's answers for 0.7.3:**
+**Data usage — the dashboard's answers for 0.7.4:**
 
 *What user data do you plan to collect from users now or in the future?*
 Tick **Web history** (the breakage report) and **User activity** (the usage

@@ -83,7 +83,9 @@
       if (drop) {
         // Rebuild from the raw pieces so the kept parameters stay byte-for-byte as they were.
         const raw = u.search.slice(1).split('&').filter((p) => {
-          const k = decodeURIComponent((p.split('=')[0] || '').replace(/\+/g, ' '));
+          const rawKey = (p.split('=')[0] || '').replace(/\+/g, ' ');
+          let k = rawKey;
+          try { k = decodeURIComponent(rawKey); } catch (_) { /* malformed %-sequence: use the raw key */ }
           return !(TRACKING.has(k) || (yt && YOUTUBE_ONLY.has(k)));
         });
         u.search = raw.length ? '?' + raw.join('&') : '';

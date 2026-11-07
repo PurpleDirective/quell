@@ -697,7 +697,7 @@
    ],
    "selectors": [],
    "text": {
-    "sel": "h2, h1, span",
+    "sel": "h2:not(article *), h1:not(article *), span:not(article *):not([data-testid=\"tweetText\"] *)",
     "re": "^Today.s News$"
    },
    "hide": "element",

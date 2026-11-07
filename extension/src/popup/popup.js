@@ -170,7 +170,7 @@ const iconFor = (it) => it.kind === 'cookie' ? ICONS.cookie : it.kind === 'popup
 let tab = { items: [], active: [], reachable: false, session: 0, links: null };
 let itemsExpanded = false;
 const expanded = { search: false, cookie: false, popup: false, aiweb: false, link: false };
-const SHOWN_ITEMS = 3;
+const SHOWN_ITEMS = 2;
 
 // What the tab says Quell hid on it (a kind and a short label per item: the
 // page's text is never asked for here), plus the toolbar count for the tab.
@@ -230,6 +230,10 @@ const pausedHere = (s) => {
 const timeWord = (ms) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 function firstRunOn(s) { return !s.firstRunDone; }
+// An updated user sees "What's new" once: first run is done, and the newest card answered is older than this.
+const WHATS_NEW = '0.7.4';
+const verLess = (a, b) => { const x = String(a || '0').split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
+function whatsNewOn(s) { return !!s.firstRunDone && verLess(s.whatsNewSeen, WHATS_NEW); }
 
 function renderHero(s) {
   const app = $('app');
@@ -237,7 +241,8 @@ function renderHero(s) {
   const first = firstRunOn(s);
   const n = Math.max(tab.items.length, tab.session) + (tab.netBlocked || 0);
   const total = Number(s.totalBlocked || 0);
-  const state = first ? 'first-run' : paused ? 'paused' : !s.enabled ? 'off' : !host ? 'no-run' : 'normal';
+  const wn = !first && whatsNewOn(s);
+  const state = first ? 'first-run' : wn ? 'whats-new' : paused ? 'paused' : !s.enabled ? 'off' : !host ? 'no-run' : 'normal';
   app.dataset.state = state;
   document.body.classList.toggle('is-off', !s.enabled && !first);
   $('enabled').checked = !!s.enabled;
@@ -267,13 +272,14 @@ function renderHero(s) {
     h.textContent = n > 0 ? `Hid ${n} ${n === 1 ? 'thing' : 'things'} on this page.` : 'Nothing to hide on this page.';
     sub.textContent = `Quell is on · ${since}`;
   }
-  $('featCard').hidden = first;
-  $('mainCard').hidden = first;
+  if (wn) { h.textContent = 'Quell is on.'; sub.hidden = true; }
+  $('featCard').hidden = first || wn;
+  $('mainCard').hidden = first || wn;
 }
 
 function renderItems(s) {
   const card = $('itemsCard');
-  const show = !firstRunOn(s) && s.enabled && !!host && tab.items.length > 0 && !isPaused(s);
+  const show = !firstRunOn(s) && !whatsNewOn(s) && s.enabled && !!host && tab.items.length > 0 && !isPaused(s);
   card.hidden = !show;
   if (!show) return;
   const list = $('itemList');
@@ -512,7 +518,7 @@ async function renderAnalytics(s) {
   $('analyticsSwitch').checked = FR ? (FR.dataApi && await FR.dataApi() ? await FR.analyticsOn(s) : s.analytics === 'on') : s.analytics === 'on';
 }
 
-let frMounted = false;
+let frMounted = false, wnMounted = false;
 async function render() {
   current = await store.get(S.DEFAULTS);
   const s = current;
@@ -530,6 +536,18 @@ async function render() {
   await renderAnalytics(s);
   const first = firstRunOn(s);
   $('firstRun').hidden = !first;
+  const wnShow = !first && whatsNewOn(s);
+  $('whatsNew').hidden = !wnShow;
+  if (wnShow) $('wnAna').hidden = s.analytics !== 'unset';
+  if (wnShow && !wnMounted && globalThis.QuellFirstRun) {
+    wnMounted = true;
+    globalThis.QuellFirstRun.mount($('whatsNew'), {
+      grantInTab: GRANT_IN_TAB, openTab: openPageView, forceAsk: true, grantName: 'whatsnew',
+      turnPatch: { linksEnabled: true, aiWebOn: true, aiWebAccess: true },
+      onDone: () => render(),
+      onChange: () => { $('app').classList.toggle('sent-open', !$('wnSent').hidden); },
+    }).catch(() => { wnMounted = false; });
+  }
   if (first && !frMounted && globalThis.QuellFirstRun) {
     frMounted = true;
     globalThis.QuellFirstRun.mount($('firstRun'), {
@@ -682,7 +700,9 @@ function grantedFeature(id, key, grantName) {
       const granted = await chrome.permissions.request({ origins: ALL_SITES }).catch(() => false);
       if (!granted) { e.target.checked = false; await render(); return; }
       await save({ [key]: true });
-    } else if (await save({ [key]: false })) {
+    } else if (await save(key === 'linksEnabled' ? { linksEnabled: false, linksWarnAffiliate: false } : { [key]: false })) {
+      // Links also gives back the optional webNavigation permission its affiliate warning used.
+      if (key === 'linksEnabled') await chrome.permissions.remove({ permissions: ['webNavigation'] }).catch(() => {});
       await releaseAllSitesIfUnused();
     }
     await render();
@@ -691,6 +711,9 @@ function grantedFeature(id, key, grantName) {
 grantedFeature('cookies', 'cookieEnabled', 'cookies');
 grantedFeature('popups', 'popupsEnabled', 'popups');
 grantedFeature('links', 'linksEnabled', 'links');
+
+// "What's new": the close button answers it without turning anything on.
+$('wnClose').addEventListener('click', async () => { await save({ whatsNewSeen: WHATS_NEW }); await render(); });
 
 // "Warn me if a site swaps an affiliate code" needs the optional webNavigation
 // permission, asked for on this click and given back when it is switched off.
@@ -924,7 +947,7 @@ $('reportSend').addEventListener('click', async () => {
   await render();
   await renderAccess();
   const grant = params.get('grant');
-  const focusId = { engines: 'engines', cookies: 'cookies', popups: 'popups', links: 'links', base: 'grantBase', analytics: 'analyticsSwitch', firstrun: 'firstRun', aiweb: 'aiWebGrant' }[grant];
+  const focusId = { engines: 'engines', cookies: 'cookies', popups: 'popups', links: 'links', base: 'grantBase', analytics: 'analyticsSwitch', firstrun: 'firstRun', aiweb: 'aiWebGrant', whatsnew: 'whatsNew' }[grant];
   if (PAGE_VIEW && grant === 'engines') { expanded.search = true; await render(); }
   if (PAGE_VIEW && grant === 'aiweb') { expanded.aiweb = true; await render(); }
   if (PAGE_VIEW && grant === 'analytics') { $('gearBtn').click(); }

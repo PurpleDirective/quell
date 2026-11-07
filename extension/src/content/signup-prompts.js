@@ -56,7 +56,9 @@
   // A real prompt is one call to action; a panel with more than this many links
   // is navigation with a Sign in item among many.
   const MANY_LINKS = 8;
-  const USER_WINDOW_MS = 2500; // the scan is throttled to 1.2 s, so a drawer opened by a click is seen up to that late
+  // A dialog that shows up within this long of the user's own click or key press is
+  // theirs: a Follow, Like or Save click opens a login a few seconds later.
+  const USER_WINDOW_MS = 10000;
   const DIALOG_SEL = '[role="dialog"], [role="alertdialog"], [aria-modal="true"], dialog[open]';
   const CONTENT_SEL = 'main, article, [role="main"]';
   const PROMPT_RE = /\b(sign[\s-]?up|sign[\s-]?in|log[\s-]?in|log into|create (?:a |an |your )?(?:free )?account|continue with (?:google|apple|facebook|email|phone)|join (?:now|free|for free|today)|register (?:now|for free)|already have an account)\b/i;
@@ -138,6 +140,16 @@
     return false;
   };
 
+  // The page has body text of its own (a main / article) outside the candidate.
+  const contentOutside = (layer) => {
+    for (const el of document.querySelectorAll(CONTENT_SEL)) {
+      if (layer.contains(el)) continue;
+      const own = (el.innerText || '').length - (el.contains(layer) ? (layer.innerText || '').length : 0);
+      if (own >= 250) return true;
+    }
+    return false;
+  };
+
   const layerRoot = (el) => {
     let r = el;
     while (r.parentElement && r.parentElement !== document.body && r.parentElement !== document.documentElement
@@ -178,6 +190,15 @@
     if (!bigLayer && !bottomBar) return false;
     const text = textOf(layer, 900);
     if (!PROMPT_RE.test(text)) return false;
+    // A column of the page's own (a content sidebar, a chat) with one "Log in"
+    // line in it is a part of the page: it touches a window edge, is narrow and
+    // about full height, or it holds a message box, a video or a list of items.
+    if (rect.width <= 0.5 * vw && rect.height >= 0.85 * vh && (rect.left <= 2 || rect.right >= vw - 2)) return false;
+    if (layer.querySelector('textarea, video, [contenteditable="true"]')) return false;
+    let items = 0;
+    for (const li of layer.querySelectorAll('li, article, [role="listitem"]')) {
+      if (!PROMPT_RE.test((li.textContent || '').slice(0, 200)) && ++items >= 3) return false;
+    }
     if (layer.matches(CONTENT_SEL) || layer.querySelector(CONTENT_SEL) || textOf(layer, 3100).length > 3000) return false;
     return true;
   };
@@ -359,6 +380,9 @@
       // A login the user asked for stays, for good: the layer is theirs.
       if (askedRecently()) { kept.add(layer); layer.setAttribute(KEEP, '1'); continue; }
       if (loginFormOutside(layer)) continue;
+      // A form with a password field on a page with no body text of its own
+      // (a login page at an address we do not know) is the page itself.
+      if (layer.querySelector('input[type="password" i]') && !contentOutside(layer)) continue;
       const bySiteRule = bySite.has(c);
       if (!bySiteRule && !looksLikePrompt(layer, rect, c.matches(DIALOG_SEL) || !!layer.querySelector(DIALOG_SEL))) continue;
       if (bySiteRule && (layer.matches(CONTENT_SEL) || layer.querySelector(CONTENT_SEL))) continue;
@@ -453,6 +477,7 @@
     globalThis.QuellSettings.onChange(['enabled', 'popupsEnabled', 'popupAllowlist', 'hideSignupPrompts'],
       () => readSettings().then(applyState).catch(() => {}));
     globalThis.QuellSettings.onGone(stop);
+    document.addEventListener('quell:rearm', () => readSettings().then(applyState).catch(() => {}));
   } catch (_) { /* test context */ }
 
   let s = DEFAULTS;

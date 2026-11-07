@@ -109,7 +109,7 @@ main { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 
 .items { padding: 0 16px; }
 .items ul { list-style: none; margin: 0; padding: 0; }
 .item + .item { border-top: 1px solid var(--line); }
-.line { display: flex; align-items: center; gap: 12px; min-height: 40px; }
+.line { display: flex; align-items: center; gap: 12px; min-height: 36px; }
 .ii { width: 16px; height: 16px; display: grid; place-items: center; flex: none; color: var(--accent); }
 .il { flex: 1; display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .il b { font-size: 13px; font-weight: 600; }
@@ -122,7 +122,7 @@ main { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 
 .items .more { margin: 0 0 8px 16px; }
 
 /* ---- this site ---- */
-.site { padding: 4px 16px 12px; }
+.site { padding: 4px 16px 8px; }
 .srow { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 28px; font-size: 12px; color: var(--muted); }
 .srow .ic-btn { margin-right: -8px; }
 .host { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -242,5 +242,10 @@ dialog .fine { font-size: 12px; margin: 0 0 8px; }
 
 /* "What's sent" open on the first-run card: give the disclosure the room. */
 .sent-open .fr-def, .sent-open #heroCopy, .sent-open #tryIt { display: none; }
+.frc { position: relative; }
+.wn-t { margin: 0 32px 12px 0; font-size: 15px; font-weight: 600; line-height: 1.3; }
+.wn-list { margin: 0 0 16px; padding: 0 0 0 16px; font-size: 12px; color: var(--muted); display: grid; gap: 4px; }
+.wn-x { position: absolute; top: 8px; right: 8px; }
+.sent-open .wn-list { display: none; }
 .frc .two { margin-top: 16px; }
 .frc .ana + .two { margin-top: 16px; }

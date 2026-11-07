@@ -35,7 +35,7 @@ const set = (o) => sw.evaluate((s) => QuellSettings.set(s), o);
 console.log('Google (live-page fixture): no blank box, AI Mode chrome, organic kept, Peek/Undo:');
 {
   await set({ enabled: true, aiEnabled: true, googleMode: 'hide', hideOverview: true, hideAiMode: true, hidePaa: false, hideGemini: true,
-    firstRunDone: true, aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [], aiWebAllowlist: [], sitePauses: {} });
+    firstRunDone: true, whatsNewSeen: '0.7.4', aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [], aiWebAllowlist: [], sitePauses: {} });
   // The live page's JavaScript gives the Overview's wrappers fixed heights the
   // static copy does not have, and its outer wrapper is not the class the CSS
   // layer targets: reproduce both, so the label pass hides an inner block and
@@ -124,6 +124,7 @@ console.log('Google (live-page fixture): no blank box, AI Mode chrome, organic k
     });
     await popup.goto(`chrome-extension://${extId}/src/popup/popup.html`);
     await popup.waitForTimeout(1200);
+    if (await popup.locator('#itemsMore').isVisible()) { await popup.click('#itemsMore'); await popup.waitForTimeout(200); }
     const labels = await popup.evaluate(() => [...document.querySelectorAll('.item b')].map((b) => b.textContent));
     ok(labels.includes('AI Overview') && labels.includes('AI Mode tab') && labels.includes('AI Mode follow-up box'), `the hidden list names the Overview, the AI Mode tab and the follow-up box (${labels.join(' | ')})`);
     const row = popup.locator('.item', { hasText: 'AI Overview' });
@@ -228,7 +229,7 @@ console.log('AI on websites (cosmetic): ten sites, nothing else touched:');
 // ------------------------------------------------ C. the popup group, real extension --
 console.log('Popup: AI on websites group:');
 {
-  await set({ enabled: true, firstRunDone: true, aiWebOn: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebReplay: false,
+  await set({ enabled: true, firstRunDone: true, whatsNewSeen: '0.7.4', aiWebOn: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebReplay: false,
     aiWebAccess: false, aiWebAllowlist: [], sitePauses: {}, aiAllowlist: [], cookieEnabled: false, popupsEnabled: false });
   const g = await ctx.newPage();
   await g.route('https://www.google.com/search**', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><div id="rso"><div class="MjjYud"><div role="heading">AI Overview</div></div></div>' }));
@@ -677,6 +678,270 @@ console.log('Brave Search: the "Ask" tab goes with the AI answer:');
   ok(on.organic && on.organicAsk, 'a result inside the organic area, even one named "Ask", is never hidden');
   const off = await run('off');
   ok(off.ask && off.all, 'Leave it: the Ask tab stays');
+}
+
+// ------------------------------------------------ H. Fable review fixes ------------------
+console.log('Review fixes: safety net, user gestures, columns, login pages, What’s new card, popup fit, links, headings, Bing:');
+{
+  const LONGP = 'Placeholder paragraph with plenty of words so that the page clearly has content of its own. '.repeat(12);
+  const stub = (st, extra = '') => `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__sent=[];
+    window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
+      runtime:{id:'quell',onMessage:{addListener(){}},sendMessage:async(m)=>{ if(m.type==='blocked'){window.__sent.push(m);return;} ${extra} }}};`;
+  const openAt = async (host, urlPath, html, src, st, wait = 1800, extra = '') => {
+    const pg = await ctx.newPage();
+    await pg.setViewportSize({ width: 1280, height: 720 });
+    await pg.route(`http://${host}/**`, (r) => r.fulfill({ contentType: 'text/html', body: html }));
+    await pg.addInitScript({ content: stub(st, extra) + '\n' + src });
+    await pg.goto(`http://${host}${urlPath}`);
+    await pg.waitForTimeout(wait);
+    return pg;
+  };
+  const vis = (pg, id) => pg.evaluate((i) => { const e = document.getElementById(i); return !!e && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none'; }, id);
+  const AIW = SETTINGS_SRC + '\n' + AIWEB_SRC;
+  const PROMPTS = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/signup-prompts.js'), 'utf8');
+
+  // 1. An app swapping its own content (spinner, then re-render) must not trip the safety net.
+  {
+    const html = `<!doctype html><html><body><header><button aria-label="Ask AI" id="ask1">Ask AI</button></header>
+      <main id="m"><p>${'Placeholder article sentence with several words in it. '.repeat(54)}</p></main>
+      <script>
+        setTimeout(() => { document.getElementById('m').innerHTML = '<div id="spin">Loading</div>'; }, 900);
+        setTimeout(() => { document.getElementById('m').innerHTML = '<p>${'Placeholder article sentence with several words in it. '.repeat(54)}</p>'; const b = document.createElement('button'); b.id = 'ask2'; b.setAttribute('aria-label', 'Ask AI'); b.textContent = 'Ask AI'; document.body.prepend(b); }, 2100);
+      </script></body></html>`;
+    const len = (html.match(/Placeholder article sentence/g) || []).length;
+    const pg = await openAt('spa.test', '/', html, AIW, { enabled: true, aiWebOn: true, aiWebAccess: true }, 3800,
+      "if(m.type==='aiWebRules') return {rules:[{sel:['button[aria-label=\"Ask AI\"]'],what:'Ask AI'}]};");
+    ok(len >= 54 && await pg.evaluate(() => document.body.innerText.length) > 2900, 'precondition: the page holds about 2,900 characters of text');
+    ok(await pg.evaluate(() => !document.documentElement.hasAttribute('data-quell-safety')), 'a page swapping its own content to a spinner and back does not trip the safety net');
+    ok(!(await vis(pg, 'ask1')) && !(await vis(pg, 'ask2')), 'Ask AI is hidden before the swap and again after the re-render');
+    await pg.close();
+  }
+  // 1b. A hide that really blanks the page still trips; the net re-arms on a new address.
+  {
+    const html = `<!doctype html><html><body><main id="m"><p id="t">${LONGP}${LONGP}</p></main></body></html>`;
+    const pg = await openAt('guard2.test', '/a', html, SETTINGS_SRC, {}, 300);
+    const res = await pg.evaluate(() => {
+      const G = QuellSettings.guard; let undone = 0;
+      G.register(() => { undone++; document.getElementById('m').style.display = ''; });
+      G.measure();
+      document.getElementById('m').style.display = 'none'; G.acted();
+      return { tripped: G.check(), undone, attr: document.documentElement.getAttribute('data-quell-safety') };
+    });
+    ok(res.tripped && res.undone === 1 && res.attr === '1', 'Quell blanking the page in one sweep still trips the net and undoes the hide');
+    await pg.evaluate(() => { window.__rearm = 0; document.addEventListener('quell:rearm', () => window.__rearm++); history.pushState({}, '', '/b'); });
+    await pg.waitForTimeout(1800);
+    ok(await pg.evaluate(() => !QuellSettings.guard.state.tripped && !document.documentElement.hasAttribute('data-quell-safety') && window.__rearm === 1),
+      'a change of address re-arms the net and tells the layers to start again');
+    await pg.close();
+  }
+
+  // 2. A login dialog that appears some seconds after the user's own click is theirs; one with no click behind it is hidden.
+  {
+    const mk = (delay) => `<!doctype html><html><body><main><h1>Story</h1><p>${LONGP}</p><button id="follow">Follow</button></main>
+      <script>document.getElementById('follow').addEventListener('click', () => setTimeout(() => {
+        const d = document.createElement('div'); d.id = 'dlg'; d.setAttribute('role', 'dialog');
+        d.style.cssText = 'position:fixed;left:30%;top:20%;width:40%;background:#fff;padding:16px;z-index:9';
+        d.innerHTML = '<h2>Log in to follow</h2><input type="email" aria-label="Email"><input type="password" aria-label="Password"><button>Log in</button>';
+        document.body.appendChild(d); }, ${delay}));</script></body></html>`;
+    for (const sec of [1, 3, 6]) {
+      const pg = await openAt('gesture.test', '/', mk(sec * 1000), PROMPTS, { popupsEnabled: true }, 300);
+      await pg.click('#follow');
+      await pg.waitForTimeout(sec * 1000 + 2600);
+      ok(await vis(pg, 'dlg'), `a login dialog ${sec} s after a click on Follow is kept`);
+      await pg.close();
+    }
+    const auto = `<!doctype html><html><body><main><h1>Story</h1><p>${LONGP}</p></main>
+      <script>setTimeout(() => { const d = document.createElement('div'); d.id = 'dlg'; d.setAttribute('role', 'dialog');
+        d.style.cssText = 'position:fixed;left:30%;top:20%;width:40%;background:#fff;padding:16px;z-index:9';
+        d.innerHTML = '<h2>Log in to continue</h2><input type="email" aria-label="Email"><input type="password" aria-label="Password"><button>Log in</button>'; document.body.appendChild(d); }, 800);</script></body></html>`;
+    const pg = await openAt('gesture2.test', '/', auto, PROMPTS, { popupsEnabled: true }, 3500);
+    ok(!(await vis(pg, 'dlg')), 'a login dialog that appears with no click or key press behind it is still hidden');
+    await pg.close();
+  }
+
+  // 3. A fixed column of the page's own with one "Log in" line in it is not a prompt.
+  {
+    const items = Array.from({ length: 6 }, (_, i) => `<li><a href="/s${i}">Placeholder story ${i + 1}</a></li>`).join('');
+    const side = `<!doctype html><html><body><main><h1>News</h1><p>${LONGP}</p></main>
+      <aside id="side" style="position:fixed;right:0;top:0;width:320px;height:100vh;background:#fff;z-index:5"><h3>Saved</h3><ul>${items}</ul><p>Log in to save stories</p></aside></body></html>`;
+    const pg = await openAt('side.test', '/', side, PROMPTS, { popupsEnabled: true }, 2800);
+    ok(await vis(pg, 'side'), 'a 320 px content sidebar with "Log in to save stories" is kept');
+    await pg.close();
+    const chat = `<!doctype html><html><body><main><h1>Live</h1><p>${LONGP}</p></main>
+      <div id="chat" style="position:fixed;right:0;top:0;width:340px;height:100vh;background:#fff;z-index:5"><div>Placeholder message</div><div>Placeholder message two</div><input aria-label="Message"><p>Log in to chat</p></div></body></html>`;
+    const pc = await openAt('chat.test', '/', chat, PROMPTS, { popupsEnabled: true }, 2800);
+    ok(await vis(pc, 'chat'), 'a fixed chat column with a message box and "Log in to chat" is kept');
+    await pc.close();
+    const modal = `<!doctype html><html><body><main><h1>News</h1><p>${LONGP}</p></main>
+      <div id="m" role="dialog" style="position:fixed;left:30%;top:20%;width:40%;background:#fff;padding:16px;z-index:9"><h2>Sign up or log in</h2><button>Continue with Google</button><button>Log in</button></div></body></html>`;
+    const pm = await openAt('modal.test', '/', modal, PROMPTS, { popupsEnabled: true }, 2800);
+    ok(!(await vis(pm, 'm')), 'control: a plain sign-up modal over an article is still hidden');
+    await pm.close();
+  }
+
+  // 4. A dedicated login page at an address Quell does not know is the page, not a prompt.
+  {
+    const links = Array.from({ length: 16 }, (_, i) => `<a href="/f${i}">Footer ${i}</a>`).join(' ');
+    const html = `<!doctype html><html><body><div id="form" style="position:fixed;left:50%;top:50%;width:560px;height:470px;margin:-235px 0 0 -280px;background:#fff;padding:16px">
+      <h2>Log in</h2><form><input type="text" aria-label="User"><input type="password" aria-label="Password"><button>Log in</button></form><div>${links}</div></div></body></html>`;
+    const pg = await openAt('members.test', '/members/enter', html, PROMPTS, { popupsEnabled: true }, 2800);
+    ok(await vis(pg, 'form'), 'a fixed login form (password field, 16 links) on /members/enter with no page text of its own is kept');
+    await pg.close();
+  }
+
+  // 7. Links: a malformed %-sequence in one address does not stop the sweep.
+  {
+    const LINKS = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/links.js'), 'utf8');
+    const html = `<!doctype html><html><body><a id="bad" href="/x?%E0%A4%A=1&utm_source=mail">bad</a><a id="good" href="/y?utm_source=mail&id=3">good</a></body></html>`;
+    const pg = await openAt('links.test', '/', html, LINKS, { enabled: true, linksEnabled: true }, 1500);
+    const h = await pg.evaluate(() => [document.getElementById('bad').getAttribute('href'), document.getElementById('good').getAttribute('href')]);
+    ok(h[1] === 'http://links.test/y?id=3', `the clean link after the malformed one is still cleaned (${h[1]})`);
+    ok(!/utm_source/.test(h[0]), `and the malformed one is cleaned with its raw key (${h[0]})`);
+    await pg.close();
+  }
+
+  // 8. X: the "Today's News" heading rule leaves post text alone.
+  {
+    const html = `<!doctype html><html><body><div id="side"><h2 id="news-h"><span id="news-s">Today's News</span></h2></div>
+      <article><div data-testid="tweetText"><span id="post">Today's News</span></div></article></body></html>`;
+    const pg = await openAt('x.com', '/explore', html, AIW, { enabled: true, aiWebOn: true, aiWebAccess: true }, 1500,
+      `if(m.type==='aiWebRules') return {rules:${JSON.stringify(COSMETIC.filter((r) => r.id === 'x-todays-news-heading').map((r) => ({ sel: r.sel, what: r.what, t: r.t })))}};`);
+    ok(!(await vis(pg, 'news-h')) && await vis(pg, 'post'), 'the "Today’s News" heading in the sidebar goes; a post that says the same words stays');
+    await pg.close();
+  }
+
+  // 10. Bing News: the "AI MODE" tab goes with Bing's AI switch, nothing shifts.
+  {
+    const BINGJS = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/common.js'), 'utf8') + '\n' + readFileSync(path.join(EXT, 'src/content/bing.js'), 'utf8');
+    const html = `<!doctype html><html><body><header id="b_header"><nav><ul id="tabs"><li><a id="t-all" href="/news">All</a></li><li id="aili"><a id="aimode" href="/x">AI MODE</a></li><li><a id="t-news" href="/news/search">News</a></li></ul></nav></header>
+      <div id="b_results"><div class="b_algo"><a id="org" href="https://example.com/">AI mode explained</a></div></div></body></html>`;
+    const pg = await ctx.newPage();
+    await pg.route('https://www.bing.com/**', (r) => r.fulfill({ contentType: 'text/html', body: html }));
+    await pg.addInitScript({ content: `window.chrome={storage:{local:{get:async(d)=>({...d,enabled:true,aiEnabled:true,bingEnabled:true})},onChanged:{addListener(){}}},runtime:{id:'quell',onMessage:{addListener(){}},sendMessage(){}}};` + '\n' + BINGJS });
+    await pg.goto('https://www.bing.com/news');
+    await pg.waitForTimeout(900);
+    ok(!(await vis(pg, 'aimode')) && !(await vis(pg, 'aili')) && await vis(pg, 't-all') && await vis(pg, 't-news') && await vis(pg, 'org'),
+      'Bing News: the "AI MODE" tab is hidden with its list item; the other tabs and the results stay');
+    await pg.close();
+  }
+
+  // 5 + 6 + 9. The popup, in the real extension.
+  {
+    const popup = async ({ tabbed = false, stubPerm = false } = {}) => {
+      const p = await ctx.newPage();
+      await p.setViewportSize({ width: 360, height: 600 });
+      await p.addInitScript(({ tabbedIn, stubIn }) => {
+        window.__perm = [];
+        if (stubIn) {
+          chrome.permissions.request = async (o) => { window.__perm.push(['request', o]); return true; };
+          chrome.permissions.remove = async (o) => { window.__perm.push(['remove', o]); return true; };
+        }
+        if (!tabbedIn) return;
+        const orig = chrome.tabs.query.bind(chrome.tabs);
+        chrome.tabs.query = async (q) => {
+          if (!q || !q.active) return orig(q);
+          const own = (await chrome.tabs.getCurrent())?.id;
+          for (const t of await orig({})) {
+            if (t.id === own) continue;
+            try { await chrome.tabs.sendMessage(t.id, { type: 'where' }); return [t]; } catch (_) { /* next */ }
+          }
+          return [];
+        };
+      }, { tabbedIn: tabbed, stubIn: stubPerm });
+      await p.goto(`chrome-extension://${extId}/src/popup/popup.html`);
+      await p.waitForTimeout(900);
+      return p;
+    };
+    const fits = (p) => p.evaluate(() => { const m = document.getElementById('main'); return { over: m.scrollHeight - m.clientHeight, body: Math.round(document.body.getBoundingClientRect().height) }; });
+    const base = { enabled: true, firstRunDone: true, linksEnabled: false, aiWebOn: false, aiWebAccess: false, aiWebAllowlist: [], sitePauses: {}, analytics: 'unset', whatsNewSeen: '' };
+
+    await set(base);
+    let p = await popup();
+    ok(await p.evaluate(() => !document.getElementById('whatsNew').hidden && document.getElementById('firstRun').hidden && document.getElementById('mainCard').hidden),
+      'updated user: the What’s new card shows, in place of the first-run card');
+    ok(await p.evaluate(() => /What.s new in Quell 0\.7\.4/.test(document.getElementById('wnT').textContent) && document.querySelectorAll('.wn-list li').length === 3
+      && /Turn these on/.test(document.querySelector('#whatsNew [data-fr=turn]').textContent) && /Not now/.test(document.querySelector('#whatsNew [data-fr=skip]').textContent)),
+      'the card has a title, three short lines, "Turn these on" and "Not now"');
+    ok(await p.evaluate(() => !document.getElementById('wnAna').hidden && !!document.querySelector('#whatsNew [data-fr=analytics]')), 'with usage counts unset, the card carries the usage-counts line');
+    let f = await fits(p);
+    ok(f.over <= 0 && f.body <= 560, `the card fits the 360 x 560 popup with no scroll (overflow ${f.over}, ${f.body}px)`);
+    await p.screenshot({ path: '/tmp/quell-review/whats-new-card.png' }).catch(() => {});
+    await p.click('#whatsNew [data-fr=sentBtn]');
+    await p.waitForTimeout(200);
+    f = await fits(p);
+    await p.screenshot({ path: '/tmp/quell-review/whats-new-card-sent-open.png' }).catch(() => {});
+    ok(f.over <= 0 && f.body <= 560, `with "What’s sent" open it still fits (overflow ${f.over})`);
+    await p.close();
+
+    // Not now: nothing turns on, the card does not come back.
+    p = await popup({ stubPerm: true });
+    await p.click('#whatsNew [data-fr=skip]');
+    await p.waitForTimeout(500);
+    let s = await sw.evaluate(() => QuellSettings.get({ linksEnabled: false, aiWebOn: true, aiWebAccess: false, whatsNewSeen: '' }));
+    ok(s.linksEnabled === false && s.aiWebOn === false && s.aiWebAccess === false && s.whatsNewSeen === '0.7.4', '"Not now" leaves Links and AI on websites off and records the card as seen');
+    ok(await p.evaluate(() => document.getElementById('whatsNew').hidden && !document.getElementById('mainCard').hidden), 'and the card is gone, the normal popup shows');
+    await p.close();
+    p = await popup();
+    ok(await p.evaluate(() => document.getElementById('whatsNew').hidden), 'a later popup does not show it again');
+    await p.close();
+
+    // Close behaves like Not now.
+    await set(base);
+    p = await popup();
+    await p.click('#wnClose');
+    await p.waitForTimeout(500);
+    s = await sw.evaluate(() => QuellSettings.get({ linksEnabled: false, aiWebOn: true, whatsNewSeen: '' }));
+    ok(s.linksEnabled === false && s.aiWebOn === false && s.whatsNewSeen === '0.7.4', 'the close button also leaves them off and does not show the card again');
+    await p.close();
+
+    // Turn these on.
+    await set(base);
+    p = await popup({ stubPerm: true });
+    await p.click('#whatsNew [data-fr=turn]');
+    await p.waitForTimeout(700);
+    s = await sw.evaluate(() => QuellSettings.get({ linksEnabled: false, aiWebOn: false, aiWebAccess: false, whatsNewSeen: '', analytics: 'unset' }));
+    ok(s.linksEnabled === true && s.aiWebOn === true && s.aiWebAccess === true && s.whatsNewSeen === '0.7.4', '"Turn these on" turns Links and AI on websites on');
+    ok(await p.evaluate(() => window.__perm.some(([k, o]) => k === 'request' && (o.origins || []).includes('<all_urls>'))), 'and asks the browser for all-sites access');
+    ok(s.analytics === 'on' || s.analytics === 'off', 'and saves the usage-counts choice shown on the card');
+    await p.close();
+
+    // Fresh install: the first-run card, not this one; finishing it records the card as seen.
+    await set({ ...base, firstRunDone: false });
+    p = await popup({ stubPerm: true });
+    ok(await p.evaluate(() => !document.getElementById('firstRun').hidden && document.getElementById('whatsNew').hidden), 'fresh install: the first-run card shows and the What’s new card does not');
+    await p.click('#firstRun [data-fr=skip]');
+    await p.waitForTimeout(500);
+    s = await sw.evaluate(() => QuellSettings.get({ firstRunDone: false, whatsNewSeen: '' }));
+    ok(s.firstRunDone === true && s.whatsNewSeen === '0.7.4', 'finishing first run records the What’s new card as seen: a new user never gets it');
+    await p.close();
+
+    // Links off gives webNavigation back.
+    await set({ ...base, whatsNewSeen: '0.7.4', linksEnabled: true, linksWarnAffiliate: true });
+    p = await popup({ stubPerm: true });
+    await p.evaluate(() => { document.getElementById('links').checked = true; });
+    const linksBox = await p.evaluate(() => document.getElementById('links').checked);
+    if (linksBox) { await p.evaluate(() => { document.getElementById('links').click(); }); await p.waitForTimeout(700); }
+    ok(await p.evaluate(() => window.__perm.some(([k, o]) => k === 'remove' && (o.permissions || []).includes('webNavigation'))), 'turning Links off hands back the webNavigation permission');
+    ok((await sw.evaluate(() => QuellSettings.get({ linksEnabled: true, linksWarnAffiliate: true }))).linksEnabled === false, 'and the Links switch is off');
+    await p.close();
+
+    // Item 6: a Google page with hidden items and the site card fits without a scroll.
+    await set({ ...base, whatsNewSeen: '0.7.4', googleMode: 'hide', hideOverview: true, hideAiMode: true, hidePaa: true, hideGemini: true, aiEnabled: true, aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [] });
+    const g = await ctx.newPage();
+    await g.setViewportSize({ width: 1280, height: 900 });
+    await g.route('https://www.google.com/search**', (r) => r.fulfill({ contentType: 'text/html', body: GOOGLE_LIVE }));
+    await g.goto('https://www.google.com/search?q=how+long+to+boil+an+egg', { waitUntil: 'domcontentloaded' });
+    await g.waitForTimeout(2200);
+    p = await popup({ tabbed: true });
+    await p.waitForTimeout(500);
+    const n = await p.evaluate(() => document.querySelectorAll('#itemList .item').length);
+    f = await fits(p);
+    ok(n >= 1 && await p.evaluate(() => !document.getElementById('siteCard').hidden), `precondition: the Google page lists hidden items (${n}) and the site card shows`);
+    ok(f.over <= 0 && f.body <= 560, `a Google page with hidden items and the site card fits the popup with no scroll (overflow ${f.over}, ${f.body}px)`);
+    await p.close();
+    await g.close();
+    await set({ aiAllowlist: [], sitePauses: {} });
+  }
 }
 
 await ctx.close();

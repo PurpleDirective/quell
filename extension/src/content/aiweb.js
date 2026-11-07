@@ -153,6 +153,7 @@
     S.onChange(['enabled', 'aiWebOn', 'aiWebAccess', 'aiWebAllowlist', 'aiWebButtons', 'aiWebChat', 'aiWebSupport'],
       () => { stop(); S.get(DEFAULTS).then(apply).catch(() => {}); });
     S.onGone(stop);
+    document.addEventListener('quell:rearm', () => { stop(); S.get(DEFAULTS).then(apply).catch(() => {}); });
   } catch (_) { /* test context */ }
 
   let s = DEFAULTS;

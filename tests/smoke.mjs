@@ -949,7 +949,7 @@ console.log('Hidden-tab sweep:');
 
 // --- Popup renders with defaults (real extension page) ---
 console.log('Popup:');
-await sw.evaluate(() => QuellSettings.set({ firstRunDone: true }));
+await sw.evaluate(() => QuellSettings.set({ firstRunDone: true, whatsNewSeen: '0.7.4' }));
 {
   const page = await ctx.newPage();
   await page.goto(`chrome-extension://${extId}/src/popup/popup.html`);
@@ -1755,7 +1755,7 @@ console.log('Popup — engines switch (intent path / off path):');
   // only when the case allows the grant, remove() flips it back.
   const fakeChrome = ({ storage, granted, allowGrant }) => `
     window.__calls = [];
-    window.__state = { granted: ${granted}, local: { firstRunDone: true, ...${JSON.stringify(storage)} } };
+    window.__state = { granted: ${granted}, local: { firstRunDone: true, whatsNewSeen: '0.7.4', ...${JSON.stringify(storage)} } };
     window.chrome = {
       runtime: { id: 'fake' },
       storage: { local: {
@@ -1876,7 +1876,7 @@ console.log('Popup — all-sites access is given back when Cookie banners and Po
   const fake = ({ local, granted, soft = [], allowGrant = true }) => `
     window.__calls = [];
     const st = window.__st = { granted: new Set(${JSON.stringify(granted)}), soft: new Set(${JSON.stringify(soft)}),
-      local: { firstRunDone: true, ...${JSON.stringify(local)} }, session: {} };
+      local: { firstRunDone: true, whatsNewSeen: '0.7.4', ...${JSON.stringify(local)} }, session: {} };
     const covers = (o) => st.granted.has(o) || st.granted.has('<all_urls>');
     window.chrome = {
       runtime: { id: 'fake' },
@@ -2779,7 +2779,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
   // asks which site it is on (null: no Quell script in the tab).
   const fake = (local, tabUrl, where = null, firefox = false) => `
     window.__calls = [];
-    window.__state = { local: { firstRunDone: true, ...${JSON.stringify(local)} }, session: { 'tab:7': 4 } };
+    window.__state = { local: { firstRunDone: true, whatsNewSeen: '0.7.4', ...${JSON.stringify(local)} }, session: { 'tab:7': 4 } };
     window.chrome = {
       runtime: { id: 'fake', getManifest: () => ({ version: '0.6.0', content_scripts: [] }),
         getURL: (p) => ${JSON.stringify(firefox ? 'moz-extension://fake/' : 'chrome-extension://fake/')} + p },
@@ -3411,7 +3411,7 @@ console.log('Quell off — Google and Bing tabs left open across an update:');
 console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, analytics, pause:');
 {
   const reset = { enabled: true, aiEnabled: true, googleMode: 'hide', hideOverview: true, hideAiMode: true, hidePaa: false,
-    hideGemini: true, bingEnabled: true, firstRunDone: true, analytics: 'on', aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [],
+    hideGemini: true, bingEnabled: true, firstRunDone: true, whatsNewSeen: '0.7.4', analytics: 'on', aiAllowlist: [], cookieAllowlist: [], popupAllowlist: [],
     sitePauses: {}, cookieEnabled: false, popupsEnabled: false };
   await sw.evaluate((r) => QuellSettings.set(r), reset);
   const g = await ctx.newPage();
@@ -3477,7 +3477,7 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
     await p.reload(); await p.waitForTimeout(600);
     const f = await fits(p);
     ok(f.bodyH <= 560 && f.mainOver <= 0, `the first-run popup also fits without scrolling (${f.bodyH}px, overflow ${f.mainOver})`);
-    await sw.evaluate(() => QuellSettings.set({ firstRunDone: true, analytics: 'on' }));
+    await sw.evaluate(() => QuellSettings.set({ firstRunDone: true, whatsNewSeen: '0.7.4', analytics: 'on' }));
     await p.close();
   }
 
@@ -4019,7 +4019,7 @@ console.log('Popup: sign-up prompts switch and the Links group:');
   const css = readFileSync(path.join(EXT, 'src/popup/popup.css'), 'utf8');
   const fake = ({ local = {}, granted = [], allowGrant = true, prompts = 0, cleaned = null }) => `
     window.__calls = [];
-    const st = window.__st = { granted: new Set(${JSON.stringify(granted)}), perms: new Set(), local: { firstRunDone: true, ...${JSON.stringify(local)} } };
+    const st = window.__st = { granted: new Set(${JSON.stringify(granted)}), perms: new Set(), local: { firstRunDone: true, whatsNewSeen: '0.7.4', ...${JSON.stringify(local)} } };
     const covers = (o) => st.granted.has(o) || st.granted.has('<all_urls>');
     window.chrome = {
       runtime: { id: 'fake', getManifest: () => ({ version: '0.7.4', content_scripts: [] }), getURL: (p) => 'chrome-extension://fake/' + p },
@@ -4098,7 +4098,7 @@ console.log('Popup: sign-up prompts switch and the Links group:');
   const keep = await open({ local: { linksEnabled: true, cookieEnabled: true }, granted: ['<all_urls>'] });
   await keep.click('#links');
   await keep.waitForTimeout(300);
-  ok(!(await calls(keep)).some(([n]) => n === 'permissions.remove'), 'popup: Links off while Cookie banners still use the access keeps it');
+  ok(!(await calls(keep)).some(([n, a]) => n === 'permissions.remove' && (a.origins || []).length), 'popup: Links off while Cookie banners still use the access keeps it');
   await keep.close();
 
   // The affiliate warning asks for webNavigation, on the click, and gives it back.

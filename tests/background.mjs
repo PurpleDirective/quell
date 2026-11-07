@@ -714,10 +714,10 @@ console.log('Background — an update puts this version into the tabs already op
   const WEB_TABS = [{ id: 31, url: 'https://example.com/' }, { id: 32, url: 'https://duckduckgo.com/?q=a' }];
   const on = { enginesEnabled: true, cookieEnabled: true, popupsEnabled: true };
   const files = (h) => h.of('scripting.executeScript').map((c) => `${c.target.tabId}:${(c.files || []).at(-1)}`).sort().join(' ');
-  // The pop-ups layer injects settings.js, popups.js, then signup-prompts.js (0.7.4); the Links
-  // script goes in where the all-sites grant is in use (it is on by default there).
-  const all = '31:src/content/cookies.js 31:src/content/engines.js 31:src/content/links.js 31:src/content/signup-prompts.js '
-    + '32:src/content/cookies.js 32:src/content/engines.js 32:src/content/links.js 32:src/content/signup-prompts.js';
+  // The pop-ups layer injects settings.js, popups.js, then signup-prompts.js (0.7.4). Links is not
+  // among them: an update from before 0.7.4 leaves it off until the user turns it on.
+  const all = '31:src/content/cookies.js 31:src/content/engines.js 31:src/content/signup-prompts.js '
+    + '32:src/content/cookies.js 32:src/content/engines.js 32:src/content/signup-prompts.js';
   {
     const h = boot({ granted: ['<all_urls>'], storage: on, sync: {}, tabs: WEB_TABS });
     await h.chrome.runtime.onInstalled.fire({ reason: 'update', previousVersion: '0.7.0' });
@@ -736,7 +736,7 @@ console.log('Background — an update puts this version into the tabs already op
     const h = boot({ granted: ['<all_urls>'], storage: { cookieEnabled: true }, sync: {}, tabs: WEB_TABS });
     await h.chrome.runtime.onInstalled.fire({ reason: 'update', previousVersion: '0.7.0' });
     await settle();
-    ok(files(h) === '31:src/content/cookies.js 31:src/content/links.js 32:src/content/cookies.js 32:src/content/links.js', `update: only the features that are on, plus Links (on by default where the grant is in use) (${files(h)})`);
+    ok(files(h) === '31:src/content/cookies.js 32:src/content/cookies.js', `update: only the features that are on (Links stays off after an update) (${files(h)})`);
   }
   for (const fire of [(h) => h.chrome.runtime.onStartup.fire(), (h) => h.chrome.runtime.onInstalled.fire({ reason: 'chrome_update' })]) {
     const h = boot({ granted: ['<all_urls>'], storage: on, sync: {}, tabs: WEB_TABS });
@@ -983,5 +983,38 @@ console.log('Background — Links ("Remove tracking from links"), on by default 
   }
 }
 
+
+// --- An update from before 0.7.4 holds Links and AI on websites back -------
+console.log('Background — update from an earlier version: new features start off:');
+{
+  const dnrIds = (h) => h.of('dnr.updateEnabledRulesets').flatMap((o) => o.enableRulesetIds || []);
+  const h = boot({ granted: ['<all_urls>'], storage: { cookieEnabled: true, popupsEnabled: true, firstRunDone: false }, sync: {}, tabs: [] });
+  await h.chrome.runtime.onInstalled.fire({ reason: 'update', previousVersion: '0.7.2' });
+  await settle();
+  ok(h.local.linksEnabled === false && !h.registered.has('quell-links'), 'update from 0.7.2: Links stays off even though all-sites access is held, and nothing is registered');
+  ok(h.sync.aiWebOn === false && !h.registered.has('quell-aiweb') && !dnrIds(h).some((i) => /^ai_web/.test(i)), 'update from 0.7.2: AI on websites stays off (no script, no ruleset enabled)');
+  ok(h.local.firstRunDone === true && !h.local.whatsNewSeen, 'the first-run card is replaced by the What\u2019s new card: first run done, What\u2019s new not yet seen');
+  ok(h.of('tabs.create').length === 0, 'an update opens no tab');
+  // The user answers the card (the popup writes these); the background follows.
+  h.reset();
+  h.local.linksEnabled = true; h.sync.aiWebOn = true; h.local.aiWebAccess = true; h.local.whatsNewSeen = '0.7.4';
+  await h.chrome.storage.onChanged.fire({ linksEnabled: { newValue: true } }, 'local');
+  await h.chrome.storage.onChanged.fire({ aiWebAccess: { newValue: true } }, 'local');
+  await h.chrome.storage.onChanged.fire({ aiWebOn: { newValue: true } }, 'sync');
+  await settle();
+  ok(h.registered.has('quell-links') && h.registered.has('quell-aiweb'), '"Turn these on" (the settings it writes) registers Links and the AI-on-websites script');
+}
+{
+  const h = boot({ granted: ['<all_urls>'], storage: { cookieEnabled: true, firstRunDone: true, whatsNewSeen: '0.7.4' }, sync: {}, tabs: [] });
+  await h.chrome.runtime.onInstalled.fire({ reason: 'update', previousVersion: '0.7.3' });
+  await settle();
+  ok(!('aiWebOn' in h.sync) || h.sync.aiWebOn !== false, 'a user who already answered the card is not held back again');
+}
+{
+  const h = boot({ granted: false, storage: {}, sync: {}, tabs: [] });
+  await h.chrome.runtime.onInstalled.fire({ reason: 'install' });
+  await settle();
+  ok(h.local.firstRunDone !== true && h.sync.aiWebOn !== false && h.local.linksEnabled !== false, 'a fresh install is untouched: first run still to come, nothing held back');
+}
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

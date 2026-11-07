@@ -470,6 +470,7 @@
       () => readSettings().then(applyState).catch(() => {}));
     // Cut off from the extension: stop hiding (see onGone in settings.js).
     globalThis.QuellSettings.onGone(teardown);
+    document.addEventListener('quell:rearm', () => readSettings().then(applyState).catch(() => {}));
   } catch (_) { /* test context */ }
 
   let s = DEFAULTS;

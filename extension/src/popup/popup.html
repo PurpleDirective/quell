@@ -62,6 +62,30 @@
         <p class="fine" data-fr="note" data-fr-upgrade="Save keeps your choice above. You can change it any time in Quell’s settings." role="status" aria-live="polite">Either button saves your choice above. Turning both on asks your browser once for access to all sites; Quell never records the pages you visit.</p>
       </section>
 
+      <!-- Shown once to a user who updated to 0.7.4: Links and AI on websites start off. -->
+      <section class="card frc" id="whatsNew" hidden aria-labelledby="wnT">
+        <button type="button" class="ghost ic-btn wn-x" id="wnClose" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+        <h2 class="wn-t" id="wnT">What’s new in Quell 0.7.4</h2>
+        <ul class="wn-list">
+          <li>A new look, and sign-up and log-in prompts can be hidden.</li>
+          <li>AI buttons and chat assistants on other websites can be hidden.</li>
+          <li>Tracking can be removed from links.</li>
+        </ul>
+        <div class="ana" id="wnAna">
+          <label class="ck"><input type="checkbox" data-fr="analytics" /><span>Share anonymous usage counts to help improve Quell</span></label>
+          <button type="button" class="tbtn" data-fr="sentBtn" aria-expanded="false" aria-controls="wnSent">What’s sent</button>
+          <p class="sentp" id="wnSent" hidden>A random install ID, Quell version and browser, which switches are on, how many items each feature hid, popup opens and button clicks, and error messages. Never the pages you visit, your searches or your browsing history.</p>
+        </div>
+        <div class="two" data-fr-ask>
+          <button type="button" class="btn pri" data-fr="turn">Turn these on</button>
+          <button type="button" class="btn ghostb" data-fr="skip">Not now</button>
+        </div>
+        <div class="two" data-fr-done hidden><button type="button" class="btn pri" data-fr="done">Save</button></div>
+        <p class="fine" data-fr="note" role="status" aria-live="polite">Links and AI on websites are off until you turn them on. This asks your browser once for access to all sites.</p>
+      </section>
+
       <div class="card" id="mainCard">
       <!-- What Quell hid on the page the user is looking at. -->
       <section class="items" id="itemsCard" hidden aria-label="Hidden on this page">
