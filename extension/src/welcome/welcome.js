@@ -13,6 +13,39 @@
   if (globalThis.QuellBrowser && globalThis.QuellBrowser.opera) {
     document.getElementById('syncNote').textContent = 'Your settings are saved in this browser.';
   }
+  document.getElementById('nvb').addEventListener('click', (e) => {
+    const body = document.getElementById('neverBody');
+    const open = body.hidden;
+    body.hidden = !open;
+    e.currentTarget.setAttribute('aria-expanded', String(open));
+  });
+
+  // The one-time card: ask once for all-sites access, and the usage-counts line.
+  const S = globalThis.QuellSettings;
+  const card = document.getElementById('firstRun');
+  const chips = async () => {
+    const s = await S.get();
+    for (const [id, on] of [['chipCookies', s.cookieEnabled], ['chipPopups', s.popupsEnabled]]) {
+      const el = document.getElementById(id);
+      el.textContent = on ? 'On' : 'Off';
+      el.classList.toggle('on', !!on);
+    }
+    return s;
+  };
+  const s0 = await chips().catch(() => null);
+  if (s0 && !s0.firstRunDone && globalThis.QuellFirstRun) {
+    globalThis.QuellFirstRun.mount(card, {
+      onDone: async () => {
+        await chips();
+        card.querySelectorAll('[data-fr-ask], [data-fr-done]').forEach((el) => { el.hidden = true; });
+        card.querySelector('[data-fr="note"]').textContent = 'Saved. You can change any of this from the toolbar icon.';
+      },
+    }).catch(() => {});
+  } else if (s0) {
+    card.hidden = true;
+  }
+  S.onChange(['cookieEnabled', 'popupsEnabled'], () => { chips().catch(() => {}); });
+
   if (typeof chrome === 'undefined' || !chrome.permissions || !chrome.runtime?.getManifest) return;
   // Firefox only: on Chromium those hosts are required at install, and
   // permissions.contains() does not report content-script hosts at all.

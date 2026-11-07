@@ -3,67 +3,102 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
   <title>Welcome to Quell</title>
   <link rel="stylesheet" href="welcome.css" />
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+    <radialGradient id="mg" cx=".28" cy=".3" r=".95"><stop offset="0" stop-color="#F7FAFC"/><stop offset=".55" stop-color="#CFE0EE"/><stop offset="1" stop-color="#8CA7BD"/></radialGradient>
+    <radialGradient id="mgl" cx=".28" cy=".3" r=".95"><stop offset="0" stop-color="#7BA6C9"/><stop offset=".6" stop-color="#3F7099"/><stop offset="1" stop-color="#274F6D"/></radialGradient>
+    <radialGradient id="mterm" gradientUnits="userSpaceOnUse" cx="99" cy="64" r="50"><stop offset=".62" stop-color="#08121C" stop-opacity=".62"/><stop offset="1" stop-color="#08121C" stop-opacity="0"/></radialGradient>
+    <clipPath id="mclip"><path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z"/></clipPath>
+  </defs></svg>
   <main class="wrap">
     <header class="hero">
-      <img src="../../icons/icon128.png" alt="" width="64" height="64" />
-      <div>
-        <h1>Quell is on.</h1>
-        <p class="lead">It hides the AI answers, cookie banners and pop-ups you didn’t ask for — and leaves everything else alone.</p>
+      <div class="moon" aria-hidden="true"><span class="halo"></span><span class="halo2"></span>
+        <svg class="moonsvg" width="82" height="90" viewBox="26 20 80 88">
+          <circle cx="74" cy="64" r="36" fill="rgba(184,212,232,.035)" stroke="rgba(184,212,232,.12)" stroke-width=".7"/>
+          <g class="lit"><path class="litfill" d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" fill="url(#mg)"/>
+            <g clip-path="url(#mclip)"><circle cx="47" cy="50" r="4.2" fill="rgba(60,90,120,.26)" stroke="rgba(255,255,255,.22)" stroke-width=".6"/><circle cx="44" cy="72" r="5.8" fill="rgba(60,90,120,.24)" stroke="rgba(255,255,255,.2)" stroke-width=".6"/><circle cx="55" cy="87" r="3.2" fill="rgba(60,90,120,.26)"/><circle cx="53" cy="39" r="2.6" fill="rgba(60,90,120,.24)"/><circle cx="58" cy="62" r="2" fill="rgba(60,90,120,.22)"/><circle cx="62" cy="76" r="2.4" fill="rgba(60,90,120,.2)"/><rect x="26" y="20" width="80" height="88" fill="url(#mterm)"/></g>
+            <path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" fill="none" stroke="rgba(255,255,255,.55)" stroke-width=".7"/></g>
+        </svg>
       </div>
+      <h1>Quell is on.</h1>
+      <p class="lead">It hides the AI answers you didn’t ask for and leaves everything else alone.</p>
     </header>
 
-    <div class="notice" id="accessNotice" hidden>
-      <p>Your browser hasn’t let Quell work on Google and Bing yet.</p>
+    <div class="pnl notice" id="accessNotice" hidden>
+      <span>Your browser hasn’t let Quell work on Google and Bing yet.</span>
       <button type="button" class="btn" id="grantBase">Allow on Google and Bing</button>
     </div>
 
-    <section aria-labelledby="h-groups">
-      <h2 id="h-groups">Three switches, your call</h2>
-      <ul class="groups">
-        <li>
-          <strong>Search</strong> <span class="on">On</span>
-          <p>Hides the AI Overview above Google results, AI Mode, Gemini and Bing Copilot. An answer you open yourself in “People also ask” stays — you asked for it. DuckDuckGo, Brave and Yahoo are one switch away.</p>
-        </li>
-        <li>
-          <strong>Cookie banners</strong> <span class="off">Off until you turn it on</span>
-          <p>Hides “we use cookies” pop-ups, and can say “reject all” for you where the site uses a consent tool Quell knows.</p>
-        </li>
-        <li>
-          <strong>Pop-ups</strong> <span class="off">Off until you turn it on</span>
-          <p>Newsletter sign-up boxes, chat bubbles and “open in app” banners.</p>
-        </li>
-      </ul>
+    <ul class="fcs" aria-label="What Quell does">
+      <li class="pnl fc">
+        <h2>Search <span class="chip on">On</span></h2>
+        <p>Hides the AI Overview above Google results, AI Mode, Gemini and Bing Copilot. Answers you open yourself in “People also ask” stay. DuckDuckGo, Brave and Yahoo are one switch away.</p>
+      </li>
+      <li class="pnl fc">
+        <h2>Cookie banners <span class="chip" id="chipCookies">Off</span></h2>
+        <p>Hides “we use cookies” notices, and says “reject all” for you where the site uses a consent tool Quell knows.</p>
+      </li>
+      <li class="pnl fc">
+        <h2>Pop-ups <span class="chip" id="chipPopups">Off</span></h2>
+        <p>Newsletter sign-up boxes, chat bubbles and “open in app” banners.</p>
+      </li>
+    </ul>
+
+    <div class="duo">
+      <section class="pnl card" id="firstRun" aria-labelledby="frH">
+        <h2 id="frH">Turn on cookie banners and pop-ups?</h2>
+        <p id="frP">They need access to all sites. Your browser asks once. Quell never records the pages you visit, and gives the access back if you turn both off.</p>
+        <div class="btns" data-fr-ask>
+          <button type="button" class="btn pri" data-fr="turn">Turn both on</button>
+          <button type="button" class="btn" data-fr="skip">Skip for now</button>
+        </div>
+        <div class="btns" data-fr-done hidden>
+          <button type="button" class="btn pri" data-fr="done">Done</button>
+        </div>
+        <p class="fine" data-fr="note" role="status" aria-live="polite"></p>
+        <hr class="hr" />
+        <div class="ana">
+          <label class="ck"><input type="checkbox" data-fr="analytics" /><span>Share anonymous usage counts to help improve Quell</span></label>
+          <button type="button" class="lk" data-fr="sentBtn" aria-expanded="false" aria-controls="frSent">What’s sent</button>
+          <p class="sentp" id="frSent" hidden>A random install ID, Quell version and browser, which switches are on, how many items each feature hid, popup opens and button clicks, and error messages. Never the pages you visit, your searches or your browsing history.</p>
+        </div>
+      </section>
+      <section class="pnl card" aria-labelledby="pinH">
+        <h2 id="pinH">Pin Quell to your toolbar</h2>
+        <div class="tb" aria-hidden="true"><span class="url">example.com</span>
+          <span class="cr"><svg width="22" height="22" viewBox="26 20 80 88"><path d="M89.3 31.41A36 36 0 1 0 89.3 96.59A34 34 0 0 1 89.3 31.41Z" fill="currentColor"/></svg></span></div>
+        <p>Open the puzzle-piece menu, then pin the crescent. Every switch works straight away. If a site looks wrong, pause Quell for that site from the same place.</p>
+      </section>
+    </div>
+
+    <section class="never" aria-labelledby="nvb">
+      <button type="button" class="nvb" id="nvb" aria-expanded="false" aria-controls="neverBody">What Quell will never do <svg class="chev" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div id="neverBody" hidden>
+        <ul>
+          <li>Hide a real search result. Every release is tested against that.</li>
+          <li>Record the pages you visit. Quell works on your device. Anonymous usage counts are sent only if you allow them, and never include pages, searches or history.</li>
+          <li>Sell or share data, or use it for anything but fixing and improving Quell.</li>
+          <li>Hold on to access it isn’t using. Turn Cookie banners and Pop-ups both off and Quell gives its all-sites access back.</li>
+        </ul>
+        <p class="fine"><span id="syncNote">Your settings sync through your own browser account, like bookmarks do.</span> Apart from usage counts you allow, the one thing Quell sends is a “this site looks broken” report you choose to send: just the site’s domain and Quell’s version, shown to you before it goes.</p>
+      </div>
     </section>
 
-    <section aria-labelledby="h-never">
-      <h2 id="h-never">What Quell will never do</h2>
-      <ul class="never">
-        <li>Hide a real search result. Every release is tested against that.</li>
-        <li>Collect your browsing. Quell works on your device and keeps nothing about the pages you visit.</li>
-        <li>Sell or share data, or use it for anything but fixing Quell.</li>
-        <li>Hold on to access it isn’t using. Turn Cookie banners and Pop-ups both off and Quell gives its all-sites access back.</li>
-      </ul>
-      <p class="fine"><span id="syncNote">Your settings sync through your own browser account, like bookmarks do.</span> The one thing Quell ever sends to us is a “this site looks broken” report you choose to send — just the site’s domain and Quell’s version, shown to you before it goes.</p>
-    </section>
-
-    <section aria-labelledby="h-where">
-      <h2 id="h-where">Changing things</h2>
-      <p>Click Quell’s crescent icon in your toolbar. If you don’t see it, open your browser’s extensions menu (the puzzle piece) and pin Quell. Every switch works straight away — no reload needed — and if a site ever looks wrong, pause Quell for just that site from the same place.</p>
-    </section>
-
-    <footer>
+    <footer class="ft">
       <a id="privacy" href="https://purpledirective.com/quell/privacy/" target="_blank" rel="noopener">Privacy policy</a>
       <a id="sponsor" href="https://github.com/sponsors/TyrianMurex" target="_blank" rel="noopener">Sponsor on GitHub</a>
       <a id="donate" href="https://donate.stripe.com/8x29AT6aX4FP3ay9sp3gk0G" target="_blank" rel="noopener">Donate by card</a>
       <span>Free and open source · Purple Directive</span>
     </footer>
   </main>
+  <script src="../shared/settings.js"></script>
   <script src="../shared/config.js"></script>
   <script src="../shared/browser.js"></script>
+  <script src="../shared/firstrun.js"></script>
   <script src="welcome.js"></script>
 </body>
 </html>
