@@ -497,6 +497,14 @@
     const state = { tripped: false, before: 0, after: 0 };
     const textLen = () => ((document.body && document.body.innerText) || '').length;
     const ROOTS = 'html, body, main, [role="main"], #root, #app, #__next, #__nuxt, #app-root';
+    const trip = (was, now) => {
+      state.tripped = true; state.before = was; state.after = now;
+      trips++; tripUrl = location.href; trippedAt = Date.now();
+      for (const fn of undos) { try { fn(); } catch (_) { /* the rest still run */ } }
+      try { document.documentElement.setAttribute('data-quell-safety', '1'); } catch (_) { /* no root */ }
+      watch();
+      return true;
+    };
     const rearm = () => {
       if (timer) { clearInterval(timer); timer = null; }
       state.tripped = false; base = 0; acted = false;
@@ -525,12 +533,21 @@
         acted = false;
         const now = textLen();
         if (now >= base * 0.5) return false;
-        state.tripped = true; state.before = base; state.after = now;
-        trips++; tripUrl = location.href; trippedAt = Date.now();
-        for (const fn of undos) { try { fn(); } catch (_) { /* the rest still run */ } }
-        try { document.documentElement.setAttribute('data-quell-safety', '1'); } catch (_) { /* no root */ }
-        watch();
-        return true;
+        return trip(base, now);
+      },
+      // A stylesheet hides before any sweep can measure, so it is judged by
+      // switching Quell's own stylesheets off and on again around two reads of
+      // the page's text: the same "just before, just after" comparison.
+      probe(ids) {
+        if (state.tripped || typeof document === 'undefined' || !document.body) return false;
+        const sheets = ids.map((i) => document.getElementById(i)).filter((e) => e && e.sheet);
+        if (!sheets.length) return false;
+        for (const s of sheets) s.sheet.disabled = true;
+        const before = textLen();
+        for (const s of sheets) s.sheet.disabled = false;
+        const after = textLen();
+        if (before < 800 || after >= before * 0.5) return false;
+        return trip(before, after);
       },
       protects(el) {
         if (!el || !el.matches) return false;

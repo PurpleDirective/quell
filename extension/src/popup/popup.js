@@ -233,6 +233,22 @@ function firstRunOn(s) { return !s.firstRunDone; }
 // An updated user sees "What's new" once: first run is done, and the newest card answered is older than this.
 const WHATS_NEW = '0.7.4';
 const verLess = (a, b) => { const x = String(a || '0').split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); } return false; };
+// What the card lists, and what "Turn these on" switches on, come from the same answer.
+function whatsNewPlan(s) {
+  const cp = !(s.cookieEnabled && s.popupsEnabled);
+  const ai = !(s.aiWebOn && s.aiWebAccess);
+  const links = !s.linksEnabled;
+  const lines = ['A new look.'];
+  if (cp) lines.push('Cookie banners and pop-ups, including sign-up and log-in prompts.');
+  else if (s.popupsEnabled && s.hideSignupPrompts !== false) lines.push('Sign-up and log-in prompts can be hidden.');
+  if (ai) lines.push('AI buttons and chat assistants on other websites.');
+  if (links) lines.push('Tracking removed from links.');
+  const patch = {};
+  if (cp) { patch.cookieEnabled = true; patch.popupsEnabled = true; }
+  if (ai) { patch.aiWebOn = true; patch.aiWebAccess = true; }
+  if (links) patch.linksEnabled = true;
+  return { lines, patch };
+}
 function whatsNewOn(s) { return !!s.firstRunDone && verLess(s.whatsNewSeen, WHATS_NEW); }
 
 function renderHero(s) {
@@ -539,11 +555,17 @@ async function render() {
   const wnShow = !first && whatsNewOn(s);
   $('whatsNew').hidden = !wnShow;
   if (wnShow) $('wnAna').hidden = s.analytics !== 'unset';
+  const wnPlan = whatsNewPlan(s);
+  if (wnShow) {
+    const ul = $('wnList');
+    ul.textContent = '';
+    for (const line of wnPlan.lines) { const li = document.createElement('li'); li.textContent = line; ul.appendChild(li); }
+  }
   if (wnShow && !wnMounted && globalThis.QuellFirstRun) {
     wnMounted = true;
     globalThis.QuellFirstRun.mount($('whatsNew'), {
       grantInTab: GRANT_IN_TAB, openTab: openPageView, forceAsk: true, grantName: 'whatsnew',
-      turnPatch: { linksEnabled: true, aiWebOn: true, aiWebAccess: true },
+      turnPatch: wnPlan.patch,
       onDone: () => render(),
       onChange: () => { $('app').classList.toggle('sent-open', !$('wnSent').hidden); },
     }).catch(() => { wnMounted = false; });

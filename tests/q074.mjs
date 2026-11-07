@@ -735,6 +735,26 @@ console.log('Review fixes: safety net, user gestures, columns, login pages, What
     await pg.close();
   }
 
+  // 1c. A stylesheet that hides the page's text trips the net; a correct one does not.
+  {
+    const html = `<!doctype html><html><body><header><button aria-label="Ask AI" id="ask">Ask AI</button></header><main id="m"><p>${'Placeholder article sentence with several words in it. '.repeat(50)}</p><p>${'Another placeholder sentence of ordinary length here. '.repeat(2)}</p></main></body></html>`;
+    const rules = (sel) => `if(m.type==='aiWebRules') return {rules:[{sel:[${JSON.stringify(sel)}],what:'x'}]};`;
+    let pg = await openAt('css1.test', '/', html, AIW, { enabled: true, aiWebOn: true, aiWebAccess: true }, 2200, rules('p'));
+    ok(await pg.evaluate(() => document.body.innerText.length) > 2600, 'precondition: the page holds about 2,700 characters of text');
+    ok(await pg.evaluate(() => document.documentElement.getAttribute('data-quell-safety') === '1' && !document.getElementById('quell-aiweb')), 'a shipped rule whose stylesheet matches the page text trips the net and the stylesheet is removed');
+    ok(await pg.evaluate(() => document.body.innerText.length) > 2600, 'and the page text is back');
+    await pg.close();
+    pg = await openAt('css2.test', '/', html, AIW, { enabled: true, aiWebOn: true, aiWebAccess: true }, 2200, rules('button[aria-label="Ask AI"]'));
+    ok(await pg.evaluate(() => !document.documentElement.hasAttribute('data-quell-safety')) && !(await vis(pg, 'ask')), 'a correct rule does not trip the net, and hides its target');
+    await pg.close();
+    const POPUPJS = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/popups.js'), 'utf8');
+    pg = await openAt('css3.test', '/', html, POPUPJS, { enabled: true, popupsEnabled: true }, 2200, "if(m.type==='popupRules') return {generic:['main p'],site:[]};");
+    ok(await pg.evaluate(() => document.body.innerText.length > 2600), 'the pop-ups layer: a generic rule matching the text leaves the text in place (its own content check keeps it, the net is the second line)');
+    // The net's probe on the pop-ups stylesheet itself, called directly with a stylesheet that hides everything.
+    ok(await pg.evaluate(() => { const st = document.createElement('style'); st.id = 'quell-probe'; st.textContent = 'main p{display:none!important}'; document.head.appendChild(st); return QuellSettings.guard.probe(['quell-probe']) && document.documentElement.getAttribute('data-quell-safety') === '1'; }), 'guard.probe on a Quell stylesheet that blanks the page trips the net');
+    await pg.close();
+  }
+
   // 2. A login dialog that appears some seconds after the user's own click is theirs; one with no click behind it is hidden.
   {
     const mk = (delay) => `<!doctype html><html><body><main><h1>Story</h1><p>${LONGP}</p><button id="follow">Follow</button></main>
@@ -853,15 +873,15 @@ console.log('Review fixes: safety net, user gestures, columns, login pages, What
       return p;
     };
     const fits = (p) => p.evaluate(() => { const m = document.getElementById('main'); return { over: m.scrollHeight - m.clientHeight, body: Math.round(document.body.getBoundingClientRect().height) }; });
-    const base = { enabled: true, firstRunDone: true, linksEnabled: false, aiWebOn: false, aiWebAccess: false, aiWebAllowlist: [], sitePauses: {}, analytics: 'unset', whatsNewSeen: '' };
+    const base = { enabled: true, firstRunDone: true, cookieEnabled: false, popupsEnabled: false, linksEnabled: false, aiWebOn: false, aiWebAccess: false, aiWebAllowlist: [], sitePauses: {}, analytics: 'unset', whatsNewSeen: '' };
 
     await set(base);
     let p = await popup();
     ok(await p.evaluate(() => !document.getElementById('whatsNew').hidden && document.getElementById('firstRun').hidden && document.getElementById('mainCard').hidden),
       'updated user: the What’s new card shows, in place of the first-run card');
-    ok(await p.evaluate(() => /What.s new in Quell 0\.7\.4/.test(document.getElementById('wnT').textContent) && document.querySelectorAll('.wn-list li').length === 3
+    ok(await p.evaluate(() => /What.s new in Quell 0\.7\.4/.test(document.getElementById('wnT').textContent) && document.querySelectorAll('.wn-list li').length === 4 && /Cookie banners and pop-ups/.test(document.getElementById('wnList').textContent)
       && /Turn these on/.test(document.querySelector('#whatsNew [data-fr=turn]').textContent) && /Not now/.test(document.querySelector('#whatsNew [data-fr=skip]').textContent)),
-      'the card has a title, three short lines, "Turn these on" and "Not now"');
+      'the card has a title, four short lines (incl. Cookie banners and pop-ups, which are off), "Turn these on" and "Not now"');
     ok(await p.evaluate(() => !document.getElementById('wnAna').hidden && !!document.querySelector('#whatsNew [data-fr=analytics]')), 'with usage counts unset, the card carries the usage-counts line');
     let f = await fits(p);
     ok(f.over <= 0 && f.body <= 560, `the card fits the 360 x 560 popup with no scroll (overflow ${f.over}, ${f.body}px)`);
@@ -871,6 +891,43 @@ console.log('Review fixes: safety net, user gestures, columns, login pages, What
     f = await fits(p);
     await p.screenshot({ path: '/tmp/quell-review/whats-new-card-sent-open.png' }).catch(() => {});
     ok(f.over <= 0 && f.body <= 560, `with "What’s sent" open it still fits (overflow ${f.over})`);
+    await p.close();
+
+    // Cookie banners and pop-ups already on: the card lists only what is new and off.
+    await set({ ...base, cookieEnabled: true, popupsEnabled: true });
+    p = await popup();
+    {
+      const lines = await p.evaluate(() => [...document.querySelectorAll('#wnList li')].map((l) => l.textContent));
+      ok(lines.length === 4 && /Sign-up and log-in prompts/.test(lines[1]) && !lines.some((l) => /Cookie banners and pop-ups/.test(l)), `cookies and pop-ups on: the card lists sign-up prompts, AI on websites and links, not cookie banners (${lines.length} lines)`);
+      f = await fits(p);
+      ok(f.over <= 0 && f.body <= 560, `that card fits with no scroll (overflow ${f.over})`);
+      await p.click('#whatsNew [data-fr=sentBtn]');
+      await p.waitForTimeout(200);
+      f = await fits(p);
+      ok(f.over <= 0 && f.body <= 560, `and with What\u2019s sent open (overflow ${f.over})`);
+    }
+    await p.close();
+    // Pop-ups off: the sign-up line is not listed on its own, and "Turn these on" switches on everything listed.
+    await set({ ...base, cookieEnabled: true, popupsEnabled: false });
+    p = await popup();
+    ok(await p.evaluate(() => { const l = [...document.querySelectorAll('#wnList li')].map((x) => x.textContent); return l.some((x) => /Cookie banners and pop-ups/.test(x)) && !l.some((x) => /^Sign-up/.test(x)); }), 'pop-ups off: the card offers Cookie banners and pop-ups (with sign-up prompts) and has no separate sign-up line');
+    await p.close();
+    await set(base);
+    p = await popup({ stubPerm: true });
+    await p.click('#whatsNew [data-fr=turn]');
+    await p.waitForTimeout(700);
+    const all = await sw.evaluate(() => QuellSettings.get({ cookieEnabled: false, popupsEnabled: false, linksEnabled: false, aiWebOn: false, aiWebAccess: false }));
+    ok(all.cookieEnabled && all.popupsEnabled && all.linksEnabled && all.aiWebOn && all.aiWebAccess, '"Turn these on" switches on everything the card listed: Cookie banners, Pop-ups, AI on websites and Links');
+    ok(await p.evaluate(() => window.__perm.filter(([k]) => k === 'request').length === 1), 'with one all-sites request');
+    await p.close();
+    await set(base);
+    p = await popup();
+    f = await fits(p);
+    ok(f.over <= 0 && f.body <= 560, `the four-line card fits (overflow ${f.over})`);
+    await p.click('#whatsNew [data-fr=sentBtn]');
+    await p.waitForTimeout(200);
+    f = await fits(p);
+    ok(f.over <= 0 && f.body <= 560, `and with What\u2019s sent open (overflow ${f.over})`);
     await p.close();
 
     // Not now: nothing turns on, the card does not come back.

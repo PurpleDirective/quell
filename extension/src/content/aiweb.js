@@ -26,6 +26,9 @@
   const G = S.guard;
   let registered = false;
 
+  // Judge Quell's own stylesheet by what it hides (see QuellSettings.guard.probe):
+  // once the page has a body, and again as the page fills in.
+  const probeSoon = () => { for (const ms of [0, 1500, 5000]) setTimeout(() => { if (active) G.probe([STYLE_ID]); }, ms); };
   const dropStyle = () => { const st = document.getElementById(STYLE_ID); if (st) st.remove(); };
   function addStyle() {
     dropStyle();
@@ -116,6 +119,7 @@
     addStyle();
     const attach = () => {
       if (!active || observer) return;
+      probeSoon();
       sweep();
       observer = new MutationObserver(schedule);
       observer.observe(document.documentElement, { childList: true, subtree: true });

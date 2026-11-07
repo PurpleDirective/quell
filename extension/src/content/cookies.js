@@ -406,6 +406,8 @@
     root.appendChild(style);
   };
   const dropStyle = (id) => document.getElementById(id)?.remove();
+  // Judge Quell's own stylesheets by what they hide (QuellSettings.guard.probe).
+  const probeSoon = () => { if (!G) return; for (const ms of [0, 1500, 5000]) setTimeout(() => { if (active) G.probe(['quell-cookies', 'quell-cookies-site']); }, ms); };
 
   // Remember the caller's own inline overflow so scroll-unlock is reversible.
   const priorOverflow = new Map();
@@ -624,6 +626,7 @@
       }
     } catch (_) { /* background asleep or non-extension context — seed still active */ }
 
+    probeSoon();
     if (!active) return; // toggled off while awaiting the background
     // Wait for a documentElement before observing. Chrome's document_start
     // guarantees one, but executeScript into an open tab does not, and

@@ -121,6 +121,8 @@
     root.appendChild(st);
   };
   const dropStyle = (id) => document.getElementById(id)?.remove();
+  // Judge Quell's own stylesheet by what it hides (QuellSettings.guard.probe).
+  const probeSoon = () => { if (!G) return; for (const ms of [0, 1500, 5000]) setTimeout(() => { if (active) G.probe(['quell-popups']); }, ms); };
 
   const buildCSS = (sels) => {
     const out = [];
@@ -402,6 +404,7 @@
     active = next.length > 0 || siteSelectors.length > 0;
     if (!active) { teardown(); return; }
     addStyle('quell-popups', buildCSS(next) + `\n[${SITE_MARK}]${KEEP}{display:none!important;}`);
+    probeSoon();
     const attach = () => {
       if (!active) return;
       if (!observer && document.documentElement) {
