@@ -191,24 +191,20 @@ now describes the usage counts and the uninstall page, and the live policy must 
 
 ## Assets (store/assets/)
 
-Regenerated 2026-09-25 from real renders of the 0.6.0 popup and welcome page
-(`node store/make-assets.mjs`; captions are the only thing drawn on top, plus a
-highlight ring placed from the rendered row's own box):
+Regenerated for 0.7.3 from real renders (`node store/make-assets.mjs`): the popup
+and welcome page are screenshotted from the loaded extension, and the lead image
+loads the local fixture `tests/fixtures/google-results.html` once with Quell off
+and once with it on. Captions, labels and framing are the only things drawn.
 
-- `screenshot-1-1280x800.png` — "Hide the AI you didn't ask for." + the popup
-  in its first-run state
-- `screenshot-2-1280x800.png` — "Keep the answers you open." + close-up of the
-  Search group, the People-also-ask row ringed
-- `screenshot-3-1280x800.png` — "Quiet, on your terms." + the welcome page
-  (Cookie banners / Pop-ups off until asked; access given back)
+- `screenshot-1-1280x800.png` — "Hide the AI answer. Keep the results." the
+  same results page without and with Quell, and the popup ("Hid 2 things on this page.")
+- `screenshot-2-1280x800.png` — "See what Quell hid. Bring it back in one click."
+  the popup with Peek and Undo, and the paused-on-this-site state
+- `screenshot-3-1280x800.png` — "Cookie banners and pop-ups, quietly gone."
+  the welcome page: the three features and the one-time ask
 - `tile-small-440x280.png` — small promo tile
 - `marquee-1400x560.png` — marquee promo tile (optional upload)
 - Icon: `extension/icons/icon128.png` (uploaded from the zip automatically)
-
-No before/after Google screenshot: every Google load in the 2026-09-25 live
-run hit Google's `/sorry/` bot wall. make-assets.mjs
-builds a fourth screenshot from any real before/after pair via
-`QUELL_BEFORE` / `QUELL_AFTER` once a clean one exists.
 
 ## Submission runbook (one-time)
 
