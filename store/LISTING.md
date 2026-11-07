@@ -136,8 +136,8 @@ and app banners — in the user's browser.
 **Data usage — the dashboard's answers for 0.7.3:**
 
 *What user data do you plan to collect from users now or in the future?*
-Tick **Web history** (the breakage report) and **User activity** (the opt-in
-usage counts) — and nothing else.
+Tick **Web history** (the breakage report) and **User activity** (the usage
+counts, asked once on first run, ticked by default) — and nothing else.
 
 > User activity: only after the user ticks the first-run box (ticked by
 > default; nothing is sent until they answer). Per UTC day: counts of popup
@@ -263,7 +263,7 @@ Firefox at install and on the AMO listing):**
 - `optional: ["browsingActivity", "technicalAndInteraction"]` — the breakage
   report: the hostname of the site the user chooses to report
   (browsingActivity — AMO's counterpart of Chrome's "Web history") and
-  Quell's version (technicalAndInteraction); and the opt-in daily usage counts
+  Quell's version (technicalAndInteraction); and the daily usage counts, asked once on first run
   (technicalAndInteraction): feature counts, switch states, version, browser,
   random install id, scrubbed error text. Quell sends the counts only while
   `browser.permissions.contains({data_collection: ["technicalAndInteraction"]})`

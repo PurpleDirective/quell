@@ -280,6 +280,7 @@ console.log('Events — usage counts (POST /api/quell/events):');
   const stored = x.DB.raw.prepare('SELECT message FROM quell_errors').get().message;
   ok(!/example|secret|foo|:\/\//.test(stored), `a URL or host in an error message is scrubbed server-side (${stored})`);
   ok(scrubMessage('in popup.js line 3') === 'in popup.js line 3', 'file names survive the scrub');
+  ok(scrubMessage('fetch to 192.168.1.5:8080/admin failed; localhost:3000 refused; [::1]:9/x') === 'fetch to <ip> failed; <host> refused; <ip>', 'IP literals and localhost are scrubbed server-side');
 
   // Same gate as /report.
   const bad = env();

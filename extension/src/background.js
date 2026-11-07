@@ -519,9 +519,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   // A UI event counted by the popup / welcome page (popup_open, peek, undo, ...).
-  // Only Quell's own pages may send it, and only a fixed list of names counts;
-  // analytics.js drops everything unless the user said yes.
-  if (msg?.type === 'quell:track' && sender.id === chrome.runtime.id && !sender.tab) {
+  // Only Quell's own pages may send it (the toolbar popup, the welcome tab, the
+  // popup opened as a tab on Firefox), and only a fixed list of names counts;
+  // analytics.js drops everything unless the user said yes. Content scripts share
+  // the extension id but run on web pages, so the sender's URL decides.
+  const ownPage = typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''));
+  if (msg?.type === 'quell:track' && sender.id === chrome.runtime.id && ownPage) {
     const A = qa();
     if (A && typeof msg.name === 'string') A.event(msg.name);
     return;

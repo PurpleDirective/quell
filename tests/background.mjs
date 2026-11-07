@@ -879,7 +879,8 @@ console.log('Background — pop-ups layer (0.6.0, off by default):');
 // --- Usage counts: the worker's side (consent gate, UI events, uninstall URL) --
 console.log('Background — usage counts:');
 {
-  const ui = { id: 'test' };           // a message from Quell's own page (no tab)
+  const ui = { id: 'test', url: 'chrome-extension://test/src/popup/popup.html' };   // the toolbar popup
+  const welcome = { id: 'test', url: 'chrome-extension://test/src/welcome/welcome.html', tab: { id: 9 } };
   const counted = (h) => { const q = h.local.quellAnalytics; return q ? Object.values(q.days)[0] : null; };
 
   let h = boot({ storage: {} });       // analytics defaults to 'unset'
@@ -891,12 +892,14 @@ console.log('Background — usage counts:');
   h = boot({ storage: { analytics: 'on' } });
   await h.chrome.runtime.onMessage.fire({ type: 'quell:track', name: 'popup_open' }, ui);
   await h.chrome.runtime.onMessage.fire({ type: 'quell:track', name: 'undo' }, { id: 'someone-else' });
-  await h.chrome.runtime.onMessage.fire({ type: 'quell:track', name: 'peek' }, { id: 'test', tab: { id: 4 } });
+  await h.chrome.runtime.onMessage.fire({ type: 'quell:track', name: 'peek' }, { id: 'test', tab: { id: 4 }, url: 'https://www.google.com/search?q=x' });
+  await h.chrome.runtime.onMessage.fire({ type: 'quell:track', name: 'firstrun_skip' }, welcome);
   await h.chrome.runtime.onMessage.fire({ type: 'blocked', count: 3, feature: 'cookies' }, { tab: { id: 1 } });
   await h.chrome.runtime.onMessage.fire({ type: 'blocked', count: 2 }, { tab: { id: 1 } });
   await settle(); await settle();
   const b = counted(h);
-  ok(b && b.events.popup_open === 1 && !b.events.undo && !b.events.peek, 'on: Quell\'s own page is counted; another sender and a tab sender are not');
+  ok(b && b.events.popup_open === 1 && !b.events.undo && !b.events.peek, 'on: Quell\'s own popup is counted; another extension and a content script on a web page are not');
+  ok(b && b.events.firstrun_skip === 1, 'on: the welcome tab (an extension page in a tab) is counted');
   ok(b && b.hides.cookies === 3 && b.hides.ai === 2, 'on: hides are counted per feature (no feature = ai)');
 
   // Turning it off deletes the queue immediately.

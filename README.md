@@ -16,7 +16,7 @@ Free. No account. No ads, no profiling; anonymous usage counts only if you say y
 Only ~30% of people find new AI features in their apps useful; 40%+ call them an
 annoyance or hype (Prophet 2026; Stanford HAI 2026). Existing "AI blockers" are
 either paywalled with dark patterns or fragile single-site hacks. Quell is the
-honest one: the blocking core is **free forever**, it collects **nothing** to run (anonymous usage counts are opt-in, asked once),
+honest one: the blocking core is **free forever**, it collects **nothing** to run (anonymous usage counts are asked once on first run, box ticked by default, off any time),
 it **never hides a real search result** (every surface has an organic-result guard
 with a regression test), and its blocklist is kept fresh by an automated pipeline
 so it doesn't rot when sites change.
@@ -244,7 +244,7 @@ Purple Directive never receives them. Firefox for Android and Opera do not sync
 extension settings, so there they stay on the device. Three grant-bound switches (other engines,
 cookie banners, pop-ups) and the hidden-items counter stay on each device.
 Settings from 0.5.x move from `storage.local` to `storage.sync` on update without
-loss. Besides the opt-in usage counts above, the only thing sent to Purple Directive is a
+loss. Besides the usage counts above (asked once, ticked by default), the only thing sent to Purple Directive is a
 breakage report you choose to send.
 
 The base install requests only `storage`, `declarativeNetRequest` (rule-based

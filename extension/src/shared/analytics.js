@@ -55,6 +55,10 @@
   function scrub(text) {
     let s = String(text == null ? '' : text);
     s = s.replace(/[a-z][a-z0-9+.-]*:\/\/[^\s)'"<>]*/gi, '<url>');
+    // IP literals and localhost, with any port and path (intranet addresses).
+    s = s.replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?(?:\/[^\s)'"<>]*)?/g, '<ip>');
+    s = s.replace(/\[[0-9a-f:.]+\](?::\d+)?(?:\/[^\s)'"<>]*)?/gi, '<ip>');
+    s = s.replace(/\blocalhost(?::\d+)?(?:\/[^\s)'"<>]*)?/gi, '<host>');
     s = s.replace(/\b(?:[a-z0-9-]+\.)+([a-z]{2,63})\b(?:[/:?#][^\s)'"<>]*)?/gi,
       (m, tld) => (FILE_EXT.test(tld) ? m : '<host>'));
     s = s.replace(/\s+/g, ' ').trim();

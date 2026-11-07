@@ -143,6 +143,8 @@ console.log('Analytics — scrubbing and uninstall URL:');
 {
   const { A } = boot({ analytics: 'on' });
   ok(!/\/\/|google|\.com/.test(A.scrub('GET https://www.google.com/search?q=cats failed on www.google.com')), 'scrub removes URLs and bare hosts');
+  ok(A.scrub('fetch to 192.168.1.5:8080/admin failed') === 'fetch to <ip> failed', 'scrub removes IPv4 literals with port and path');
+  ok(A.scrub('localhost:3000/api refused, [::1]:8080/x down') === '<host> refused, <ip> down', 'scrub removes localhost and IPv6 literals');
   ok(A.scrub('x'.repeat(500)).length === 160, 'scrub caps length');
   ok(A.scrub('Unexpected token in popup.js') === 'Unexpected token in popup.js', 'file names survive');
   ok(A.sourceFile('https://evil.com/a/b.js?x=1') === 'b.js' && A.sourceFile('weird name') === 'unknown', 'sourceFile keeps a bare file name only');

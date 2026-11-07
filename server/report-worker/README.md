@@ -77,6 +77,12 @@ D1-shaped adapter. Also run by `tests/run.sh`.
 
 ## Deploy (operator — not done by the PR that added this)
 
+**Deploy order for a release that changes the schema or endpoints (e.g. 0.7.3):**
+1. schema (`./deploy.sh d1 execute quell-reports --remote --file schema.sql`),
+2. this Worker, 3. the site (privacy page), 4. only then upload the store packages.
+An old Worker answers 4xx to new endpoints, and the extension drops days a server
+refuses, so publishing the extension first loses its first days of counts.
+
 From `server/report-worker/`:
 
 0. Supply the account and database ids from the environment, never the repo:
