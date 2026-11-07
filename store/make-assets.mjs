@@ -94,7 +94,7 @@ async function popupShot(act) {
 const popNormal = await popupShot();
 const popPeek = await popupShot(async (p) => { await p.locator('.item', { hasText: 'AI Overview' }).locator('[data-peek]').click(); await p.waitForTimeout(400); });
 console.log('popup headline:', popNormal.text);
-await set({ ...base, aiAllowlist: ['www.google.com'], sitePauses: { 'www.google.com': { until: Date.now() + 3600e3, added: ['aiAllowlist'] } } });
+await set({ ...base, aiAllowlist: ['www.google.com'], aiWebAllowlist: ['www.google.com'], sitePauses: { 'www.google.com': { until: Date.now() + 3600e3, added: ['aiAllowlist', 'aiWebAllowlist'] } } });
 await gpage.reload();
 await gpage.waitForTimeout(800);
 const popPaused = await popupShot();
@@ -104,7 +104,7 @@ await gpage.close();
 // The welcome page's first-run card, with the three features above it.
 await set({ ...base, firstRunDone: false, analytics: 'unset' });
 const wp = await ctx.newPage();
-await wp.setViewportSize({ width: 1100, height: 1000 });
+await wp.setViewportSize({ width: 1180, height: 1000 });
 await wp.emulateMedia({ colorScheme: 'dark' });
 await wp.goto(`chrome-extension://${extId}/src/welcome/welcome.html`);
 await wp.waitForTimeout(700);
@@ -191,7 +191,7 @@ await render('screenshot-2-1280x800.png', 1280, 800, shell(CAPCSS + `
 
 // 3 — cookie banners and pop-ups.
 await render('screenshot-3-1280x800.png', 1280, 800, shell(CAPCSS + `
-  .wel { position:absolute; left:140px; top:200px; width:1000px; }
+  .wel { position:absolute; left:210px; top:180px; width:860px; }
 `, `
   ${caption('Cookie banners and pop-ups, quietly gone.', 'Off until you turn them on. Quell asks your browser once, and gives the access back when both are off.')}
   ${MK}

@@ -369,14 +369,14 @@ function aiWebStatus(s, paused) {
   if (hid || blocked) {
     return [hid ? `Hid ${hid} here` : '', blocked ? `Blocked ${blocked} AI ${blocked === 1 ? 'script' : 'scripts'}` : ''].filter(Boolean).join(' · ');
   }
-  if (!s.aiWebAccess && (s.aiWebButtons || s.aiWebChat)) return 'Chat scripts blocked. Allow all sites to hide buttons';
+  if (!s.aiWebAccess && (s.aiWebButtons || s.aiWebChat)) return 'Buttons need all-sites access';
   return !host || !tab.reachable ? 'On for other pages' : 'Watching. Nothing to hide here';
 }
 // The Links row and the sign-up prompt line (0.7.4), kept apart from rowStatus.
 function renderLinkRows(s, paused) {
   const prompts = tab.items.filter((i) => i.kind === 'popup' && i.label === 'Sign-up prompt' && !i.kept).length;
   $('pSignupD').textContent = prompts ? `Closed ${prompts} sign-up ${prompts === 1 ? 'prompt' : 'prompts'}` : '';
-  let line = 'Asks your browser for access to all sites';
+  let line = 'Needs access to all sites';
   if (!s.enabled) line = 'Quell is off';
   else if (s.linksEnabled) {
     if (!host || tab.links === null) line = 'On for other pages';
