@@ -2968,7 +2968,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
   // Keep AI on this site: confirm, then the host goes into aiAllowlist.
   {
     const pg = await openPopup({});
-    await pg.click('#siteMore'); // per-feature allows sit behind "Choose per feature"
+    await pg.click('#siteMenuBtn'); await pg.click('#siteMore'); // per-feature allows sit behind the … menu
     await pg.click('#siteAi');
     await pg.waitForTimeout(150);
     ok(await dlgOpen(pg, 'confirmDlg'), '"Keep AI on this site" asks first');
@@ -2984,7 +2984,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
   {
     const full = Array.from({ length: 400 }, (_, i) => `site-${i}.example.com`);
     const pg = await openPopup({ cookieEnabled: true, cookieAllowlist: full }, 'https://news.example.org/');
-    await pg.click('#siteMore');
+    await pg.click('#siteMenuBtn'); await pg.click('#siteMore');
     await pg.click('#siteAllow');
     await pg.waitForTimeout(200);
     ok(await pg.evaluate(() => !document.getElementById('saveError').hidden && /full/i.test(document.getElementById('saveError').textContent)),
@@ -2996,7 +2996,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
   // Breakage report: shows exactly what goes, sends exactly that, once.
   {
     const pg = await openPopup({}, 'https://shop.example.co.uk/basket/123?session=abc#x');
-    await pg.click('#reportBtn');
+    await pg.click('#siteMenuBtn'); await pg.click('#reportBtn');
     await pg.waitForTimeout(150);
     ok(await dlgOpen(pg, 'reportDlg'), 'the report opens a confirmation first');
     const shown = JSON.parse(await pg.evaluate(() => document.getElementById('reportPayload').textContent));
@@ -3006,7 +3006,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
     await pg.click('#reportCancel');
     await pg.waitForTimeout(150);
     ok(reports.length === 0 && !(await dlgOpen(pg, 'reportDlg')), 'Cancel sends nothing');
-    await pg.click('#reportBtn');
+    await pg.click('#siteMenuBtn'); await pg.click('#reportBtn');
     await pg.waitForTimeout(100);
     await pg.click('#reportSend');
     await pg.waitForTimeout(500);
@@ -3031,7 +3031,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
   for (const [status, re, name] of [[400, /public website/, '400'], [429, /minute/, '429'], [500, /try again later/, '500']]) {
     endpointStatus = status;
     const pg = await openPopup({}, 'https://shop.example.com/');
-    await pg.click('#reportBtn');
+    await pg.click('#siteMenuBtn'); await pg.click('#reportBtn');
     await pg.waitForTimeout(100);
     await pg.click('#reportSend');
     await pg.waitForTimeout(400);
@@ -3511,13 +3511,27 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
     ok(await p.evaluate(() => !document.getElementById('firstRun').hidden && document.getElementById('featCard').hidden), 'first run: the card shows, the feature rows wait');
     ok(await p.evaluate(() => document.querySelector('[data-fr=analytics]').checked), 'the usage-counts box is ticked by default');
     ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'unset', 'nothing is stored until the user answers: still unset');
+    // Consent order: the choice and its disclosure come BEFORE the buttons, and the buttons say they save it.
+    ok(await p.evaluate(() => { const c = document.querySelector('[data-fr=analytics]').getBoundingClientRect().top; const b = document.querySelector('[data-fr=turn]').getBoundingClientRect().top; return c < b; }),
+      'the usage-counts box sits above the buttons');
+    ok(await p.evaluate(() => document.querySelector('[data-fr=skip]').textContent.trim() === 'Not now' && /Either button saves your choice above/.test(document.querySelector('[data-fr=note]').textContent)),
+      'the buttons read "Not now" and the card says either button saves the choice above');
     await p.click('[data-fr=analytics]');
     await p.waitForTimeout(300);
-    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'off', 'unticking the box stores analytics: off');
+    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'unset', 'unticking the box alone stores nothing: still unset');
     await p.click('[data-fr=analytics]');
     await p.waitForTimeout(300);
-    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'on', 'ticking it stores analytics: on');
+    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'unset', 'ticking it alone stores nothing either');
+    // "What's sent" open must still fit without a scroll.
     await p.click('[data-fr=sentBtn]');
+    await p.waitForTimeout(200);
+    {
+      const f = await fits(p);
+      ok(f.mainOver <= 0 && f.bodyH <= 560, `first-run popup with "What’s sent" open: no scroll (main overflow ${f.mainOver}, body ${f.bodyH}px)`);
+    }
+    await p.click('[data-fr=sentBtn]');
+    await p.click('[data-fr=sentBtn]');
+    await p.waitForTimeout(100);
     const sent = await p.evaluate(() => document.getElementById('frSent').textContent);
     ok(['random install ID', 'version and browser', 'which switches are on', 'how many items each feature hid', 'popup opens and button clicks', 'error messages',
       'Never the pages you visit, your searches or your browsing history'].every((t) => sent.includes(t)), 'What’s sent lists everything, and what is never sent');
@@ -3526,7 +3540,7 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
     await p.click('[data-fr=skip]');
     await p.waitForTimeout(500);
     const st = await sw.evaluate(() => QuellSettings.get({ firstRunDone: false, analytics: 'unset', cookieEnabled: false, popupsEnabled: false }));
-    ok(st.firstRunDone === true && st.analytics === 'on' && !st.cookieEnabled && !st.popupsEnabled, `Skip: answered once, nothing turned on (${JSON.stringify(st)})`);
+    ok(st.firstRunDone === true && st.analytics === 'on' && !st.cookieEnabled && !st.popupsEnabled, `Not now: the ticked box is saved with the button, once, nothing turned on, nothing turned on (${JSON.stringify(st)})`);
     ok(await p.evaluate(() => document.getElementById('firstRun').hidden && !document.getElementById('featCard').hidden), 'the card is gone and the rows are back');
     ok(await p.evaluate(() => window.__tracked.some((m) => m.name === 'firstrun_skip')), 'firstrun_skip is tracked');
     await p.close();
@@ -3542,11 +3556,12 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
     ok(await w2.evaluate(() => !document.getElementById('firstRun').hidden && document.querySelector('[data-fr=analytics]').checked), 'welcome page: the card shows once, box ticked');
     await w2.click('[data-fr=analytics]');
     await w2.waitForTimeout(300);
-    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'off', 'welcome page: the box writes the setting too');
+    ok((await sw.evaluate(() => QuellSettings.get({ analytics: 'unset' }))).analytics === 'unset', 'welcome page: the box alone stores nothing');
     ok(!/keeps nothing|collects nothing/i.test(await w2.evaluate(() => document.body.textContent)), 'the welcome page never says Quell keeps or collects nothing');
     await w2.click('[data-fr=skip]');
     await w2.waitForTimeout(500);
-    ok((await sw.evaluate(() => QuellSettings.get({ firstRunDone: false }))).firstRunDone === true, 'welcome page: Skip answers it');
+    const wst = await sw.evaluate(() => QuellSettings.get({ firstRunDone: false, analytics: 'unset' }));
+    ok(wst.firstRunDone === true && wst.analytics === 'off', `welcome page: "Not now" saves the unticked box with it (${JSON.stringify(wst)})`);
     await w2.close();
     // "Turn both on": the all-sites request is the click's first call, and both switches follow the grant.
     await sw.evaluate(() => QuellSettings.set({ firstRunDone: false, analytics: 'unset', cookieEnabled: false, popupsEnabled: false }));
@@ -3563,6 +3578,12 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
     const on = await sw.evaluate(() => QuellSettings.get({ cookieEnabled: false, popupsEnabled: false, firstRunDone: false }));
     ok(on.cookieEnabled && on.popupsEnabled && on.firstRunDone, 'and turns Cookie banners and Pop-ups on');
     await t.close();
+    // An upgrade that already runs both: only the usage-counts choice is left, and the button says Save.
+    await sw.evaluate(() => QuellSettings.set({ firstRunDone: false, analytics: 'unset', cookieEnabled: true, popupsEnabled: true }));
+    const up = await openReal();
+    ok(await up.evaluate(() => document.querySelector('[data-fr=done]').textContent.trim() === 'Save' && !document.querySelector('[data-fr=done]').closest('[data-fr-done]').hidden
+      && document.querySelector('[data-fr-ask]').hidden), 'the upgrade card has one button, Save');
+    await up.close();
     await sw.evaluate((r) => QuellSettings.set(r), reset);
   }
 
@@ -3585,7 +3606,7 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
   // Pause here: the allowlists every content script already reads, plus when to take them back.
   {
     const p = await openReal();
-    await p.click('input[name=pdur][value=always]');
+    await p.selectOption('#pauseDur', 'always');
     await p.click('#pauseBtn');
     await p.waitForTimeout(500);
     ok(JSON.stringify((await sw.evaluate(() => QuellSettings.get({ aiAllowlist: [] }))).aiAllowlist) === '["www.google.com"]', 'Pause here (Always) puts the site in the same allowlist "Keep AI on this site" uses');
@@ -3593,17 +3614,33 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
     await g.waitForFunction(() => getComputedStyle(document.getElementById('ai-block')).display !== 'none', null, { timeout: 10000 }).catch(() => {});
     ok(await shownG('ai-block') && await organicAll(), 'the page is as Google serves it while paused');
     ok(await p.evaluate(() => window.__tracked.some((m) => m.name === 'pause')), 'pause is tracked');
+    ok(await p.evaluate(() => !document.getElementById('enabled').disabled), 'the master moon stays usable while paused');
+    ok(await p.evaluate(() => !document.getElementById('resumeBtn').hidden && !!document.getElementById('siteCard').contains(document.getElementById('resumeBtn'))), 'Resume sits in the site panel');
     await p.click('#resumeBtn');
     await p.waitForTimeout(500);
     ok((await sw.evaluate(() => QuellSettings.get({ aiAllowlist: [] }))).aiAllowlist.length === 0, 'Resume takes the site out again');
     await g.waitForFunction(() => getComputedStyle(document.getElementById('ai-block')).display === 'none', null, { timeout: 10000 }).catch(() => {});
     ok(!(await shownG('ai-block')) && await organicAll(), 'and the AI Overview is hidden again, organic results intact');
-    await p.click('input[name=pdur][value=hour]');
+    await p.selectOption('#pauseDur', 'hour');
     await p.click('#pauseBtn');
     await p.waitForTimeout(500);
     const rec = (await sw.evaluate(() => QuellSettings.get({ sitePauses: {} }))).sitePauses['www.google.com'];
     ok(rec && rec.until > Date.now() + 3500e3 && rec.until < Date.now() + 3700e3 && rec.added.join() === 'aiAllowlist', `1 hour is recorded as an expiry and what the pause added (${JSON.stringify(rec)})`);
     await p.close();
+    await sw.evaluate((r) => QuellSettings.set(r), reset);
+    // Resume takes back only what the pause added: an allow the user made earlier stays.
+    await sw.evaluate(() => QuellSettings.set({ aiAllowlist: ['www.google.com'] }));
+    const pr = await openReal();
+    await pr.selectOption('#pauseDur', 'always');
+    await pr.click('#pauseBtn');
+    await pr.waitForTimeout(500);
+    const own = (await sw.evaluate(() => QuellSettings.get({ sitePauses: {} }))).sitePauses['www.google.com'];
+    ok(own && own.added.length === 0, `pausing a site the user had already allowed adds nothing of its own (${JSON.stringify(own)})`);
+    await pr.click('#resumeBtn');
+    await pr.waitForTimeout(500);
+    const after = await sw.evaluate(() => QuellSettings.get({ aiAllowlist: [], sitePauses: {} }));
+    ok(JSON.stringify(after.aiAllowlist) === '["www.google.com"]' && !('www.google.com' in after.sitePauses), `Resume leaves the user's own per-feature allow in place and clears only the pause (${JSON.stringify(after)})`);
+    await pr.close();
     await sw.evaluate((r) => QuellSettings.set(r), reset);
     // Expiry takes back only what the pause itself added.
     await sw.evaluate(() => QuellSettings.set({
