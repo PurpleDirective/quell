@@ -171,7 +171,7 @@ console.log('AI on websites (cosmetic): ten sites, nothing else touched:');
   ];
   const baseState = { enabled: true, aiWebOn: true, aiWebAccess: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebAllowlist: [] };
   const rulesFor = (host, st) => COSMETIC.filter((r) => ({ buttons: st.aiWebButtons, chat: st.aiWebChat, support: st.aiWebSupport })[r.g]
-    && r.h.some((h) => h === '*' || host === h || host.endsWith('.' + h))).map((r) => ({ sel: r.sel, what: r.what }));
+    && r.h.some((h) => h === '*' || host === h || host.endsWith('.' + h))).map((r) => ({ sel: r.sel, what: r.what, t: r.t }));
   const stub = (host, st) => `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__sent=[];window.__ml=[];
     window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
       runtime:{id:'quell',onMessage:{addListener:(f)=>window.__ml.push(f)},
@@ -303,7 +303,7 @@ console.log('AI on websites: YouTube, Amazon and X (fixtures reduced from live-r
   const fx = (n) => readFileSync(path.join(HERE, 'fixtures', n), 'utf8');
   const st = { enabled: true, aiWebOn: true, aiWebAccess: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebAllowlist: [] };
   const rulesFor = (host, state) => COSMETIC.filter((r) => ({ buttons: state.aiWebButtons, chat: state.aiWebChat, support: state.aiWebSupport })[r.g]
-    && r.h.some((h) => h === '*' || host === h || host.endsWith('.' + h))).map((r) => ({ sel: r.sel, what: r.what }));
+    && r.h.some((h) => h === '*' || host === h || host.endsWith('.' + h))).map((r) => ({ sel: r.sel, what: r.what, t: r.t }));
   const stub = (host, state) => `window.__state=${JSON.stringify(state)};window.__cbs=[];window.__ml=[];
     window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
       runtime:{id:'quell',onMessage:{addListener:(f)=>window.__ml.push(f)},
@@ -356,8 +356,8 @@ console.log('AI on websites: YouTube, Amazon and X (fixtures reduced from live-r
   ok(JSON.stringify(hostsOf(/^youtube-/)) === '["www.youtube.com"]' && JSON.stringify(hostsOf(/^amazon-/)) === '["www.amazon.com"]'
     && JSON.stringify(hostsOf(/^x-/).sort()) === '["twitter.com","x.com"]', 'the new rules are scoped to youtube.com, amazon.com and x.com / twitter.com');
   ok(!COSMETIC.some((r) => /how-this-was-made|auto-dub/i.test(r.id + r.what + r.sel.join())), 'the "How this was made / Auto-dubbed" disclosure is not hidden (it is information)');
-  ok(COSMETIC.filter((r) => r.id.startsWith('youtube-')).length === 6 && COSMETIC.filter((r) => r.id.startsWith('amazon-')).length === 8 && COSMETIC.filter((r) => r.id.startsWith('x-')).length === 5,
-    'YouTube 6 rules, Amazon 8, X 5');
+  ok(COSMETIC.filter((r) => r.id.startsWith('youtube-')).length === 6 && COSMETIC.filter((r) => r.id.startsWith('amazon-')).length === 9 && COSMETIC.filter((r) => r.id.startsWith('x-')).length === 7,
+    'YouTube 6 rules, Amazon 9, X 7');
 }
 
 // ------------------------------------------------ F. live-retest fixes (0.7.4) ----------
@@ -402,7 +402,7 @@ console.log('Sign-up prompts never hide navigation; emptied cells collapse; more
   {
     const AIWEB = readFileSync(path.join(EXT, 'src/content/aiweb.js'), 'utf8');
     const st = { enabled: true, aiWebOn: true, aiWebAccess: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebAllowlist: [] };
-    const rules = COSMETIC.filter((r) => r.h.includes('learn.microsoft.com') && r.g === 'buttons').map((r) => ({ sel: r.sel, what: r.what }));
+    const rules = COSMETIC.filter((r) => r.h.includes('learn.microsoft.com') && r.g === 'buttons').map((r) => ({ sel: r.sel, what: r.what, t: r.t }));
     const aiStub = `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__ml=[];
       window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
         runtime:{id:'quell',onMessage:{addListener:(f)=>window.__ml.push(f)},sendMessage:async(m)=>{ if(m.type==='aiWebRules') return {rules:${JSON.stringify(rules)}}; }}};`;
@@ -422,7 +422,7 @@ console.log('Sign-up prompts never hide navigation; emptied cells collapse; more
   {
     const AIWEB = readFileSync(path.join(EXT, 'src/content/aiweb.js'), 'utf8');
     const st = { enabled: true, aiWebOn: true, aiWebAccess: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebAllowlist: [] };
-    const rules = COSMETIC.filter((r) => r.h.includes('docs.datadoghq.com')).map((r) => ({ sel: r.sel, what: r.what }));
+    const rules = COSMETIC.filter((r) => r.h.includes('docs.datadoghq.com')).map((r) => ({ sel: r.sel, what: r.what, t: r.t }));
     const aiStub = `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__ml=[];
       window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
         runtime:{id:'quell',onMessage:{addListener:(f)=>window.__ml.push(f)},sendMessage:async(m)=>{ if(m.type==='aiWebRules') return {rules:${JSON.stringify(rules)}}; }}};`;
@@ -485,7 +485,7 @@ console.log('Sign-up prompts never hide navigation; emptied cells collapse; more
     const AIWEB = readFileSync(path.join(EXT, 'src/content/aiweb.js'), 'utf8');
     const st = { enabled: true, aiWebOn: true, aiWebAccess: true, aiWebButtons: true, aiWebChat: true, aiWebSupport: false, aiWebAllowlist: [] };
     const run = async (host, html, ids) => {
-      const rules = COSMETIC.filter((r) => r.h.some((h) => h === '*' || host === h) && ({ buttons: 1, chat: 1 })[r.g]).map((r) => ({ sel: r.sel, what: r.what }));
+      const rules = COSMETIC.filter((r) => r.h.some((h) => h === '*' || host === h) && ({ buttons: 1, chat: 1 })[r.g]).map((r) => ({ sel: r.sel, what: r.what, t: r.t }));
       const pg = await ctx.newPage();
       await pg.route(`https://${host}/**`, (r) => r.fulfill({ contentType: 'text/html', body: html }));
       await pg.addInitScript({ content: `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__ml=[];window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},runtime:{id:'quell',onMessage:{addListener:(f)=>window.__ml.push(f)},sendMessage:async(m)=>{ if(m.type==='aiWebRules') return {rules:${JSON.stringify(rules)}}; }}};` + '\n' + SETTINGS_SRC + '\n' + AIWEB });
@@ -501,6 +501,145 @@ console.log('Sign-up prompts never hide navigation; emptied cells collapse; more
     const one = `<!doctype html><html><body><main id="keep-main">Placeholder</main><div id="onemind-widget" style="position:fixed;right:20px;bottom:20px;width:300px;height:400px"><iframe id="onemind-iframe" title="AI assistant" style="width:100%;height:100%"></iframe></div></body></html>`;
     r = await run('www.salesloft.com', one, ['onemind-widget', 'keep-main']);
     ok(!r[0] && r[1], 'salesloft: the 1mind AI assistant is hidden, the page stays');
+  }
+}
+
+// ------------------------------------------------ G. real-Chrome retest fixes --------
+console.log('Safety net, blank bands, app bars, sign-in callouts, Bing timing, chips:');
+{
+  const FIXD = path.join(HERE, 'fixtures');
+  const PROMPTS = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/signup-prompts.js'), 'utf8');
+  const POPUPS = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/popups.js'), 'utf8');
+  const COOKIES = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/cookies.js'), 'utf8');
+  const BING = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/common.js'), 'utf8') + '\n' + readFileSync(path.join(EXT, 'src/content/bing.js'), 'utf8');
+  const ENGINES = SETTINGS_SRC + '\n' + readFileSync(path.join(EXT, 'src/content/common.js'), 'utf8') + '\n' + readFileSync(path.join(EXT, 'src/content/engines.js'), 'utf8');
+  const stub = (st, extra = '') => `window.__state=${JSON.stringify(st)};window.__cbs=[];window.__sent=[];
+    window.chrome={storage:{local:{get:async(d)=>({...d,...window.__state})},onChanged:{addListener:(f)=>window.__cbs.push(f)}},
+      runtime:{id:'quell',onMessage:{addListener(){}},sendMessage:async(m)=>{ if(m.type==='blocked'){window.__sent.push(m);return;} ${extra} }}};`;
+  const open = async (host, html, src, st, wait = 1800, extra = '') => {
+    const pg = await ctx.newPage();
+    await pg.route(`http://${host}/**`, (r) => r.fulfill({ contentType: 'text/html', body: html }));
+    await pg.addInitScript({ content: stub(st, extra) + '\n' + src });
+    await pg.goto(`http://${host}/`);
+    await pg.waitForTimeout(wait);
+    return pg;
+  };
+  const vis = (pg, id) => pg.evaluate((i) => { const e = document.getElementById(i); return !!e && e.getClientRects().length > 0 && getComputedStyle(e).display !== 'none'; }, id);
+  const LONG = 'Placeholder paragraph with plenty of words so that the page clearly has content of its own. '.repeat(12);
+
+  // 1. Zara-shaped page: the app sizes itself with height:100% and an inner scroller.
+  {
+    const html = `<!doctype html><html style="height:100%"><body style="height:100%;margin:0;overflow:hidden">
+      <div id="app" style="height:100%;display:flex;flex-direction:column"><div id="top" style="height:40px"><a id="hdr-link" href="/">Menu</a></div>
+      <div id="content" style="flex:1;overflow:auto"><p id="body-text">${LONG}</p><a href="/1">One</a> <a href="/2">Two</a></div></div>
+      <div id="wall" role="dialog" style="position:fixed;left:30%;top:30%;width:40%;background:#fff;padding:12px;z-index:9"><h2>Sign up for our newsletter</h2><p>Create a free account.</p><button>Sign up</button> <button>Log in</button></div></body></html>`;
+    const pg = await open('zara.test', html, PROMPTS, { popupsEnabled: true });
+    const textLen = () => pg.evaluate(() => document.getElementById('content').innerText.length);
+    ok(!(await vis(pg, 'wall')), 'zara-like: the sign-up dialog is hidden');
+    ok(await textLen() > 800 && await vis(pg, 'body-text') && await vis(pg, 'hdr-link'), 'zara-like: the page content is not blanked (height:100% layout intact)');
+    ok(await pg.evaluate(() => { const r = document.getElementById('content').getBoundingClientRect(); return r.height > 300; }), 'zara-like: the content area keeps its height (unlock never forces height:auto)');
+    await pg.close();
+  }
+  // 1b. The safety net itself: a hide that blanks the page is undone and the page marked.
+  {
+    const html = `<!doctype html><html><body><main id="m"><p id="t">${LONG}${LONG}</p></main><div id="x">x</div></body></html>`;
+    const pg = await open('guard.test', html, SETTINGS_SRC, {}, 300);
+    const res = await pg.evaluate(() => {
+      const G = QuellSettings.guard; let undone = 0;
+      G.register(() => { undone++; document.getElementById('m').style.display = ''; });
+      G.measure(true);
+      document.getElementById('m').style.display = 'none'; G.acted();
+      const tripped = G.check();
+      return { tripped, undone, attr: document.documentElement.getAttribute('data-quell-safety'), back: document.getElementById('t').getClientRects().length > 0 };
+    });
+    ok(res.tripped && res.undone === 1 && res.attr === '1' && res.back, 'safety net: visible text fell under half after a hide, so the hide is undone and the page marked data-quell-safety');
+    const calm = await pg.evaluate(() => { const G = QuellSettings.guard; return G.protects(document.body) && G.protects(document.getElementById('m')) && !G.protects(document.getElementById('x')); });
+    ok(calm, 'safety net: body and main are protected, a small element is not');
+    await pg.close();
+  }
+  // 1c. A rule that matches the element holding the page's text is refused.
+  {
+    const html = `<!doctype html><html><body><div id="shell"><p id="t">${LONG}${LONG}</p></div></body></html>`;
+    const pg = await open('shell.test', html, POPUPS, { popupsEnabled: true }, 1500, "if(m.type==='popupRules') return {generic:['#shell'],site:[]};");
+    ok(await vis(pg, 't'), 'a pop-up rule matching the element that holds most of the page text does not hide it');
+    await pg.close();
+  }
+
+  // 2. A banner's emptied slot collapses; a slot the site left empty is not Quell's to touch.
+  {
+    const html = `<!doctype html><html><body><div id="slot" data-probe="1" style="padding:120px 0"><div id="onetrust-banner-sdk">We use cookies</div></div>
+      <div id="adslot" style="height:250px"></div><main id="main"><h1>Page</h1><p>${LONG}</p></main></body></html>`;
+    const pg = await open('band.test', html, COOKIES, { enabled: true, cookieEnabled: true });
+    ok(!(await vis(pg, 'onetrust-banner-sdk')) && await pg.evaluate(() => document.getElementById('slot').getClientRects().length === 0), 'cookie banner: the banner and the slot it left empty are collapsed (no band)');
+    ok(await pg.evaluate(() => document.getElementById('adslot').getBoundingClientRect().height === 250) && await vis(pg, 'main'), 'cookie banner: an empty ad slot the site left itself is untouched, and the page stays');
+    await pg.close();
+  }
+
+  // 3. MyRecipes "open in app" bar.
+  {
+    const html = `<!doctype html><html><body><header style="height:64px"><a id="hdr-app" href="/app">Get the app</a> <a id="hdr-home" href="/">Home</a></header>
+      <div id="appbar" style="height:70px;background:#eee"><a href="#">Don't lose your favorite Thanksgiving recipes. Save using the MyRecipes app now!</a> <button aria-label="Close" id="appbar-close">×</button></div>
+      <main id="main"><h1>Recipes</h1><p id="app-para">Try our app for timers and unit conversion while you cook; it is a short promotional line without any close control.</p><p>${LONG}</p></main></body></html>`;
+    const pg = await open('recipes.test', html, POPUPS, { popupsEnabled: true, hideAppBanners: true }, 1800, "if(m.type==='popupRules') return {generic:[],site:[]};");
+    ok(!(await vis(pg, 'appbar')), 'seriouseats-like: the "save using the MyRecipes app" bar is hidden');
+    ok(await vis(pg, 'hdr-app') && await vis(pg, 'hdr-home') && await vis(pg, 'main') && await vis(pg, 'app-para'), 'seriouseats-like: the header\'s own Get the app link, the page and an in-article mention of the app stay');
+    const off = await open('recipes.test', html, POPUPS, { popupsEnabled: true, hideAppBanners: false }, 1500, "if(m.type==='popupRules') return {generic:[],site:[]};");
+    ok(await vis(off, 'appbar'), 'with "Open in app" banners off, the bar shows');
+    await off.close();
+    await pg.close();
+  }
+
+  // 4. IMDb: an auto-appearing sign-in callout goes; one the user opened stays.
+  {
+    const html = `<!doctype html><html><body><header id="hdr" style="position:relative;height:64px;background:#111"><a id="hdr-signin" href="/signin" style="color:#fff">Sign in</a>
+      <button id="opener" onclick="document.getElementById('menu').style.display='block'">Account</button>
+      <div id="popover" style="position:absolute;right:10px;top:70px;width:320px;height:170px;background:#fff;border:2px solid gold"><a href="/signin" id="pop-btn">Sign in</a><button aria-label="Close" id="pop-close">×</button><p>New customer? <a href="/create">Create account</a></p></div>
+      <div id="menu" style="display:none;position:absolute;right:340px;top:70px;width:320px;height:170px;background:#fff"><a href="/signin" id="menu-btn">Sign in</a><button aria-label="Close menu">×</button><p>New customer? <a href="/create">Create account</a></p></div></header>
+      <main id="main"><h1>Movies</h1><p>${LONG}</p></main></body></html>`;
+    const pg = await open('imdb.test', html, PROMPTS, { popupsEnabled: true });
+    ok(!(await vis(pg, 'popover')), 'imdb-like: the auto-appearing sign-in callout is hidden');
+    ok(await vis(pg, 'hdr-signin') && await vis(pg, 'hdr') && await vis(pg, 'main'), 'imdb-like: the header\'s own Sign in and the page stay');
+    await pg.click('#opener');
+    await pg.waitForTimeout(2600);
+    ok(await vis(pg, 'menu') && await vis(pg, 'menu-btn'), 'imdb-like: a sign-in menu the user opened stays');
+    await pg.close();
+  }
+
+  // 5. Bing: tabs and panels inserted late are hidden and their gap collapses; stale first settings catch up.
+  {
+    const html = `<!doctype html><html><body><header id="b_header"><ul class="b_scopebar"><li><a id="t-all" href="/search?q=x">All</a></li></ul></header>
+      <div id="b_content"><div id="gap" data-probe="1" style="min-height:200px"><div id="b_copilot_search_container"><a id="chip" href="/copilotsearch?q=x">Ask Copilot</a></div></div><ol id="b_results"><li class="b_algo"><a id="org" href="https://example.com">Result</a></li></ol></div>
+      <script>setTimeout(function(){var li=document.createElement('li');li.id='late-li';li.innerHTML='<a id="late-tab" href="/copilotsearch?q=x&FORM=X">AI MODE</a>';document.querySelector('.b_scopebar').appendChild(li);},900);</script></body></html>`;
+    const pg = await ctx.newPage();
+    await pg.route('https://www.bing.com/**', (r) => r.fulfill({ contentType: 'text/html', body: html }));
+    // the first settings read is stale (Quell reads "off"); the next is right
+    await pg.addInitScript({ content: `window.__reads=0;window.chrome={storage:{local:{get:async(d)=>{window.__reads++;return {...d,enabled:true,aiEnabled:true,bingEnabled:window.__reads>1};}},onChanged:{addListener(){}}},runtime:{id:'quell',onMessage:{addListener(){}},sendMessage(){}}};` + '\n' + BING });
+    await pg.goto('https://www.bing.com/search?q=x');
+    await pg.waitForTimeout(3600);
+    ok(!(await vis(pg, 'late-tab')) && !(await vis(pg, 'chip')), 'bing: the Copilot tab inserted late and the panel are hidden, even after a stale first settings read');
+    ok(await pg.evaluate(() => document.getElementById('gap').getClientRects().length === 0), 'bing: the gap the Copilot panel left is collapsed');
+    ok(await vis(pg, 't-all') && await vis(pg, 'org'), 'bing: the other tabs and the results stay');
+    await pg.close();
+  }
+
+  // 6. DuckDuckGo: the Search Assist and Ask Duck.ai chips go; other chips and a result of the same name stay.
+  {
+    const html = `<!doctype html><html><body><ul id="chips"><li><a id="chip-all" href="/?q=x">All</a></li><li><a id="chip-assist" href="/?q=x&assist=true">Search Assist</a></li><li><a id="chip-duck" href="https://duck.ai/">Ask Duck.ai</a></li><li><a id="chip-img" href="/?q=x&iax=images">Images</a></li></ul>
+      <ol class="react-results--main"><li data-layout="organic"><a id="organic" href="https://example.com/a">Search Assist</a></li></ol></body></html>`;
+    const run = async (mode) => {
+      const pg = await ctx.newPage();
+      await pg.route('https://duckduckgo.com/**', (r) => r.fulfill({ contentType: 'text/html', body: html }));
+      await pg.addInitScript({ content: `window.chrome={storage:{local:{get:async(d)=>({...d,enabled:true,aiEnabled:true,ddgMode:${JSON.stringify(mode)}})},onChanged:{addListener(){}}},runtime:{id:'quell',onMessage:{addListener(){}},sendMessage(){}}};` + '\n' + ENGINES });
+      await pg.goto('https://duckduckgo.com/?q=x');
+      await pg.waitForTimeout(1000);
+      const r = { assist: await vis(pg, 'chip-assist'), duck: await vis(pg, 'chip-duck'), all: await vis(pg, 'chip-all'), img: await vis(pg, 'chip-img'), organic: await vis(pg, 'organic') };
+      await pg.close();
+      return r;
+    };
+    const on = await run('hide');
+    ok(!on.assist && !on.duck && on.all && on.img, 'duckduckgo: the Search Assist and Ask Duck.ai chips are hidden with the AI switch on; All and Images remain');
+    ok(on.organic, 'duckduckgo: a result named "Search Assist" is never hidden');
+    ok((await run('off')).assist, 'duckduckgo: with the AI switch off the chips stay');
   }
 }
 

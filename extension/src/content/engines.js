@@ -39,6 +39,9 @@
       // the AI card itself as organic and made both passes inert here.
       organic: 'li[data-layout="organic"]',
       cleanParam: ['assist', 'false'],
+      // The "Search Assist" and "Ask Duck.ai" chips in the top bar are AI entry
+      // points: they go with the AI answer (hidden by what they say, near the top).
+      chipText: /^(search assist|ask duck\.ai|duck\.ai)$/i,
       // Web results only. `/?q=…&ia=chat` is Duck.ai — a chat the user opened
       // on purpose — and ia=images/videos/news are other verticals; none of
       // them are a place to be rewriting the URL.
@@ -239,6 +242,17 @@
       }
     }
     if (cfg.sparkleSwitch) hidden += hideSparkle();
+    if (cfg.chipText) {
+      for (const a of document.querySelectorAll('a, button, [role="tab"]')) {
+        if (isOrganic(a) || a.dataset.quellHidden === '1' || a.closest('[data-quell-hidden="1"]')) continue;
+        if (!cfg.chipText.test((a.textContent || '').trim()) || a.getBoundingClientRect().top + scrollY > 260) continue;
+        const tabEl = a.closest('li, [role="tab"]') || a;
+        tabEl.style.setProperty('display', 'none', 'important');
+        tabEl.dataset.quellHidden = '1';
+        tabEl.dataset.quellLabel = 'AI chip';
+        if (!alreadyCounted(tabEl)) { tabEl.dataset.quellCounted = '1'; hidden++; }
+      }
+    }
     if (cfg.askTab) {
       for (const a of document.querySelectorAll(cfg.askTab)) {
         if (isOrganic(a) || a.dataset.quellHidden === '1') continue;
@@ -354,5 +368,7 @@
   window.Quell.onSettingsChange(['enabled', 'aiEnabled', 'aiAllowlist', cfg.key], (next) => applyState(next, true));
   // Cut off from the extension: stop hiding (see onGone in settings.js).
   window.Quell.onGone(teardown);
-  applyState(await window.Quell.getSettings(), false);
+  const first = await window.Quell.getSettings();
+  applyState(first, false);
+  window.Quell.recheckSettings((next) => applyState(next, false), first);
 })();

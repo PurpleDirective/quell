@@ -417,7 +417,8 @@ async function aiWebRulesFor(host) {
   const groups = { buttons: s.aiWebButtons, chat: s.aiWebChat, support: s.aiWebSupport };
   return (await getAiWebRules()).filter((r) => groups[r.g]
     && r.h.some((h) => h === '*' || host === h || host.endsWith('.' + h)))
-    .map((r) => ({ sel: r.sel, what: r.what }));
+    
+    .map((r) => ({ sel: r.sel, what: r.what, t: r.t }));
 }
 
 // The network layer must also respect the per-site pause: one dNR "allow" rule

@@ -23,11 +23,13 @@
   let observer = null;
   let active = false;
   let scheduled = false;
+  const G = S.guard;
+  let registered = false;
 
   const dropStyle = () => { const st = document.getElementById(STYLE_ID); if (st) st.remove(); };
   function addStyle() {
     dropStyle();
-    const sels = rules.flatMap((r) => r.sel);
+    const sels = rules.flatMap((r) => r.sel || []);
     if (!sels.length) return;
     const root = document.head || document.documentElement;
     if (!root) { setTimeout(addStyle, 0); return; }
@@ -63,20 +65,36 @@
 
   function sweep() {
     let n = 0;
+    if (G.state.tripped) return;
+    G.measure();
     S.emptied.recheckCollapsed(OWNER, (el) => el.hasAttribute(MARK));
     for (const r of rules) {
       let found = [];
-      try { found = document.querySelectorAll(r.sel.join(',')); } catch (_) { continue; }
+      try {
+        found = r.sel && r.sel.length ? [...document.querySelectorAll(r.sel.join(','))] : [];
+        // A heading with no stable selector is found by its exact words.
+        if (r.t) {
+          const re = new RegExp(r.t.re, 'i');
+          for (const el of document.querySelectorAll(r.t.sel)) {
+            if (re.test((el.textContent || '').trim()) && !el.querySelector('input, button, a[href], img')) found.push(el);
+          }
+        }
+      } catch (_) { continue; }
       for (const el of found) {
         if (el.getAttribute(MARK) !== null) continue;
+        if (G.protects(el)) continue;
         el.setAttribute(MARK, r.what);
+        // Found by its words rather than a selector: hide it directly.
+        if (r.t && getComputedStyle(el).display !== 'none') { el.style.setProperty('display', 'none', 'important'); el.setAttribute('data-quell-aiweb-inline', '1'); }
         n++;
         hideSeparator(el, r.what);
         const w = S.emptied.emptyAncestor(el);
         if (w) S.emptied.collapse(w, r.what, OWNER);
       }
     }
-    if (n > 0) { try { chrome.runtime.sendMessage({ type: 'blocked', count: n }); } catch (_) { /* sw asleep */ } }
+    if (n > 0) G.acted();
+    G.check();
+    if (n > 0 && !G.state.tripped) { try { chrome.runtime.sendMessage({ type: 'blocked', count: n }); } catch (_) { /* sw asleep */ } }
   }
   const schedule = () => {
     if (scheduled) return;
@@ -85,8 +103,9 @@
   };
 
   async function start() {
-    if (active) return;
+    if (active || G.state.tripped) return;
     active = true;
+    if (!registered) { registered = true; G.register(stop); }
     try {
       const r = await chrome.runtime.sendMessage({ type: 'aiWebRules' });
       rules = (r && r.rules) || [];
@@ -107,6 +126,7 @@
     if (observer) { observer.disconnect(); observer = null; }
     dropStyle();
     S.emptied.uncollapseAll(OWNER);
+    for (const el of document.querySelectorAll('[data-quell-aiweb-inline]')) { el.style.removeProperty('display'); el.removeAttribute('data-quell-aiweb-inline'); }
     for (const el of document.querySelectorAll('[' + MARK + ']')) el.removeAttribute(MARK);
   }
   const apply = (s) => {

@@ -128,6 +128,26 @@ window.Quell = window.Quell || {
     }
   },
 
+  // Read the settings again a moment after load and when the tab comes back, and
+  // hand them to cb: a layer that started from a stale read catches up without
+  // an off/on toggle.
+  recheckSettings(cb, initial) {
+    // Only a read that differs from what the layer started with is applied, so
+    // a settled page is never touched again (no DOM writes while idle).
+    // (the running total of hidden things changes as Quell works; it is not a setting)
+    const keyOf = (o) => JSON.stringify(o ? { ...o, totalBlocked: 0 } : null);
+    let seen = keyOf(initial);
+    const run = () => globalThis.QuellSettings.get().then((next) => {
+      const k = keyOf(next);
+      if (k === seen) return;
+      seen = k;
+      cb(next);
+    }).catch(() => {});
+    setTimeout(run, 1500);
+    setTimeout(run, 5000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) run(); });
+  },
+
   // Tell the background how many AI elements we just removed (for the badge).
   report(n) {
     if (n > 0) {

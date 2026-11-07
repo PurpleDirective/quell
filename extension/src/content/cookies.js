@@ -522,9 +522,12 @@
   // Count banners we actually removed (once per element) for the popup counter.
   // Counting runs on the curated SEED only — scanning the full 15k-selector
   // generic list per mutation would be a page-wide perf tax.
+  const G = globalThis.QuellSettings && globalThis.QuellSettings.guard;
+  let guardRegistered = false;
   const sweep = () => {
     let n = 0;
     let present = false;
+    if (G) { if (G.state.tripped) return; G.measure(); }
     for (const sel of SEED) {
       for (const el of document.querySelectorAll(sel)) {
         present = true;
@@ -549,6 +552,21 @@
     // the feature off and on again (or un-allowing a site) hides the same
     // banner a second time, and the page must scroll that time too.
     if (present) cmpSeen = true;
+    // A hidden banner can leave the strip or slot that held it empty (a 250-300 px
+    // band at the top of elpais.com, 0.7.4 retest): that wrapper goes with it.
+    // Only what Quell emptied: a reserved ad slot the site left empty itself
+    // is the site's own and is not touched.
+    const E = globalThis.QuellSettings && globalThis.QuellSettings.emptied;
+    if (E) {
+      E.recheckCollapsed('cookies', (el) => el.dataset.quellSeen === '1' || el.getAttribute(WALL_MARK) === '1');
+      for (const sel of SEED) {
+        for (const el of document.querySelectorAll(sel)) {
+          const w = E.emptyAncestor(el, {});
+          if (w) E.collapse(w, 'Cookie banner', 'cookies');
+        }
+      }
+    }
+    if (G) { if (n > 0) G.acted(); G.check(); }
     // CMPs inject late and re-render; keep offering the reject until one lands.
     if (rejectOn) tryReject();
     unlock();
@@ -571,8 +589,9 @@
   };
 
   async function apply() {
-    if (active) return;
+    if (active || (G && G.state.tripped)) return;
     active = true;
+    if (G && !guardRegistered) { guardRegistered = true; G.register(() => teardown()); }
     genericSheet(true);
 
     // Reject BEFORE hiding. A programmatic .click() does still reach a
@@ -635,6 +654,7 @@
     for (const el of document.querySelectorAll(`[${WALL_MARK}]`)) el.removeAttribute(WALL_MARK);
     cmpSeen = false;
     wallSeen = false;
+    try { globalThis.QuellSettings.emptied.uncollapseAll('cookies'); } catch (_) { /* test context */ }
   }
 
   const applyState = (s) => {

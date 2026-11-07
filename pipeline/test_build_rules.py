@@ -129,12 +129,12 @@ ok(all(vendors[v] == "replay" for v in vendors if any(k in v for k in ("Hotjar",
    "session-replay vendors are in the opt-in replay group only")
 ok(all(vendors[v] == "support" for v in vendors if any(k in v for k in ("Intercom", "Zendesk", "HubSpot", "Gorgias", "LiveChat"))),
    "support-chat vendors are in the opt-in support group, not the default one")
-ok(shipped_cos and all(c["g"] in ("buttons", "chat", "support") and c["h"] and c["sel"] and c["what"] for c in shipped_cos),
+ok(shipped_cos and all(c["g"] in ("buttons", "chat", "support") and c["h"] and (c["sel"] or c.get("t")) and c["what"] for c in shipped_cos),
    "every cosmetic rule has a group, hosts, selectors and a label")
 src_c = {c["id"]: c for c in AW_SRC["cosmetic"]}
 ok(not any("tawk" in " ".join(c["hosts"]) or "tawk" in c["id"] for c in AW_SRC["cosmetic"]),
    "tawk.to has no cosmetic rule (it sets inline !important): its network rule only")
-ok(all(c["what"] and not c["selectors"] == [] for c in AW_SRC["cosmetic"]), "no empty selector lists")
+ok(all(c["what"] and (c["selectors"] or c.get("text")) for c in AW_SRC["cosmetic"]), "every rule has selectors or a heading to find by its words")
 ok(all(len(c["sel"]) == 1 for c in shipped_cos if src_c[c["id"]]["hide"].startswith("ancestor:")),
    "rules that name a container hide the container itself, so no empty box is left")
 man = json.loads((aw.ROOT / "extension" / "manifest.json").read_text())

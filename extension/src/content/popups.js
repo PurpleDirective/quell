@@ -92,6 +92,9 @@
   const APP_LINK = 'a[href*="apps.apple.com"], a[href*="itunes.apple.com"], a[href*="play.google.com"]';
 
   let active = false;
+  const G = globalThis.QuellSettings && globalThis.QuellSettings.guard;
+  let registered = false;
+  let appOn = false;
   let selectors = [];   // generic + seed: hidden by stylesheet at once
   let siteSelectors = []; // this host's rules: hidden only once verified
   let observer = null;
@@ -282,15 +285,55 @@
     return 1;
   };
 
+  // "Open in app" bars the rule lists do not know (MyRecipes on seriouseats.com
+  // and allrecipes.com, 0.7.4 retest): a short bar across the top of the page,
+  // or fixed along the bottom, that asks you to use the app and carries its own
+  // close control. Never inside the page's header or nav (the header's own "Get
+  // the app" button stays), never content, never a bar with no way to dismiss it.
+  const APPBAR_RE = /\bapp\b/i;
+  const APP_VERB = /\b(get|save|open|use|download|install|continue|try)\b/i;
+  const CLOSE_SEL = '[aria-label*="close" i], [aria-label*="dismiss" i], [class*="close" i], [data-testid*="close" i]';
+  const appBars = () => {
+    if (!appOn || !document.body) return 0;
+    let n = 0, looked = 0;
+    const vw = innerWidth, vh = innerHeight;
+    for (const el of document.body.querySelectorAll('div, section, aside, p, span, a')) {
+      if (++looked > 2500) break;
+      if (el.hasAttribute(SITE_MARK) || el.hasAttribute('data-quell-keep') || el.closest('[' + SITE_MARK + ']')) continue;
+      const txt = el.textContent || '';
+      if (txt.length < 15 || txt.length > 220 || !APPBAR_RE.test(txt) || !APP_VERB.test(txt)) continue;
+      let bar = el;
+      for (let a = el; a && a !== document.body; a = a.parentElement) {
+        const r = a.getBoundingClientRect();
+        if (r.height > 160 || a.querySelector('main, article, h1, [role="main"]')) break;
+        bar = a;
+        if (r.width >= 0.7 * vw) break;
+      }
+      const r = bar.getBoundingClientRect();
+      if (r.width < 0.6 * vw || r.height < 24 || r.height > 160) continue;
+      const top = r.top + scrollY;
+      const topBar = top <= 320;
+      const bottomBar = getComputedStyle(bar).position === 'fixed' && r.bottom >= vh - 4;
+      if (!topBar && !bottomBar) continue;
+      const hasClose = !!bar.querySelector(CLOSE_SEL) || [...bar.querySelectorAll('button, [role="button"]')].some((b) => /^[×✕✖xX]$/.test((b.textContent || '').trim()));
+      if (!hasClose) continue;
+      if (isContent(bar) || isSensitive(bar) || inFlowInNav(bar) || (G && G.protects(bar))) continue;
+      bar.setAttribute(SITE_MARK, '1');
+      n += count(bar);
+    }
+    return n;
+  };
+
   const sweep = () => {
     lastSweep = Date.now();
     if (!document.body || (!selectors.length && !siteSelectors.length)) return;
+    if (G) { if (G.state.tripped) return; G.measure(); }
     let n = 0;
     // Generic rules: already hidden by the stylesheet — put back anything that
     // is content or a sign-in / cart surface.
     for (const el of queryAll(selectors)) {
       if (el.hasAttribute('data-quell-keep')) continue;
-      if (isContent(el) || isSensitive(el) || inFlowInNav(el)) { el.setAttribute('data-quell-keep', '1'); continue; }
+      if (isContent(el) || isSensitive(el) || inFlowInNav(el) || (G && G.protects(el))) { el.setAttribute('data-quell-keep', '1'); continue; }
       n += count(el);
     }
     // Site rules: hide only what is verifiably a nag.
@@ -301,8 +344,10 @@
       el.setAttribute(SITE_MARK, '1');
       n += count(el);
     }
+    n += appBars();
     unlock();
     collapseEmptied();
+    if (G) { if (n > 0) G.acted(); G.check(); }
     if (n > 0) {
       try { chrome.runtime.sendMessage({ type: 'blocked', count: n, feature: 'popups' }); } catch (_) { /* sw asleep */ }
     }
@@ -333,6 +378,8 @@
   };
 
   async function apply(s) {
+    if (G && G.state.tripped) return;
+    if (G && !registered) { registered = true; G.register(() => teardown()); }
     let rules = { generic: [], site: [] };
     try {
       rules = await chrome.runtime.sendMessage({
@@ -350,6 +397,7 @@
     dropStyle('quell-popups');
     clearSiteMarks();
     selectors = next;
+    appOn = !!s.hideAppBanners;
     siteSelectors = rules.site || [];
     active = next.length > 0 || siteSelectors.length > 0;
     if (!active) { teardown(); return; }

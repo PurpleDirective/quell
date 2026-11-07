@@ -643,6 +643,48 @@
    ],
    "hide": "element",
    "what": "AI assistant chat (1mind)"
+  },
+  {
+   "id": "amazon-ask-alexa-heading",
+   "group": "buttons",
+   "hosts": [
+    "www.amazon.com"
+   ],
+   "selectors": [],
+   "text": {
+    "sel": "h2, h3, h4, h5, h6, span.a-size-base-plus",
+    "re": "^Ask (Alexa|Rufus)$"
+   },
+   "hide": "element",
+   "what": "\"Ask Alexa\" heading"
+  },
+  {
+   "id": "x-grok-links",
+   "group": "buttons",
+   "hosts": [
+    "x.com",
+    "twitter.com"
+   ],
+   "selectors": [
+    "a[href*=\"/i/grok\"]"
+   ],
+   "hide": "element",
+   "what": "Grok promo link"
+  },
+  {
+   "id": "x-todays-news-heading",
+   "group": "buttons",
+   "hosts": [
+    "x.com",
+    "twitter.com"
+   ],
+   "selectors": [],
+   "text": {
+    "sel": "h2, h1, span",
+    "re": "^Today.s News$"
+   },
+   "hide": "element",
+   "what": "\"Today's News\" heading"
   }
  ],
  "network": [

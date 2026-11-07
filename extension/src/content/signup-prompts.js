@@ -77,8 +77,10 @@
   let hiddenCount = 0;
   let unlockStyle = null;
   const kept = new WeakSet();
+  let startedOnce = false;
   let notFixed = new WeakSet();   // elements already seen not to be position:fixed
   let listening = false;
+  const G = globalThis.QuellSettings && globalThis.QuellSettings.guard;
 
   const textOf = (el, max) => {
     const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -188,6 +190,7 @@
   };
 
   function hide(layer) {
+    if (G && G.protects(layer)) return;
     layer.setAttribute(MARK, '1');
     hiddenCount++;
   }
@@ -223,7 +226,10 @@
     if (!unlockStyle) {
       unlockStyle = document.createElement('style');
       unlockStyle.id = 'quell-prompt-unlock';
-      unlockStyle.textContent = 'html,body{overflow:auto!important;position:static!important;height:auto!important;max-height:none!important}'
+      // Only the lock is released. Height is never forced: pages such as Zara
+      // size their app with height:100% and blanked when it was set to auto.
+      unlockStyle.textContent = 'html,body{overflow:auto!important}'
+        + 'body[data-quell-unfix]{position:static!important}'
         + `[data-quell-unblur]{filter:none!important;-webkit-filter:none!important;backdrop-filter:none!important}`
         + `[data-quell-unclamp]{max-height:none!important;height:auto!important;overflow:visible!important}`;
       (document.head || document.documentElement).appendChild(unlockStyle);
@@ -238,7 +244,13 @@
       const cs = getComputedStyle(el);
       return cs.overflowY === 'hidden' || cs.position === 'fixed';
     });
+    const bodyFixed = !!document.body && getComputedStyle(document.body).position === 'fixed';
     sheet.disabled = !(locked && !open);
+    if (document.body) {
+      const want = !sheet.disabled && bodyFixed;
+      if (want && !document.body.hasAttribute('data-quell-unfix')) document.body.setAttribute('data-quell-unfix', '1');
+      else if (!want && document.body.hasAttribute('data-quell-unfix')) document.body.removeAttribute('data-quell-unfix');
+    }
     if (!open) { unblur(); unclamp(); }
   }
 
@@ -273,9 +285,47 @@
     }
   }
 
+  // A small callout that shows by itself and nudges the visitor to sign in (IMDb:
+  // a popover under the header's "Sign in" with a Sign in button, "New customer?
+  // Create account" and its own close control). It may sit in the page's header,
+  // so the header guard does not apply to it, but everything else does: it must
+  // look like that and nothing else (one Sign in button, a create-account line, a
+  // close control, small, anchored), it must not have been opened by the user,
+  // and the header's own Sign in link is never touched.
+  function nudges() {
+    let n = 0, looked = 0;
+    for (const el of document.body.querySelectorAll('div, aside, section')) {
+      if (++looked > SCAN_CAP) break;
+      if (el.hasAttribute(MARK) || el.closest('[' + MARK + ']') || kept.has(el) || el.hasAttribute(KEEP)) continue;
+      const t = el.textContent || '';
+      if (t.length > 300 || !/create (an )?account|new customer/i.test(t)) continue;
+      if (![...el.querySelectorAll('a, button')].some((b) => /^\s*sign in\s*$/i.test(b.textContent || ''))) continue;
+      const hasClose = !!el.querySelector('[aria-label*="close" i], [aria-label*="dismiss" i], [class*="close" i], [class*="dismiss" i]')
+        || [...el.querySelectorAll('button, [role="button"]')].some((b) => /^[×✕✖xX]$/.test((b.textContent || '').trim()));
+      if (!hasClose) continue;
+      // The anchored layer: this element or one of the three around it.
+      let layer = null;
+      for (let a = el, i = 0; a && a !== document.body && i < 4; a = a.parentElement, i++) {
+        const p = getComputedStyle(a).position;
+        if (p === 'absolute' || p === 'fixed') { layer = a; break; }
+        if ((a.textContent || '').length > 320) break;
+      }
+      if (!layer || layer.querySelector(NAV_INNER) || layer.querySelector('main, article, h1, [role="main"]')) continue;
+      const r = shown(layer);
+      if (!r || r.width < 180 || r.width > 480 || r.height < 80 || r.height > 320 || r.top + scrollY > 500) continue;
+      if (G && G.protects(layer)) continue;
+      if (!firstSeen.has(layer)) firstSeen.set(layer, Date.now());
+      if (askedRecently() || openedByUser(layer, firstSeen.get(layer))) { kept.add(layer); layer.setAttribute(KEEP, '1'); continue; }
+      hide(layer);
+      n++;
+    }
+    return n;
+  }
+
   function scan() {
     lastScan = Date.now();
     if (!document.body || !active) return;
+    if (G) { if (G.state.tripped) return; G.measure(); }
     if (onLoginPage()) { unlock(); return; }
     let n = 0;
     const vw = innerWidth, vh = innerHeight;
@@ -316,8 +366,10 @@
       hide(layer);
       n++;
     }
+    n += nudges();
     n += hideScrims();
     unlock();
+    if (G) { if (n > 0) G.acted(); G.check(); }
     if (n > 0) {
       try { chrome.runtime.sendMessage({ type: 'blocked', count: n, feature: 'popups' }); } catch (_) { /* sw asleep */ }
     }
@@ -341,8 +393,9 @@
   };
 
   function start() {
-    if (active) return;
+    if (active || (G && G.state.tripped)) return;
     active = true;
+    if (G && !startedOnce) { startedOnce = true; G.register(stop); }
     addStyle();
     document.addEventListener('click', onAsk, true);
     document.addEventListener('keydown', onKey, true);
@@ -375,6 +428,7 @@
     }
     document.getElementById('quell-prompts')?.remove();
     if (unlockStyle) { unlockStyle.remove(); unlockStyle = null; }
+    if (document.body) document.body.removeAttribute('data-quell-unfix');
     hiddenCount = 0;
   }
 

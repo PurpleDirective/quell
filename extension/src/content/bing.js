@@ -67,6 +67,14 @@
         hidden++;
       }
     }
+    // What a hidden Copilot block left empty (a ~200 px band under the tabs on
+    // 0.7.4's first live retest) goes with it; never anything holding results.
+    const E = window.QuellSettings.emptied;
+    E.recheckCollapsed('bing', (n) => n.dataset.quellSeen === '1');
+    for (const el of document.querySelectorAll(sel)) {
+      const w = E.emptyAncestor(el, { safe: '#b_results, #b_content, #b_header form, #sb_form' });
+      if (w) E.collapse(w, 'Copilot', 'bing');
+    }
     window.Quell.report(hidden);
   }
 
@@ -104,6 +112,7 @@
     active = false;
     if (observer) { observer.disconnect(); observer = null; }
     window.Quell.removeCSS('quell-bing');
+    window.QuellSettings.emptied.uncollapseAll('bing');
   }
 
   const applyState = (s) =>
@@ -120,5 +129,10 @@
   window.Quell.onSettingsChange(['enabled', 'aiEnabled', 'aiAllowlist', 'bingEnabled'], applyState);
   // Cut off from the extension: stop hiding (see onGone in settings.js).
   window.Quell.onGone(teardown);
-  applyState(await window.Quell.getSettings());
+  const first = await window.Quell.getSettings();
+  applyState(first);
+  // The first load right after Quell is switched on can read the settings a
+  // moment before they land (live retest: tabs hid only after an off/on
+  // toggle), so they are read again shortly after, and when the tab returns.
+  window.Quell.recheckSettings(applyState, first);
 })();

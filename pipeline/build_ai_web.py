@@ -72,7 +72,10 @@ def cosmetic(src):
     for c in src["cosmetic"]:
         hide = c["hide"]
         sel = [hide[len("ancestor:"):]] if hide.startswith("ancestor:") else list(c["selectors"])
-        out.append({"id": c["id"], "g": c["group"], "h": c["hosts"], "sel": sel, "what": c["what"]})
+        rule = {"id": c["id"], "g": c["group"], "h": c["hosts"], "sel": sel, "what": c["what"]}
+        if c.get("text"):  # a heading found by its exact words (no stable selector exists)
+            rule["t"] = c["text"]
+        out.append(rule)
     return out
 
 

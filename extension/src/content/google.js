@@ -378,5 +378,7 @@
   window.Quell.onGone(teardownHide);
   // Run at document_start — applyHide/applyCleanWeb both handle a missing
   // <body> themselves, and redirecting early avoids loading the AI page at all.
-  applyState(await window.Quell.getSettings(), false);
+  const first = await window.Quell.getSettings();
+  applyState(first, false);
+  window.Quell.recheckSettings((next) => applyState(next, false), first);
 })();

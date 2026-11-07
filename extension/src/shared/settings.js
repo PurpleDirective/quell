@@ -445,7 +445,7 @@
     return top;
   }
   function collapseEl(w, label, owner) {
-    if (!w || w.dataset.quellCollapsed === '1') return;
+    if (!w || w.dataset.quellCollapsed === '1' || guard.state.tripped || guard.protects(w)) return;
     w.dataset.quellCollapsed = '1';
     w.dataset.quellOwner = owner || '';
     if (label) w.dataset.quellLabel = label;
@@ -474,10 +474,58 @@
     }
   }
 
+  // PAGE SAFETY NET (content scripts)
+  // Quell hides things; it must never blank a page. Every hiding layer reports
+  // here: measure() before it acts, check() after. If the page's visible text
+  // has fallen to under half of the most it held, the page was blanked (Zara,
+  // 0.7.4 retest), so every layer takes its hides back, stays off for this
+  // page load and the page is marked data-quell-safety. protects() names what
+  // may never be hidden or collapsed: the document, main, the app root, or an
+  // element that holds most of the page's text.
+  const guard = (() => {
+    let peak = 0, acted = false, last = 0;
+    const undos = [];
+    const state = { tripped: false, before: 0, after: 0 };
+    const textLen = () => ((document.body && document.body.innerText) || '').length;
+    const ROOTS = 'html, body, main, [role="main"], #root, #app, #__next, #__nuxt, #app-root';
+    return {
+      state,
+      register(fn) { undos.push(fn); },
+      acted() { acted = true; },
+      measure(force) {
+        if (state.tripped || typeof document === 'undefined' || !document.body) return;
+        const now = Date.now();
+        if (!force && now - last < 800) return;
+        last = now;
+        peak = Math.max(peak, textLen());
+      },
+      check() {
+        if (state.tripped || !acted || peak < 800 || !document.body) return false;
+        const now = textLen();
+        if (now >= peak * 0.5) return false;
+        state.tripped = true; state.before = peak; state.after = now;
+        for (const fn of undos) { try { fn(); } catch (_) { /* the rest still run */ } }
+        try { document.documentElement.setAttribute('data-quell-safety', '1'); } catch (_) { /* no root */ }
+        return true;
+      },
+      protects(el) {
+        if (!el || !el.matches) return false;
+        try {
+          if (el.matches(ROOTS) || el.querySelector('main, [role="main"], #root, #app, #__next, #__nuxt')) return true;
+          // textContent, not innerText: the element may already be hidden by a
+          // stylesheet, which empties its innerText but not what it holds.
+          const total = ((document.body && document.body.textContent) || '').replace(/\s+/g, ' ').length;
+          return total >= 600 && ((el.textContent || '').replace(/\s+/g, ' ').length > total * 0.5);
+        } catch (_) { return false; }
+      },
+    };
+  })();
+
   g.QuellSettings = {
     SYNC_DEFAULTS, LOCAL_DEFAULTS, DEFAULTS, OBSOLETE_KEYS, LIST_BYTE_BUDGET,
     home, get, set, migrate, onChange, onGone, ListFullError, sweepPauses,
     hidden: { register: registerHidden, list: listHidden, listen },
+    guard,
     emptied: { emptyAncestor, collapse: collapseEl, uncollapseAll, recheckCollapsed, hasVisibleContent },
   };
 })();
