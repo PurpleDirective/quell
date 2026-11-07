@@ -71,7 +71,10 @@ WHY QUELL?
 • Private. Your settings sync through your own browser account like bookmarks
   do — never to us. Quell sends us nothing until you answer one question on
   first run: may it send anonymous usage counts (which features get used,
-  never a page, a domain or a search). Say no and it sends nothing, ever.
+  never a page, a domain or a search). Say no and it sends no counts.
+  When you remove Quell, your browser opens a short page on our site asking
+  why; its address carries the Quell version and browser (and the install
+  id only if counts were on).
   A "this site looks broken" report is sent only when you press Send, with
   the site's domain and Quell's version shown to you first.
 • Asks before AI comes back — switching an AI surface back on needs a
@@ -169,8 +172,10 @@ location, website content.
   lending purposes.
 
 The same answer, in words, for any free-text field: *Quell collects nothing
-to work. It sends data in two cases only: a report the user chooses to send
-(the hostname of the site they report, and Quell's version), and anonymous
+to work. It sends data in three cases only: a report the user chooses to send
+(the hostname of the site they report, and Quell's version); the uninstall
+page the browser opens on removal (Quell version and browser, plus the
+install id only if usage counts were on); and anonymous
 daily usage counts if the user answers yes on the first-run card (feature
 counts, switch states, version, browser, a random install id, scrubbed error
 text; never a page address, domain, search term or page content). Used only
