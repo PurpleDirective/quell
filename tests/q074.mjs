@@ -777,6 +777,37 @@ console.log('Review fixes: safety net, user gestures, columns, login pages, What
     await pg.close();
   }
 
+  // 1e. A SWEEP that hides a wordy overlay on a sparse page never trips; one that blanks in-flow text does.
+  {
+    const wordy = 'We and our partners store and access information on your device to personalise content and measure performance. '.repeat(16);
+    const sparse = (banner) => `<!doctype html><html><body><main><h1>Home</h1><p>Short page with little text of its own, a few lines only.</p></main>${banner}</body></html>`;
+    for (const [name, banner, sel] of [
+      ['OneTrust banner', `<div id="onetrust-consent-sdk"><div id="ot" style="position:fixed;bottom:0;left:0;right:0;background:#fff"><p>${wordy}</p></div></div>`, '#ot'],
+      ['Didomi-style banner', `<div id="didomi-host"><div id="dd" class="didomi-popup-container" style="position:fixed;bottom:0;left:0;right:0;background:#fff"><p>${wordy}</p></div></div>`, '#dd'],
+      ['dialog banner', `<div id="dl" role="dialog" style="position:fixed;left:10%;top:10%;width:80%;background:#fff"><p>${wordy}</p></div>`, '#dl'],
+    ]) {
+      const pg = await openAt('sweep.test', '/', sparse(banner), SETTINGS_SRC, {}, 300);
+      const r = await pg.evaluate((s) => {
+        const G = QuellSettings.guard; const el = document.querySelector(s);
+        const protectedByText = G.protects(el);
+        G.measure();
+        el.style.setProperty('display', 'none', 'important'); G.acted();
+        return { protectedByText, tripped: G.check(), attr: document.documentElement.getAttribute('data-quell-safety') };
+      }, sel);
+      ok(!r.protectedByText && !r.tripped && r.attr === null, `${name}: a sweep may hide it on a sparse page, and hiding it does not trip the net`);
+      await pg.close();
+    }
+    const modal = `<!doctype html><html><body><main><h1>Home</h1><p>${'Placeholder page text of its own, a few lines. '.repeat(8)}</p></main><div id="su" role="dialog" style="position:fixed;left:30%;top:20%;width:40%;background:#fff;padding:16px;z-index:9"><h2>Sign up or log in</h2><p>${wordy}</p><button>Continue with Google</button><button>Log in</button></div></body></html>`;
+    let pg = await openAt('sweep2.test', '/', modal, PROMPTS, { popupsEnabled: true }, 2800);
+    ok(!(await vis(pg, 'su')) && await pg.evaluate(() => !document.documentElement.hasAttribute('data-quell-safety')), 'a wordy sign-up modal hidden by a sweep on a sparse page: hidden, no trip');
+    await pg.close();
+    const paras = Array.from({ length: 24 }, () => '<p class="c">Placeholder article sentence with several words in it.</p>').join('');
+    pg = await openAt('sweep3.test', '/', `<!doctype html><html><body><main>${paras}</main></body></html>`, AIW, { enabled: true, aiWebOn: true, aiWebAccess: true }, 2200,
+      `if(m.type==='aiWebRules') return {rules:[{sel:[],what:'x',t:{sel:'p.c',re:'placeholder'}}]};`);
+    ok(await pg.evaluate(() => document.documentElement.getAttribute('data-quell-safety') === '1' && document.body.innerText.length > 1200), 'a sweep text rule that blanks in-flow paragraphs trips and the text is restored');
+    await pg.close();
+  }
+
   // 2. A login dialog that appears some seconds after the user's own click is theirs; one with no click behind it is hidden.
   {
     const mk = (delay) => `<!doctype html><html><body><main><h1>Story</h1><p>${LONGP}</p><button id="follow">Follow</button></main>

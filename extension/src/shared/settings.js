@@ -495,7 +495,8 @@
     let base = 0, acted = false, tripUrl = '', trips = 0, timer = null, trippedAt = 0;
     const undos = [];
     const state = { tripped: false, before: 0, after: 0 };
-    const textLen = () => ((document.body && document.body.innerText) || '').length;
+    // One measure for the sweep check and the stylesheet probe: in-flow text (flowText below).
+    const textLen = () => flowText();
     const ROOTS = 'html, body, main, [role="main"], #root, #app, #__next, #__nuxt, #app-root';
     // Text of the page itself, for judging a stylesheet: what a visible
     // overlay holds (a fixed or sticky layer, a dialog, a consent tool) is not
@@ -519,6 +520,13 @@
       };
       walk(document.body);
       return n;
+    };
+    const isOverlay = (el) => {
+      for (let a = el; a && a !== document.body && a !== document.documentElement; a = a.parentElement) {
+        const cs = getComputedStyle(a);
+        if (cs.position === 'fixed' || cs.position === 'sticky' || a.matches(OVERLAY)) return true;
+      }
+      return false;
     };
     const trip = (was, now) => {
       state.tripped = true; state.before = was; state.after = now;
@@ -566,9 +574,9 @@
         const sheets = ids.map((i) => document.getElementById(i)).filter((e) => e && e.sheet);
         if (!sheets.length) return false;
         for (const s of sheets) s.sheet.disabled = true;
-        const before = flowText();
+        const before = textLen();
         for (const s of sheets) s.sheet.disabled = false;
-        const after = flowText();
+        const after = textLen();
         if (before < 800 || after >= before * 0.5) return false;
         return trip(before, after);
       },
@@ -578,6 +586,9 @@
           if (el.matches(ROOTS) || el.querySelector('main, [role="main"], #root, #app, #__next, #__nuxt')) return true;
           // textContent, not innerText: the element may already be hidden by a
           // stylesheet, which empties its innerText but not what it holds.
+          // An overlay (a banner, a dialog, a consent tool) is not "the page":
+          // however much of a sparse page's text it holds, it may be hidden.
+          if (isOverlay(el)) return false;
           const total = ((document.body && document.body.textContent) || '').replace(/\s+/g, ' ').length;
           return total >= 600 && ((el.textContent || '').replace(/\s+/g, ' ').length > total * 0.5);
         } catch (_) { return false; }
