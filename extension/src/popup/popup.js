@@ -39,7 +39,7 @@ const REPORT_DATA = ['browsingActivity', 'technicalAndInteraction'];
 
 const ENGINE_MODES = ['ddgMode', 'braveMode', 'yahooMode'];
 const SURFACE_IDS = { sOverview: 'hideOverview', sAiMode: 'hideAiMode', sPaa: 'hidePaa', sGemini: 'hideGemini' };
-const POPUP_IDS = { pNews: 'hideNewsletters', pChat: 'hideChat', pApp: 'hideAppBanners' };
+const POPUP_IDS = { pNews: 'hideNewsletters', pChat: 'hideChat', pApp: 'hideAppBanners', pSignup: 'hideSignupPrompts' };
 const SURFACE_NAMES = {
   hideOverview: 'the AI Overview', hideAiMode: 'AI Mode',
   hidePaa: 'answers you open in “People also ask”', hideGemini: 'Gemini buttons and promos',
@@ -167,15 +167,15 @@ const ICONS = {
 const iconFor = (it) => it.kind === 'cookie' ? ICONS.cookie : it.kind === 'popup' ? (it.label === 'Chat widget' ? ICONS.chat : ICONS.popup)
   : /gemini/i.test(it.label) ? ICONS.chat : ICONS.search;
 
-let tab = { items: [], active: [], reachable: false, session: 0 };
+let tab = { items: [], active: [], reachable: false, session: 0, links: null };
 let itemsExpanded = false;
-const expanded = { search: false, cookie: false, popup: false };
+const expanded = { search: false, cookie: false, popup: false, link: false };
 const SHOWN_ITEMS = 3;
 
 // What the tab says Quell hid on it (a kind and a short label per item: the
 // page's text is never asked for here), plus the toolbar count for the tab.
 async function loadTab() {
-  const out = { items: [], active: [], reachable: false, session: 0 };
+  const out = { items: [], active: [], reachable: false, session: 0, links: null };
   if (PAGE_VIEW || tabId == null || !hasChrome) return out;
   if (chrome.storage?.session) {
     const key = 'tab:' + tabId;
@@ -186,6 +186,11 @@ async function loadTab() {
       const r = await chrome.tabs.sendMessage(tabId, { type: 'quell:hidden:list' });
       if (r && Array.isArray(r.items)) { out.items = r.items; out.active = r.active || []; out.reachable = true; }
     } catch (_) { /* nothing of Quell's in that tab */ }
+    // Links: how many links the page script cleaned here (a count, nothing else).
+    try {
+      const l = await chrome.tabs.sendMessage(tabId, { type: 'quell:links:status' });
+      if (l && Number.isInteger(l.cleaned)) out.links = l.cleaned;
+    } catch (_) { /* the links script is not in that tab */ }
   }
   return out;
 }
@@ -338,11 +343,24 @@ function rowStatus(kind, s, paused) {
   }
   return `Hid ${mine.length} here`;
 }
+// The Links row and the sign-up prompt line (0.7.4), kept apart from rowStatus.
+function renderLinkRows(s, paused) {
+  const prompts = tab.items.filter((i) => i.kind === 'popup' && i.label === 'Sign-up prompt' && !i.kept).length;
+  $('pSignupD').textContent = prompts ? `Closed ${prompts} sign-up ${prompts === 1 ? 'prompt' : 'prompts'}` : '';
+  let line = 'Asks your browser for access to all sites';
+  if (!s.enabled) line = 'Quell is off';
+  else if (s.linksEnabled) {
+    if (!host || tab.links === null) line = 'On for other pages';
+    else line = tab.links ? `Cleaned ${tab.links} ${tab.links === 1 ? 'link' : 'links'} here` : 'Watching. Nothing to clean here';
+  }
+  $('linksD').textContent = line;
+}
 function renderRows(s) {
   const paused = !!host && s.enabled && isPaused(s);
   $('gSearchD').textContent = rowStatus('search', s, paused && AI_HOST_RE.test(host) );
   $('cookiesD').textContent = rowStatus('cookie', s, paused);
   $('popupsD').textContent = rowStatus('popup', s, paused);
+  renderLinkRows(s, paused);
 }
 
 async function renderAccess() {
@@ -405,6 +423,12 @@ function renderPopups(s) {
   for (const [id, key] of Object.entries(POPUP_IDS)) $(id).checked = !!s[key];
 }
 
+function renderLinkGroup(s) {
+  $('links').checked = !!s.linksEnabled;
+  setExpander($('linkExpand'), $('linkBody'), expanded.link, !!s.linksEnabled);
+  $('linkWarn').checked = !!s.linksWarnAffiliate;
+}
+
 function renderSite(s) {
   const card = $('siteCard');
   if (!host || firstRunOn(s)) { card.hidden = true; return; }
@@ -460,6 +484,7 @@ async function render() {
   renderSearch(s, engines);
   renderCookies(s);
   renderPopups(s);
+  renderLinkGroup(s);
   renderSite(s);
   renderHero(s);
   renderItems(s);
@@ -582,7 +607,7 @@ $('engines').addEventListener('change', async (e) => {
 // the click itself), the engines switch goes off and the user is told why.
 async function releaseAllSitesIfUnused() {
   if (!hasChrome || !chrome.permissions) return;
-  if (current.cookieEnabled || current.popupsEnabled) return; // still in use
+  if (current.cookieEnabled || current.popupsEnabled || current.linksEnabled) return; // still in use
   const held = await chrome.permissions.contains({ origins: ALL_SITES }).catch(() => false);
   if (!held) return;
   const keepEngines = await enginesOn(current);
@@ -627,6 +652,24 @@ function grantedFeature(id, key, grantName) {
 }
 grantedFeature('cookies', 'cookieEnabled', 'cookies');
 grantedFeature('popups', 'popupsEnabled', 'popups');
+grantedFeature('links', 'linksEnabled', 'links');
+
+// "Warn me if a site swaps an affiliate code" needs the optional webNavigation
+// permission, asked for on this click and given back when it is switched off.
+$('linkWarn').addEventListener('change', async (e) => {
+  if (!hasChrome || !chrome.permissions) return;
+  showInfo('');
+  if (e.target.checked) {
+    if (GRANT_IN_TAB) { e.target.checked = false; openPageView({ grant: 'links' }); return; }
+    const granted = await chrome.permissions.request({ permissions: ['webNavigation'] }).catch(() => false);
+    if (!granted) { e.target.checked = false; await render(); return; }
+    await save({ linksWarnAffiliate: true });
+  } else {
+    await save({ linksWarnAffiliate: false });
+    await chrome.permissions.remove({ permissions: ['webNavigation'] }).catch(() => {});
+  }
+  await render();
+});
 
 $('cookieReject').addEventListener('change', async (e) => { await save({ cookieReject: e.target.checked }); await render(); });
 for (const [id, key] of Object.entries(POPUP_IDS)) {
@@ -703,6 +746,7 @@ function toggler(btn, onFlip) {
 toggler($('searchExpand'), (o) => { expanded.search = o; render(); });
 toggler($('cookieExpand'), (o) => { expanded.cookie = o; render(); });
 toggler($('popupExpand'), (o) => { expanded.popup = o; render(); });
+toggler($('linkExpand'), (o) => { expanded.link = o; render(); });
 toggler($('siteMore'), (o) => { $('siteMore').setAttribute('aria-expanded', String(o)); $('siteDetail').hidden = !o; closeMenu(); });
 function closeMenu() { $('siteMenu').hidden = true; $('siteMenuBtn').setAttribute('aria-expanded', 'false'); }
 $('siteMenuBtn').addEventListener('click', (e) => {
@@ -825,7 +869,7 @@ $('reportSend').addEventListener('click', async () => {
   await render();
   await renderAccess();
   const grant = params.get('grant');
-  const focusId = { engines: 'engines', cookies: 'cookies', popups: 'popups', base: 'grantBase', analytics: 'analyticsSwitch', firstrun: 'firstRun' }[grant];
+  const focusId = { engines: 'engines', cookies: 'cookies', popups: 'popups', links: 'links', base: 'grantBase', analytics: 'analyticsSwitch', firstrun: 'firstRun' }[grant];
   if (PAGE_VIEW && grant === 'engines') { expanded.search = true; await render(); }
   if (PAGE_VIEW && grant === 'analytics') { $('gearBtn').click(); }
   if (PAGE_VIEW && focusId) {
