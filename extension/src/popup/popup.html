@@ -46,7 +46,7 @@
 
       <!-- First run: shown once, here and on the welcome page. -->
       <section class="card frc" id="firstRun" hidden aria-labelledby="frT">
-        <p class="fr-def" id="frT"><strong>Cookie banners</strong> hides “we use cookies” notices and can say “reject all” for you. <strong>Pop-ups</strong> hides newsletter boxes, chat bubbles and “open in app” banners.</p>
+        <p class="fr-def" id="frT" data-fr-ask-only><strong>Cookie banners</strong> hides “we use cookies” notices and can say “reject all” for you. <strong>Pop-ups</strong> hides newsletter boxes, chat bubbles and “open in app” banners.</p>
         <div class="ana">
           <label class="ck"><input type="checkbox" data-fr="analytics" /><span>Share anonymous usage counts to help improve Quell</span></label>
           <button type="button" class="tbtn" data-fr="sentBtn" aria-expanded="false" aria-controls="frSent">What’s sent</button>
@@ -59,7 +59,7 @@
         <div class="two" data-fr-done hidden>
           <button type="button" class="btn pri" data-fr="done">Save</button>
         </div>
-        <p class="fine" data-fr="note" role="status" aria-live="polite">Either button saves your choice above. Turning both on asks your browser once for access to all sites; Quell never records the pages you visit.</p>
+        <p class="fine" data-fr="note" data-fr-upgrade="Save keeps your choice above. You can change it any time in Quell’s settings." role="status" aria-live="polite">Either button saves your choice above. Turning both on asks your browser once for access to all sites; Quell never records the pages you visit.</p>
       </section>
 
       <div class="card" id="mainCard">

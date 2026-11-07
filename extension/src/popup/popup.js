@@ -265,7 +265,7 @@ function renderItems(s) {
     li.className = 'item' + (it.kept ? ' undone' : '');
     li.dataset.id = it.id;
     li.innerHTML = '<div class="line"><span class="ii"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"></svg></span>'
-      + '<span class="il"><b></b><small></small></span>'
+      + '<span class="il"><b></b><small aria-live="polite"></small></span>'
       + '<span class="acts"><button type="button" class="ghost" data-peek>Peek</button><button type="button" class="ghost" data-undo>Undo</button></span></div>'
       + '<p class="ex" hidden></p>';
     li.querySelector('svg').innerHTML = iconFor(it);
@@ -297,14 +297,22 @@ async function onPeek(it, li, btn) {
   const r = await tellTab({ type: 'quell:hidden:peek', id: it.id, on });
   if (!r || !r.ok) return;
   btn.setAttribute('aria-pressed', String(on));
+  // The excerpt takes the place of the item's second line, cut to one line, so a
+  // peek never makes the popup taller (it has no spare height at 560 px).
   const ex = li.querySelector('.ex');
-  ex.hidden = !on;
-  if (on) {
-    T('peek');
-    ex.textContent = r.excerpt || 'Showing on the page for a few seconds.';
-    clearTimeout(peekTimers.get(it.id));
-    peekTimers.set(it.id, setTimeout(() => { btn.setAttribute('aria-pressed', 'false'); ex.hidden = true; }, 6000));
-  }
+  const sub = li.querySelector('small');
+  if (sub.dataset.base === undefined) sub.dataset.base = sub.textContent;
+  const close = () => {
+    btn.setAttribute('aria-pressed', 'false');
+    sub.textContent = sub.dataset.base; sub.classList.remove('peeking'); sub.removeAttribute('title');
+    ex.hidden = true;
+  };
+  clearTimeout(peekTimers.get(it.id));
+  if (!on) { close(); return; }
+  T('peek');
+  const text = r.excerpt || 'Showing on the page for a few seconds.';
+  sub.textContent = text; sub.title = text; sub.classList.add('peeking');
+  peekTimers.set(it.id, setTimeout(close, 6000));
 }
 async function onUndo(it, on) {
   const r = await tellTab({ type: 'quell:hidden:keep', id: it.id, on });

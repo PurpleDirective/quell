@@ -81,6 +81,8 @@
     ask.hidden = both;
     done.hidden = !both;
     card.querySelectorAll('[data-fr-ask-only]').forEach((el) => { el.hidden = both; });
+    // Copy written for the two-button ask is swapped for its one-button version.
+    if (both) card.querySelectorAll('[data-fr-upgrade]').forEach((el) => { el.textContent = el.dataset.frUpgrade; });
     box.checked = await analyticsOn(s);
 
     sentBtn.addEventListener('click', () => {
@@ -113,6 +115,10 @@
     };
     const finish = async (patch) => {
       await S.set({ ...patch, ...(await analyticsPatch()), firstRunDone: true });
+      // The answer is saved. The box must not stay live: its change handler stores
+      // nothing, so an untick here would show a choice that was never saved. From
+      // now on the settings switch in the toolbar popup is where it changes.
+      box.disabled = true;
       onDone();
     };
 

@@ -3471,8 +3471,9 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
     await row.locator('[data-peek]').click();
     await p.waitForTimeout(300);
     ok(await shownG('ai-block') && await shownG('ai-block-css'), 'Peek shows the hidden AI Overview on the page');
-    ok(/Generated answer|Matches BLOCK_CSS/.test(await row.locator('.ex').innerText()), 'Peek shows the excerpt in the popup only');
+    ok(/Generated answer|Matches BLOCK_CSS/.test(await row.locator('.il small').innerText()), 'Peek shows the excerpt in the popup only, in place of the item\'s second line');
     ok(await organicAll(), 'organic results are all still present during Peek');
+    { const f = await fits(p); ok(f.mainOver <= 0 && f.bodyH <= 560, `a Peek does not make the popup scroll (main overflow ${f.mainOver}, body ${f.bodyH}px)`); }
     await row.locator('[data-peek]').click();
     await p.waitForTimeout(300);
     ok(!(await shownG('ai-block')) && !(await shownG('ai-block-css')), 'Peek again puts it back');
@@ -3562,6 +3563,9 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
     await w2.waitForTimeout(500);
     const wst = await sw.evaluate(() => QuellSettings.get({ firstRunDone: false, analytics: 'unset' }));
     ok(wst.firstRunDone === true && wst.analytics === 'off', `welcome page: "Not now" saves the unticked box with it (${JSON.stringify(wst)})`);
+    // Once saved, the box cannot show a choice that was never stored (review r2 #1).
+    ok(await w2.evaluate(() => { const b = document.querySelector('[data-fr=analytics]'); return !b || b.disabled || b.closest('[hidden]') !== null; }),
+      'welcome page: after saving, the usage-counts box is locked (the toolbar settings switch changes it)');
     await w2.close();
     // "Turn both on": the all-sites request is the click's first call, and both switches follow the grant.
     await sw.evaluate(() => QuellSettings.set({ firstRunDone: false, analytics: 'unset', cookieEnabled: false, popupsEnabled: false }));
@@ -3583,7 +3587,13 @@ console.log('Popup (Moonlit) — height, hidden list, Peek and Undo, first run, 
     const up = await openReal();
     ok(await up.evaluate(() => document.querySelector('[data-fr=done]').textContent.trim() === 'Save' && !document.querySelector('[data-fr=done]').closest('[data-fr-done]').hidden
       && document.querySelector('[data-fr-ask]').hidden), 'the upgrade card has one button, Save');
+    const upText = await up.evaluate(() => { const c = document.getElementById('firstRun'); return [...c.querySelectorAll('p,h2,button,label')].filter((e) => !e.closest('[hidden]')).map((e) => e.textContent).join(' '); });
+    ok(!/Either button|Turning both on|Cookie banners\s*hides/.test(upText), `the upgrade card never mentions the two-button ask (${upText.slice(0, 80)}…)`);
     await up.close();
+    const wu = await openReal({ page: 'src/welcome/welcome.html', tabbed: false });
+    const wuText = await wu.evaluate(() => { const c = document.getElementById('firstRun'); return [...c.querySelectorAll('p,h2,button,label')].filter((e) => !e.closest('[hidden]')).map((e) => e.textContent).join(' '); });
+    ok(!/Either button|Turn on cookie banners|They need access/.test(wuText) && /One more thing/.test(wuText), 'welcome upgrade card: one-button copy, no two-button ask');
+    await wu.close();
     await sw.evaluate((r) => QuellSettings.set(r), reset);
   }
 
