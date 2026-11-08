@@ -141,8 +141,12 @@ man = json.loads((aw.ROOT / "extension" / "manifest.json").read_text())
 res = {r["id"]: r for r in man["declarative_net_request"]["rule_resources"]}
 ok(all(res.get("ai_web_" + g, {}).get("path") == f"rules/ai-web-{g}.json" and res["ai_web_" + g]["enabled"] is False for g in shipped),
    "the manifest declares the three rulesets, off until the background enables them")
-ok("declarativeNetRequestFeedback" in man["permissions"] and "<all_urls>" not in man.get("host_permissions", []),
-   "the matched-rule feedback permission is declared; <all_urls> stays optional")
+ok("activeTab" in man["permissions"] and "<all_urls>" not in man.get("host_permissions", []),
+   "the matched-rule count comes through activeTab; <all_urls> stays optional")
+# declarativeNetRequestFeedback warns "Read your browsing history": a new warning
+# disables the extension on update until the user accepts it again.
+ok("declarativeNetRequestFeedback" not in man["permissions"] + man.get("optional_permissions", []),
+   "no permission that warns 'Read your browsing history' (an update would switch Quell off)")
 
 print("Links ruleset (0.7.4):")
 gen = b.links_ruleset()

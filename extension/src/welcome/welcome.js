@@ -22,6 +22,7 @@
 
   // The one-time card: ask once for all-sites access, and the usage-counts line.
   const S = globalThis.QuellSettings;
+  await globalThis.QuellGrant?.settle().catch(() => {});
   const card = document.getElementById('firstRun');
   const chips = async () => {
     const s = await S.get();

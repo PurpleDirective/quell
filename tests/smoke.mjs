@@ -1787,6 +1787,7 @@ console.log('Popup — engines switch (intent path / off path):');
       if (u.pathname.endsWith('/shared/report-host.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/report-host.js'), 'utf8') });
       if (u.pathname.endsWith('/shared/config.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/config.js'), 'utf8') });
       if (u.pathname.endsWith('/shared/browser.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/browser.js'), 'utf8') });
+      if (u.pathname.endsWith('/shared/grant.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/grant.js'), 'utf8') });
       if (u.pathname.endsWith('popup.css')) return r.fulfill({ contentType: 'text/css', body: css });
       return r.fulfill({ contentType: 'text/html', body: html });
     });
@@ -1832,6 +1833,24 @@ console.log('Popup — engines switch (intent path / off path):');
     ok((await checked(pg)) === false, 'the switch springs back off when Chrome refuses');
     ok((await modesHidden(pg)) === true, 'and the dropdowns stay hidden');
     await pg.close();
+  }
+
+  // Chrome closes the popup when its prompt opens: request() never comes back
+  // here. The switch must still be saved, from the record written before the
+  // prompt (src/shared/grant.js), by whichever page or worker sees the grant.
+  {
+    const pg = await openPopup({ storage: { enginesEnabled: false }, granted: false, allowGrant: true });
+    await pg.evaluate(() => { chrome.permissions.request = () => new Promise(() => {}); });
+    await pg.click('#engines');
+    await pg.waitForTimeout(300);
+    const rec = await pg.evaluate(() => window.__state.local.quellPendingGrant);
+    ok(rec && rec.patch && rec.patch.enginesEnabled === true && JSON.stringify(rec.request.origins) === JSON.stringify(POPUP_ORIGINS),
+      `before the prompt, the popup writes down what the click is for (${JSON.stringify(rec && rec.patch)})`);
+    await pg.close();
+    const again = await openPopup({ storage: { enginesEnabled: false, quellPendingGrant: { ...rec, at: Date.now() } }, granted: true, allowGrant: true });
+    ok((await checked(again)) === true, 'the next popup to open saves it once Chrome has granted: the switch reads on, no second ask');
+    ok(!(await calls(again)).some(([n]) => n === 'permissions.request'), 'and nothing is asked for again');
+    await again.close();
   }
 
   // Off path: intent cleared FIRST, then the hosts revoked.
@@ -1919,6 +1938,7 @@ console.log('Popup — all-sites access is given back when Cookie banners and Po
       if (u.pathname.endsWith('/shared/report-host.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/report-host.js'), 'utf8') });
       if (u.pathname.endsWith('/shared/config.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/config.js'), 'utf8') });
       if (u.pathname.endsWith('/shared/browser.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/browser.js'), 'utf8') });
+      if (u.pathname.endsWith('/shared/grant.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/grant.js'), 'utf8') });
       if (u.pathname.endsWith('popup.css')) return r.fulfill({ contentType: 'text/css', body: css });
       return r.fulfill({ contentType: 'text/html', body: html });
     });
@@ -1980,7 +2000,10 @@ console.log('Popup — all-sites access is given back when Cookie banners and Po
     const c = await calls(pg);
     const req = idx(c, 'permissions.request', isAll);
     const set = idx(c, 'storage.set', (o) => o.popupsEnabled === true);
-    ok(req === 0, `re-enabling asks for <all_urls> as the click's FIRST call (request@${req})`);
+    // The one write allowed before it is the pending-grant record (grant.js), started
+    // and not awaited, so the request is still the click's first await.
+    const mark = idx(c, 'storage.set', (o) => 'quellPendingGrant' in o);
+    ok(req === mark + 1 && mark <= 0, `re-enabling asks for <all_urls> as the click's FIRST call after the pending record (record@${mark}, request@${req})`);
     ok(set > req, 'and the switch is saved on only after the grant');
     ok(await pg.evaluate(() => document.getElementById('popups').checked), 'the switch reads on');
     await pg.close();
@@ -1990,7 +2013,7 @@ console.log('Popup — all-sites access is given back when Cookie banners and Po
     await pg.click('#cookies');
     await pg.waitForTimeout(300);
     const c = await calls(pg);
-    ok(idx(c, 'permissions.request', isAll) === 0 && idx(c, 'storage.set', (o) => 'cookieEnabled' in o) < 0,
+    ok(idx(c, 'permissions.request', isAll) === idx(c, 'storage.set', (o) => 'quellPendingGrant' in o) + 1 && idx(c, 'storage.set', (o) => 'cookieEnabled' in o) < 0,
       're-enabling with the grant refused: nothing saved');
     ok(!(await pg.evaluate(() => document.getElementById('cookies').checked)), 'and the switch springs back off');
     await pg.close();
@@ -2810,6 +2833,7 @@ console.log('Popup — confirm before AI comes back, site card, breakage report:
       if (u.pathname.endsWith('/shared/report-host.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/report-host.js'), 'utf8') });
       if (u.pathname.endsWith('/shared/config.js')) return r.fulfill({ contentType: 'text/javascript', body: cfgSrc || cfg });
       if (u.pathname.endsWith('/shared/browser.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/browser.js'), 'utf8') });
+      if (u.pathname.endsWith('/shared/grant.js')) return r.fulfill({ contentType: 'text/javascript', body: readFileSync(path.join(EXT, 'src/shared/grant.js'), 'utf8') });
       return r.fulfill({ contentType: 'text/html', body: html });
     });
     await pg.route(ENDPOINT, async (r) => {
@@ -4058,7 +4082,7 @@ console.log('Popup: sign-up prompts switch and the Links group:');
       const f = (n, t) => r.fulfill({ contentType: t, body: readFileSync(path.join(EXT, n), 'utf8') });
       if (u.pathname.endsWith('popup.js')) return r.fulfill({ contentType: 'text/javascript', body: js });
       if (u.pathname.endsWith('popup.css')) return r.fulfill({ contentType: 'text/css', body: css });
-      for (const n of ['settings', 'report-host', 'config', 'browser']) if (u.pathname.endsWith(`/shared/${n}.js`)) return f(`src/shared/${n}.js`, 'text/javascript');
+      for (const n of ['settings', 'report-host', 'config', 'browser', 'grant']) if (u.pathname.endsWith(`/shared/${n}.js`)) return f(`src/shared/${n}.js`, 'text/javascript');
       return r.fulfill({ contentType: 'text/html', body: html });
     });
     await pg.addInitScript({ content: fake(o) });
