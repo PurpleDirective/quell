@@ -1,4 +1,4 @@
-# Quell — store listings (v0.7.4)
+# Quell — store listings (v0.7.5)
 
 Build with `pipeline/package.sh`:
 

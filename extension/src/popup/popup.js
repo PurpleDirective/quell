@@ -572,6 +572,9 @@ async function render() {
   if (wnShow) $('wnAna').hidden = s.analytics !== 'unset';
   const wnPlan = whatsNewPlan(s);
   if (wnShow) {
+    // The card covers every change since the user's last answer: name the version they now run.
+    const ver = hasChrome && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : '';
+    if (ver) $('wnT').textContent = `What’s new in Quell ${ver}`;
     const ul = $('wnList');
     ul.textContent = '';
     $('wnSum').textContent = wnPlan.sum;
