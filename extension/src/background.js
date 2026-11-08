@@ -179,12 +179,18 @@ async function syncEngineLayerInOpenTabs() {
   }
 }
 
-// Save a switch whose popup closed under the prompt, and count its click the
-// way the popup would have (the popup never got that far).
-async function settleGrant() {
-  const done = await QuellGrant.settle().catch(() => false);
-  const A = qa();
-  if (done && done.track && A) { try { A.event(done.track); } catch (_) { /* counts are best-effort */ } }
+// Close a pending grant (grant.js): save the switch whose popup may have
+// closed under the prompt, remove the record, and count its click. The
+// background is the only closer and runs one close at a time, so a click is
+// counted once even when the page, onAdded and startup all see the grant.
+let grantChain = Promise.resolve();
+function settleGrant() {
+  grantChain = grantChain.then(async () => {
+    const done = await QuellGrant.settle({ close: true }).catch(() => false);
+    const A = qa();
+    if (done && done.track && A) { try { A.event(done.track); } catch (_) { /* counts are best-effort */ } }
+  });
+  return grantChain;
 }
 
 // Grants and revocations can happen from chrome://extensions as well as from
@@ -713,6 +719,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // analytics.js drops everything unless the user said yes. Content scripts share
   // the extension id but run on web pages, so the sender's URL decides.
   const ownPage = typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''));
+  // A page saw its grant come back (grant.js): close the record here.
+  if (msg?.type === 'quell:grantSettle' && sender.id === chrome.runtime.id && ownPage) {
+    settleGrant();
+    return;
+  }
   if (msg?.type === 'quell:track' && sender.id === chrome.runtime.id && ownPage) {
     const A = qa();
     if (A && typeof msg.name === 'string') A.event(msg.name);

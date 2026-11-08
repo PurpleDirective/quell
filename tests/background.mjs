@@ -1048,6 +1048,30 @@ console.log('Background — a grant whose popup closed before it could save:');
     ok(seen.join() === 'firstrun_turn_on', `the click the popup could not count is counted when the background saves it (${seen.join()})`);
   }
   {
+    // The page survived the prompt (Firefox's tab, a popup that stayed open):
+    // it saved the switch and told the background, and onAdded fired too.
+    // The click is still counted once.
+    const h = boot({ granted: false, storage: { firstRunDone: true, quellPendingGrant: { ...pending().quellPendingGrant, track: 'firstrun_turn_on' } }, sync: {}, tabs: [] });
+    const seen = [];
+    vm.runInContext('QuellAnalytics', h.sandbox).event = (n) => { seen.push(n); };
+    h.state.grant(['<all_urls>']);
+    const own = { id: 'test', url: 'chrome-extension://test/src/popup/popup.html' };
+    await Promise.all([
+      h.chrome.permissions.onAdded.fire({ origins: ['<all_urls>'] }),
+      h.chrome.runtime.onMessage.fire({ type: 'quell:grantSettle' }, own, () => {}),
+      h.chrome.runtime.onMessage.fire({ type: 'quell:grantSettle' }, own, () => {}),
+    ]);
+    await settle(); await settle();
+    ok(seen.length === 1, `onAdded and the page's message together count the click once (${seen.length})`);
+    ok(!('quellPendingGrant' in h.local), 'and the record is closed');
+  }
+  {
+    const h = boot({ granted: ['<all_urls>'], storage: { firstRunDone: true, ...pending() }, sync: {}, tabs: [] });
+    await h.chrome.runtime.onMessage.fire({ type: 'quell:grantSettle' }, { id: 'test', url: 'https://evil.test/' }, () => {});
+    await settle();
+    ok('quellPendingGrant' in h.local, 'a web page cannot close a pending grant');
+  }
+  {
     const h = boot({ granted: false, storage: { firstRunDone: true, ...pending() }, sync: {}, tabs: [] });
     h.state.grant(true); // something else was granted (the engines), not all sites
     await h.chrome.permissions.onAdded.fire({ origins: h.ENGINE_ORIGINS });

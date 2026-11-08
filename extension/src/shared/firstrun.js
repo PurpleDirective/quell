@@ -144,7 +144,8 @@
         note.textContent = 'Not turned on: your browser didn’t allow it. You can try again or skip.';
         return;
       }
-      track('firstrun_turn_on');
+      // Counted by the background when it closes the grant (grant.js), once,
+      // whether or not this page lived through the prompt.
       await finish(turnPatch);
     });
     q('skip').addEventListener('click', async () => { track('firstrun_skip'); await finish({}); });
