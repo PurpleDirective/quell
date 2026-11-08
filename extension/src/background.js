@@ -11,6 +11,10 @@
 if (typeof QuellSettings === 'undefined' && typeof importScripts === 'function') {
   importScripts('/src/shared/settings.js');
 }
+// Saves a switch whose popup closed under Chrome's permission prompt (grant.js).
+if (typeof QuellGrant === 'undefined' && typeof importScripts === 'function') {
+  importScripts('/src/shared/grant.js');
+}
 // Usage counts (consent-gated; see analytics.js). Firefox lists these in
 // background.scripts, Chrome loads them here.
 if (typeof QuellAnalytics === 'undefined' && typeof importScripts === 'function') {
@@ -175,9 +179,27 @@ async function syncEngineLayerInOpenTabs() {
   }
 }
 
+// Close a pending grant (grant.js): save the switch whose popup may have
+// closed under the prompt, remove the record, and count its click. The
+// background is the only closer and runs one close at a time, so a click is
+// counted once even when the page, onAdded and startup all see the grant.
+let grantChain = Promise.resolve();
+function settleGrant() {
+  grantChain = grantChain.then(async () => {
+    const done = await QuellGrant.settle({ close: true }).catch(() => false);
+    const A = qa();
+    if (done && done.track && A) { try { A.event(done.track); } catch (_) { /* counts are best-effort */ } }
+  });
+  return grantChain;
+}
+
 // Grants and revocations can happen from chrome://extensions as well as from
 // the popup, so react to the permission event itself, not just to our own UI.
 chrome.permissions.onAdded.addListener(async () => {
+  // The popup that asked is usually gone (Chrome closes it when the prompt
+  // opens): save the switch it was asking for. The storage change then sets
+  // the feature up through storage.onChanged, as a click in the popup would.
+  await settleGrant();
   await applyEngineScripts();
   await syncEngineLayerInOpenTabs();
   // First time all-sites access exists: Links starts on (see defaultLinksOn).
@@ -492,6 +514,8 @@ async function init() {
   // 0.5.x kept every setting in storage.local; 0.6.0 moves the user's choices
   // to storage.sync. Idempotent, and a no-op once done.
   await QuellSettings.migrate().catch(() => {});
+  // Before anything reads the switches, and before an unused grant is given back.
+  await settleGrant();
   const current = await readSettings();
   chrome.action.setBadgeBackgroundColor({ color: '#5B21B6' });
   await applyCookieBlocking(current.enabled && current.cookieEnabled);
@@ -695,6 +719,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // analytics.js drops everything unless the user said yes. Content scripts share
   // the extension id but run on web pages, so the sender's URL decides.
   const ownPage = typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''));
+  // A page saw its grant come back (grant.js): close the record here.
+  if (msg?.type === 'quell:grantSettle' && sender.id === chrome.runtime.id && ownPage) {
+    settleGrant();
+    return;
+  }
   if (msg?.type === 'quell:track' && sender.id === chrome.runtime.id && ownPage) {
     const A = qa();
     if (A && typeof msg.name === 'string') A.event(msg.name);

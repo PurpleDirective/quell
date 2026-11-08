@@ -1,4 +1,4 @@
-# Quell — store listings (v0.7.4)
+# Quell — store listings (v0.7.5)
 
 Build with `pipeline/package.sh`:
 
@@ -85,10 +85,12 @@ Quell removes unwanted content from web pages — AI features in search engines 
   same scripts into tabs the user already has open at the moment they switch a
   feature on, so the change applies without a reload. Nothing is injected or
   registered until the matching permission has been granted.
-- `declarativeNetRequestFeedback` — lets Quell's popup read, for the open tab
-  only, how many AI scripts its own block rules stopped (`getMatchedRules`),
-  so it can say "Blocked 2 AI scripts". It carries no page content and the
-  count is not sent anywhere.
+- `activeTab` — when you click Quell's toolbar button, lets the popup read, for
+  that tab only, how many AI scripts Quell's own block rules stopped
+  (`getMatchedRules`), so it can say "Blocked 2 AI scripts". It carries no page
+  content and the count is not sent anywhere. It replaces
+  `declarativeNetRequestFeedback`, which made Chrome warn "Read your browsing
+  history" and switch Quell off on update until the user accepted it again.
 - Host permissions (google.* / bing.com content scripts) — inject the CSS/JS
   that hides AI feature blocks on search result pages only. These are the ONLY
   hosts Quell is installed with.

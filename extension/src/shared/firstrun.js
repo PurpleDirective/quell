@@ -134,13 +134,18 @@
     q('turn').addEventListener('click', async () => {
       if (grantInTab) { openTab({ grant: grantName }); return; }
       // The permission request is the click's first call: browsers need the gesture.
-      const granted = hasChrome && chrome.permissions
-        ? await chrome.permissions.request({ origins: ALL_SITES }).catch(() => false) : false;
+      // The whole answer goes with it (QuellGrant), because Chrome closes the
+      // toolbar popup when its prompt opens and this page may never hear back.
+      // The box mirrors the browser's own state where that exists, so it is the answer.
+      const answer = { ...turnPatch, analytics: box.checked ? 'on' : 'off', firstRunDone: true, whatsNewSeen: WHATS_NEW };
+      const granted = hasChrome && chrome.permissions && g.QuellGrant
+        ? await g.QuellGrant.ask({ origins: ALL_SITES }, answer, { track: 'firstrun_turn_on' }) : false;
       if (!granted) {
         note.textContent = 'Not turned on: your browser didn’t allow it. You can try again or skip.';
         return;
       }
-      track('firstrun_turn_on');
+      // Counted by the background when it closes the grant (grant.js), once,
+      // whether or not this page lived through the prompt.
       await finish(turnPatch);
     });
     q('skip').addEventListener('click', async () => { track('firstrun_skip'); await finish({}); });

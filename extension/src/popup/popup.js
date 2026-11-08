@@ -73,6 +73,17 @@ function showError(msg) {
 }
 
 // Every write goes through here so a sync-quota refusal is shown, not lost.
+// A switch that needs a permission: ask, and save the switch with the grant.
+// Chrome closes this popup the moment its prompt opens, so the code after the
+// request often never runs; QuellGrant writes the answer down first and the
+// background saves it when the browser grants (see src/shared/grant.js).
+// Must be the click's first await. Resolves true once granted and saved.
+async function grantThen(request, patch) {
+  const ok = await QuellGrant.ask(request, patch).catch(() => false);
+  if (ok) { showError(''); Object.assign(current, patch); setTimeout(refreshTab, 500); }
+  return ok;
+}
+
 async function save(patch) {
   try {
     await store.set(patch);
@@ -196,8 +207,8 @@ async function loadTab() {
   return out;
 }
 // How many AI scripts the network rules stopped in this tab. The browser's own
-// matched-rule record (declarativeNetRequest.getMatchedRules, which needs the
-// declarativeNetRequestFeedback permission) is the only honest source: it
+// matched-rule record (declarativeNetRequest.getMatchedRules, readable for
+// this tab through activeTab, which opening the popup grants) is the only honest source: it
 // holds the last few minutes, and the browser limits how often it can be read,
 // so a failure just means no count is shown.
 async function netBlockedFor(id) {
@@ -561,6 +572,9 @@ async function render() {
   if (wnShow) $('wnAna').hidden = s.analytics !== 'unset';
   const wnPlan = whatsNewPlan(s);
   if (wnShow) {
+    // The card covers every change since the user's last answer: name the version they now run.
+    const ver = hasChrome && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : '';
+    if (ver) $('wnT').textContent = `What’s new in Quell ${ver}`;
     const ul = $('wnList');
     ul.textContent = '';
     $('wnSum').textContent = wnPlan.sum;
@@ -661,9 +675,8 @@ $('engines').addEventListener('change', async (e) => {
   if (!hasChrome || !chrome.permissions) return; // preview context — no-op
   if (e.target.checked) {
     if (GRANT_IN_TAB) { e.target.checked = false; openPageView({ grant: 'engines' }); return; }
-    const granted = await chrome.permissions.request({ origins: ENGINE_ORIGINS }).catch(() => false);
+    const granted = await grantThen({ origins: ENGINE_ORIGINS }, { enginesEnabled: true });
     if (!granted) { e.target.checked = false; await render(); return; }
-    await save({ enginesEnabled: true });
   } else {
     // Clear the intent FIRST: remove() cannot revoke an <all_urls> grant the
     // cookie feature owns, so the stored flag is what actually turns this
@@ -724,9 +737,8 @@ function grantedFeature(id, key, grantName) {
     showInfo('');
     if (e.target.checked) {
       if (GRANT_IN_TAB) { e.target.checked = false; openPageView({ grant: grantName }); return; }
-      const granted = await chrome.permissions.request({ origins: ALL_SITES }).catch(() => false);
+      const granted = await grantThen({ origins: ALL_SITES }, { [key]: true });
       if (!granted) { e.target.checked = false; await render(); return; }
-      await save({ [key]: true });
     } else if (await save(key === 'linksEnabled' ? { linksEnabled: false, linksWarnAffiliate: false } : { [key]: false })) {
       // Links also gives back the optional webNavigation permission its affiliate warning used.
       if (key === 'linksEnabled') await chrome.permissions.remove({ permissions: ['webNavigation'] }).catch(() => {});
@@ -749,9 +761,8 @@ $('linkWarn').addEventListener('change', async (e) => {
   showInfo('');
   if (e.target.checked) {
     if (GRANT_IN_TAB) { e.target.checked = false; openPageView({ grant: 'links' }); return; }
-    const granted = await chrome.permissions.request({ permissions: ['webNavigation'] }).catch(() => false);
+    const granted = await grantThen({ permissions: ['webNavigation'] }, { linksWarnAffiliate: true });
     if (!granted) { e.target.checked = false; await render(); return; }
-    await save({ linksWarnAffiliate: true });
   } else {
     await save({ linksWarnAffiliate: false });
     await chrome.permissions.remove({ permissions: ['webNavigation'] }).catch(() => {});
@@ -801,8 +812,7 @@ for (const [id, key] of [['aiWeb', 'aiWebOn'], ['aiWebButtons', 'aiWebButtons'],
 $('aiWebGrant').addEventListener('click', async () => {
   if (!hasChrome || !chrome.permissions) return;
   if (GRANT_IN_TAB) { openPageView({ grant: 'aiweb' }); return; }
-  const granted = await chrome.permissions.request({ origins: ALL_SITES }).catch(() => false);
-  if (granted) await save({ aiWebAccess: true });
+  await grantThen({ origins: ALL_SITES }, { aiWebAccess: true });
   await render();
 });
 
@@ -971,6 +981,8 @@ $('reportSend').addEventListener('click', async () => {
     tabId = tab?.id ?? null;
     host = hostOf(tab?.url) || await hostFromPage(tabId);
   }
+  // A grant the last popup asked for, and closed before it could save.
+  await globalThis.QuellGrant?.settle().catch(() => {});
   await render();
   await renderAccess();
   const grant = params.get('grant');

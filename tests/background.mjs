@@ -27,7 +27,7 @@ const BG = readFileSync(process.env.QUELL_BG || path.join(EXT, 'src/background.j
 const SETTINGS = readFileSync(path.join(EXT, 'src/shared/settings.js'), 'utf8');
 
 // config.js, browser.js and analytics.js, loaded the way Firefox's background.scripts do.
-const ANALYTICS_DEPS = ['config', 'browser', 'analytics', 'affiliate']
+const ANALYTICS_DEPS = ['grant', 'config', 'browser', 'analytics', 'affiliate']
   .map((f) => readFileSync(path.join(EXT, 'src/shared', f + '.js'), 'utf8')).join('\n;');
 
 let passed = 0, failed = 0;
@@ -1015,6 +1015,87 @@ console.log('Background — update from an earlier version: new features start o
   await h.chrome.runtime.onInstalled.fire({ reason: 'install' });
   await settle();
   ok(h.local.firstRunDone !== true && h.sync.aiWebOn !== false && h.local.linksEnabled !== false, 'a fresh install is untouched: first run still to come, nothing held back');
+}
+
+// --- The popup closed under Chrome's permission prompt ----------------------
+// Chrome closes the toolbar popup when its prompt opens, so the popup never
+// saves the switch it asked for. grant.js writes the answer down first; the
+// background saves it when the browser grants (permissions.onAdded).
+console.log('Background — a grant whose popup closed before it could save:');
+{
+  const answer = { cookieEnabled: true, popupsEnabled: true, aiWebOn: true, aiWebAccess: true, linksEnabled: true,
+    analytics: 'on', firstRunDone: true, whatsNewSeen: '0.7.4' };
+  const pending = (at = Date.now()) => ({ quellPendingGrant: { request: { origins: ['<all_urls>'] }, patch: answer, at } });
+  {
+    const h = boot({ granted: false, storage: { firstRunDone: true, ...pending() }, sync: {}, tabs: [] });
+    h.state.grant(['<all_urls>']);
+    await h.chrome.permissions.onAdded.fire({ origins: ['<all_urls>'] });
+    await settle();
+    ok(h.local.whatsNewSeen === '0.7.4' && h.local.cookieEnabled === true && h.local.popupsEnabled === true
+      && h.local.aiWebAccess === true && h.local.linksEnabled === true && h.local.analytics === 'on',
+      '"Turn these on" is saved when Chrome grants, though the popup is gone: the card does not come back');
+    ok(h.sync.aiWebOn === true, 'the synced part of the answer is saved too');
+    ok(!('quellPendingGrant' in h.local), 'the pending answer is cleared once saved');
+  }
+  {
+    const h = boot({ granted: false, storage: { firstRunDone: true, quellPendingGrant: { ...pending().quellPendingGrant, track: 'firstrun_turn_on' } }, sync: {}, tabs: [] });
+    const seen = [];
+    const A = vm.runInContext('QuellAnalytics', h.sandbox);
+    A.event = (n) => { seen.push(n); };
+    h.state.grant(['<all_urls>']);
+    await h.chrome.permissions.onAdded.fire({ origins: ['<all_urls>'] });
+    await settle();
+    ok(seen.join() === 'firstrun_turn_on', `the click the popup could not count is counted when the background saves it (${seen.join()})`);
+  }
+  {
+    // The page survived the prompt (Firefox's tab, a popup that stayed open):
+    // it saved the switch and told the background, and onAdded fired too.
+    // The click is still counted once.
+    const h = boot({ granted: false, storage: { firstRunDone: true, quellPendingGrant: { ...pending().quellPendingGrant, track: 'firstrun_turn_on' } }, sync: {}, tabs: [] });
+    const seen = [];
+    vm.runInContext('QuellAnalytics', h.sandbox).event = (n) => { seen.push(n); };
+    h.state.grant(['<all_urls>']);
+    const own = { id: 'test', url: 'chrome-extension://test/src/popup/popup.html' };
+    await Promise.all([
+      h.chrome.permissions.onAdded.fire({ origins: ['<all_urls>'] }),
+      h.chrome.runtime.onMessage.fire({ type: 'quell:grantSettle' }, own, () => {}),
+      h.chrome.runtime.onMessage.fire({ type: 'quell:grantSettle' }, own, () => {}),
+    ]);
+    await settle(); await settle();
+    ok(seen.length === 1, `onAdded and the page's message together count the click once (${seen.length})`);
+    ok(!('quellPendingGrant' in h.local), 'and the record is closed');
+  }
+  {
+    const h = boot({ granted: ['<all_urls>'], storage: { firstRunDone: true, ...pending() }, sync: {}, tabs: [] });
+    await h.chrome.runtime.onMessage.fire({ type: 'quell:grantSettle' }, { id: 'test', url: 'https://evil.test/' }, () => {});
+    await settle();
+    ok('quellPendingGrant' in h.local, 'a web page cannot close a pending grant');
+  }
+  {
+    const h = boot({ granted: false, storage: { firstRunDone: true, ...pending() }, sync: {}, tabs: [] });
+    h.state.grant(true); // something else was granted (the engines), not all sites
+    await h.chrome.permissions.onAdded.fire({ origins: h.ENGINE_ORIGINS });
+    await settle();
+    ok(h.local.cookieEnabled !== true && !h.local.whatsNewSeen && 'quellPendingGrant' in h.local,
+      'a grant that does not cover what was asked saves nothing, and the ask stays open');
+  }
+  {
+    const h = boot({ granted: false, storage: { firstRunDone: true, ...pending(Date.now() - 11 * 60 * 1000) }, sync: {}, tabs: [] });
+    h.state.grant(['<all_urls>']);
+    await h.chrome.permissions.onAdded.fire({ origins: ['<all_urls>'] });
+    await settle();
+    ok(h.local.cookieEnabled !== true && !('quellPendingGrant' in h.local),
+      'an ask older than ten minutes is dropped, not acted on');
+  }
+  {
+    // The worker was asleep when Chrome granted: the next start saves it,
+    // and the grant is in use, so it is not handed back.
+    const h = boot({ granted: ['<all_urls>'], storage: { firstRunDone: true, ...pending() }, sync: {}, tabs: [] });
+    await h.chrome.runtime.onStartup.fire();
+    await settle();
+    ok(h.local.cookieEnabled === true && h.local.whatsNewSeen === '0.7.4', 'a pending answer is saved at startup');
+    ok(!h.of('permissions.remove').some((o) => (o || []).includes('<all_urls>')), 'and the all-sites grant it asked for is kept');
+  }
 }
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

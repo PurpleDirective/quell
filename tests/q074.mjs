@@ -979,7 +979,7 @@ console.log('Review fixes: safety net, user gestures, columns, login pages, What
     let p = await popup();
     ok(await p.evaluate(() => !document.getElementById('whatsNew').hidden && document.getElementById('firstRun').hidden && document.getElementById('mainCard').hidden),
       'updated user: the What’s new card shows, in place of the first-run card');
-    ok(await p.evaluate(() => /What.s new in Quell 0\.7\.4/.test(document.getElementById('wnT').textContent) && document.querySelectorAll('.wn-list li').length === 4 && /Cookie banners and pop-ups/.test(document.getElementById('wnList').textContent)
+    ok(await p.evaluate(() => new RegExp('What.s new in Quell ' + chrome.runtime.getManifest().version.replace(/\./g, '\\.') + '$').test(document.getElementById('wnT').textContent) && document.querySelectorAll('.wn-list li').length === 4 && /Cookie banners and pop-ups/.test(document.getElementById('wnList').textContent)
       && /Turn these on/.test(document.querySelector('#whatsNew [data-fr=turn]').textContent) && /Not now/.test(document.querySelector('#whatsNew [data-fr=skip]').textContent)),
       'the card has a title, four short lines (incl. Cookie banners and pop-ups, which are off), "Turn these on" and "Not now"');
     ok(await p.evaluate(() => !document.getElementById('wnAna').hidden && !!document.querySelector('#whatsNew [data-fr=analytics]')), 'with usage counts unset, the card carries the usage-counts line');

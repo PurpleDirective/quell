@@ -63,7 +63,7 @@ def firefox(m):
     m = copy.deepcopy(m)
     m["name"] = FIREFOX_NAME
     m["background"] = {"scripts": [
-        "src/shared/settings.js", "src/shared/config.js", "src/shared/browser.js",
+        "src/shared/settings.js", "src/shared/grant.js", "src/shared/config.js", "src/shared/browser.js",
         "src/shared/analytics.js", "src/shared/affiliate.js", "src/background.js",
     ]}
     m.pop("minimum_chrome_version", None)
