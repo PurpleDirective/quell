@@ -179,13 +179,21 @@ async function syncEngineLayerInOpenTabs() {
   }
 }
 
+// Save a switch whose popup closed under the prompt, and count its click the
+// way the popup would have (the popup never got that far).
+async function settleGrant() {
+  const done = await QuellGrant.settle().catch(() => false);
+  const A = qa();
+  if (done && done.track && A) { try { A.event(done.track); } catch (_) { /* counts are best-effort */ } }
+}
+
 // Grants and revocations can happen from chrome://extensions as well as from
 // the popup, so react to the permission event itself, not just to our own UI.
 chrome.permissions.onAdded.addListener(async () => {
   // The popup that asked is usually gone (Chrome closes it when the prompt
   // opens): save the switch it was asking for. The storage change then sets
   // the feature up through storage.onChanged, as a click in the popup would.
-  await QuellGrant.settle().catch(() => {});
+  await settleGrant();
   await applyEngineScripts();
   await syncEngineLayerInOpenTabs();
   // First time all-sites access exists: Links starts on (see defaultLinksOn).
@@ -501,7 +509,7 @@ async function init() {
   // to storage.sync. Idempotent, and a no-op once done.
   await QuellSettings.migrate().catch(() => {});
   // Before anything reads the switches, and before an unused grant is given back.
-  await QuellGrant.settle().catch(() => {});
+  await settleGrant();
   const current = await readSettings();
   chrome.action.setBadgeBackgroundColor({ color: '#5B21B6' });
   await applyCookieBlocking(current.enabled && current.cookieEnabled);

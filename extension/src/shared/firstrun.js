@@ -139,7 +139,7 @@
       // The box mirrors the browser's own state where that exists, so it is the answer.
       const answer = { ...turnPatch, analytics: box.checked ? 'on' : 'off', firstRunDone: true, whatsNewSeen: WHATS_NEW };
       const granted = hasChrome && chrome.permissions && g.QuellGrant
-        ? await g.QuellGrant.ask({ origins: ALL_SITES }, answer) : false;
+        ? await g.QuellGrant.ask({ origins: ALL_SITES }, answer, { track: 'firstrun_turn_on' }) : false;
       if (!granted) {
         note.textContent = 'Not turned on: your browser didn’t allow it. You can try again or skip.';
         return;

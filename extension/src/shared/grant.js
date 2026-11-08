@@ -25,11 +25,12 @@
   // Must be called straight from the click, before any other await: the
   // browser needs the gesture. The storage write is started, not awaited, so
   // request() is still the click's first await. Resolves true once granted
-  // and the settings are saved; false if the user said no.
-  async function ask(request, patch = {}) {
+  // and the settings are saved; false if the user said no. `track` names the
+  // usage event the background counts if it is the one that saves the answer.
+  async function ask(request, patch = {}, { track = '' } = {}) {
     const area = local();
     let mark = Promise.resolve();
-    try { if (area) mark = Promise.resolve(area.set({ [KEY]: { request, patch, at: Date.now() } })).catch(() => {}); } catch (_) { /* no record: the live path still saves */ }
+    try { if (area) mark = Promise.resolve(area.set({ [KEY]: { request, patch, track, at: Date.now() } })).catch(() => {}); } catch (_) { /* no record: the live path still saves */ }
     const granted = !!(await chrome.permissions.request(request).catch(() => false));
     await mark;
     if (granted) await g.QuellSettings.set(patch);
@@ -39,6 +40,7 @@
 
   // Save a pending grant the browser has since granted. Safe to call any time,
   // from any context, as often as wanted; saving the same patch twice is the same.
+  // Resolves to the record it saved (truthy), or false.
   async function settle() {
     const area = local();
     if (!area || typeof chrome === 'undefined' || !chrome.permissions) return false;
@@ -53,7 +55,7 @@
     if (!held) return false; // still deciding, or said no: it ages out
     await g.QuellSettings.set(p.patch || {});
     await drop(area);
-    return true;
+    return p;
   }
 
   g.QuellGrant = { ask, settle, KEY, MAX_AGE_MS };

@@ -1038,6 +1038,16 @@ console.log('Background — a grant whose popup closed before it could save:');
     ok(!('quellPendingGrant' in h.local), 'the pending answer is cleared once saved');
   }
   {
+    const h = boot({ granted: false, storage: { firstRunDone: true, quellPendingGrant: { ...pending().quellPendingGrant, track: 'firstrun_turn_on' } }, sync: {}, tabs: [] });
+    const seen = [];
+    const A = vm.runInContext('QuellAnalytics', h.sandbox);
+    A.event = (n) => { seen.push(n); };
+    h.state.grant(['<all_urls>']);
+    await h.chrome.permissions.onAdded.fire({ origins: ['<all_urls>'] });
+    await settle();
+    ok(seen.join() === 'firstrun_turn_on', `the click the popup could not count is counted when the background saves it (${seen.join()})`);
+  }
+  {
     const h = boot({ granted: false, storage: { firstRunDone: true, ...pending() }, sync: {}, tabs: [] });
     h.state.grant(true); // something else was granted (the engines), not all sites
     await h.chrome.permissions.onAdded.fire({ origins: h.ENGINE_ORIGINS });
