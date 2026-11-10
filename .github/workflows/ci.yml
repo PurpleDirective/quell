@@ -10,8 +10,9 @@ permissions:
 # forks run the same checks safely.
 #
 # No `branches:` filter on pull_request: a PR stacked on another PR's branch
-# would otherwise run zero checks. No `paths:` filter either: the repository
-# is only Quell, so every change is a Quell change.
+# would otherwise run zero checks. No workflow-level `paths:` filter either: a required
+# check must always report. The `changes` job skips the smoke and rules jobs on a docs-only
+# PR instead, and `ci-ok` is the one required check (green = passed or rightly skipped).
 on:
   pull_request:
   workflow_dispatch:
@@ -21,8 +22,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Scope detection. One cheap job decides which jobs this PR needs; the heavy jobs carry
+  # `if: needs.changes.outputs.app == 'true'`. `ci-ok` (below) is the only required check: it
+  # accepts a skip only when this job said the skip was right, so a never-started required job
+  # cannot leave a PR pending, and a wrongly skipped one cannot pass silently.
+  # FAIL OPEN: a non-PR event, an odd checkout, a git error or an empty diff all mean "run
+  # everything". A wrong `true` costs a runner slot; a wrong `false` merges untested code.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      app: ${{ steps.scope.outputs.app }}
+    steps:
+      # depth 2: the PR test-merge commit and its parents, all the diff needs.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      - name: Which parts of the repo changed
+        id: scope
+        run: |
+          app=true
+          if [ "$GITHUB_EVENT_NAME" = pull_request ] \
+             && [ "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3 ] \
+             && files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD) \
+             && [ -n "$files" ]; then
+            app=false
+            while IFS= read -r f; do
+              case "$f" in
+                docs/*|README.md|AGENTS.md|CLAUDE.md|DIRECTIVE.md|LICENSE|NOTICE) ;;
+                *) app=true; break ;;
+              esac
+            done <<EOF
+          $files
+          EOF
+          fi
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+          echo "scope: app=$app"
+
   quell-smoke:
     name: quell extension smoke
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' }}
     # `playwright install --with-deps` and the xvfb install below use apt via
     # the hosted runner's passwordless sudo.
     runs-on: ubuntu-latest
@@ -55,6 +98,8 @@ jobs:
 
   quell-rules-integrity:
     name: quell rules artifacts
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' }}
     # Cheap structural check on the pipeline output: the ruleset ships inside
     # the extension, so a malformed regeneration is a shipped defect.
     #
@@ -170,3 +215,33 @@ jobs:
           echo "$S  gl.tgz" | sha256sum -c - 2>/dev/null || echo "$S  gl.tgz" | shasum -a 256 -c -
           tar xzf gl.tgz gitleaks
           ./gitleaks git . --redact --no-banner --exit-code 1
+
+  # THE one required check. Green when every job that had to run passed. A gated job counts as
+  # passed when skipped ONLY if `changes` said app=false; any other skip, a failure or a cancel
+  # is red. A new job must be added to `needs:` and to ALWAYS/GATED here, or it gates nothing.
+  ci-ok:
+    name: ci-ok
+    if: ${{ always() }}
+    needs: [changes, compliant-claims, secret-scan, quell-smoke, quell-rules-integrity]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every required job passed or was rightly skipped
+        env:
+          APP: ${{ needs.changes.outputs.app }}
+          ALWAYS: ${{ needs.changes.result }} ${{ needs.compliant-claims.result }} ${{ needs.secret-scan.result }}
+          GATED: ${{ needs.quell-smoke.result }} ${{ needs.quell-rules-integrity.result }}
+          DETAIL: ${{ toJSON(needs) }}
+        run: |
+          echo "app=$APP"
+          echo "$DETAIL"
+          for r in $ALWAYS; do
+            [ "$r" = success ] || { echo "::error::an always-run job finished $r"; exit 1; }
+          done
+          for r in $GATED; do
+            [ "$r" = success ] && continue
+            [ "$r" = skipped ] && [ "$APP" = false ] && continue
+            echo "::error::a gated job finished $r with app=$APP"
+            exit 1
+          done
