@@ -103,7 +103,7 @@ The Services are not directed to children under 18, and we do not knowingly coll
 
 ## Where information is processed
 
-We are based in the United States. We store the data we hold in the United States. Some of our service providers, such as our network, payment and email providers, may process information in other countries when they handle it for us; where the law requires, those transfers are covered by appropriate safeguards.
+We are based in the United States. We store the data we hold in the United States. Our service providers, such as our network provider, may process information in other countries when they handle it for us; where the law requires, those transfers are covered by appropriate safeguards.
 
 ## Changes to this policy
 
