@@ -1,8 +1,8 @@
 # Quell Privacy Policy
 
-Version 3.2.0 · Effective November 7, 2026
+Version 3.2.1 · Effective November 7, 2026
 
-This policy explains how Purple Directive ("we", "us") collects, uses and shares information when you use Quell and its related websites, communications and services (the "Services"). The information we collect depends on how you use the Services and on the choices you make.
+This policy explains how Purple Directive<sup>1</sup> ("we", "us") collects, uses and shares information when you use Quell and its related websites, communications and services (the "Services"). The information we collect depends on how you use the Services and on the choices you make.
 
 ## About Quell
 
@@ -122,3 +122,7 @@ We may update this policy from time to time. When we do, we will post the new ve
 ## Contact us
 
 Questions or requests about this policy: support@purpledirective.com. Purple Directive.
+
+---
+
+<sup>1</sup> Purple Directive is a trade name (d/b/a) of Misam Trading, Inc., a Texas corporation based in Spring, Texas, which is the legal party to this policy.
