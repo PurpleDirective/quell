@@ -1,12 +1,12 @@
 # Quell Privacy Policy
 
-Version 3.2.1 · Effective November 7, 2026
+Version 3.3.0 · Effective November 16, 2026
 
 This policy explains how Purple Directive<sup>1</sup> ("we", "us") collects, uses and shares information when you use Quell and its related websites, communications and services (the "Services"). The information we collect depends on how you use the Services and on the choices you make.
 
 ## About Quell
 
-Quell is a browser extension that hides content you did not ask for on the pages you visit, such as AI answers in search results, cookie banners and pop-ups. It asks for access to the sites where it works so it can hide the page elements you choose. Some features act on a page for you, such as declining a cookie banner; the site and its tools handle that choice under their own policies. You do not need an account to use it. The extension sends us nothing unless you choose to: a problem report you send, or, if you leave the first-run box ticked, the anonymous usage counts described in "Quell usage counts and the uninstall page" below. The rest of this policy covers our websites and any information you choose to send us.
+Quell is a browser extension that hides content you did not ask for on the pages you visit, such as AI answers in search results, cookie banners and pop-ups. It asks for access to the sites where it works so it can hide the page elements you choose. Some features act on a page for you, such as declining a cookie banner; the site and its tools handle that choice under their own policies. You do not need an account to use it. The extension sends us nothing unless you choose to: a problem report you send, or, if you leave the first-run box ticked, the usage counts not linked to you described in "Quell usage counts and the uninstall page" below. The rest of this policy covers information you send us about Quell.
 
 **What the newer switches do on your device, and what they send.** Quell can close "sign up or log in to keep reading" boxes, take tracking codes (such as utm_ and fbclid) off the links you open and off links in the page, send a Google or Bing result straight to its site, and, only if you turn it on, warn you when a shopping page changes its affiliate code. All of this happens in your browser. Quell reads a page's text and addresses on your device to do it, keeps nothing about them after the tab closes, and sends none of it anywhere. Quell never changes an affiliate code. The affiliate warning asks your browser for one extra permission when you turn it on and gives it back when you turn it off. Nothing here adds anything to the problem report or the usage counts.
 
@@ -14,7 +14,7 @@ Your Quell settings are stored in your browser, and your browser may sync them a
 
 ## Quell usage counts and the uninstall page
 
-When you first open Quell, it asks whether you will let it send anonymous usage counts. The box is ticked by default. Nothing is sent until you have answered, and if you untick it or answer no, nothing is ever sent.
+When you first open Quell, it asks whether you will let it send usage counts not linked to you. The box is ticked by default. Nothing is sent until you have answered, and if you untick it or answer no, nothing is ever sent.
 
 **What we collect if you say yes.** A random install identifier that Quell makes on your device, which is not linked to your name, email address, browser account or device. For each day (in UTC): how many times you opened Quell's popup and used its controls (peek, undo, pause, the report dialog, and your answer on the first-run card); how many items Quell hid for each feature (AI answers, cookie banners, pop-ups); whether each of Quell's own switches is on or off; the Quell version; the browser (Chrome, Firefox or Opera); and error messages from Quell, with the name of the Quell file they came from and any web address removed.
 
@@ -28,7 +28,7 @@ When you first open Quell, it asks whether you will let it send anonymous usage 
 
 **Turning it off.** You can turn usage counts off at any time in Quell's settings. Quell then stops sending at once and deletes the queued counts and the install identifier from your device. Removing Quell stops everything.
 
-**The uninstall page.** When you remove Quell, your browser opens a short page on purpledirective.com asking why. The address carries the Quell version and your browser. If usage counts were on, it also carries the install identifier, so that your answer can be matched to those counts; if they were off, it carries no identifier. Answering is optional. You can pick a reason, add up to 500 characters of text, and give an email address if you would like a reply. We store the reason, the text, the email address if you gave one, the version, the browser, the identifier if it was in the address, and the date. We do not store your IP address or browser details. We delete answers after two years, and sooner if you ask us to at support@purpledirective.com.
+**The uninstall page.** When you remove Quell, your browser opens a short page on purpledirective.com asking why. The address carries the Quell version and your browser. If usage counts were on, it also carries the install identifier, so that your answer can be matched to those counts; if they were off, it carries no identifier. Answering is optional. You can pick a reason, add up to 500 characters of text, and give an email address if you would like a reply. We store the reason, the text, the email address if you gave one, the version, the browser, the identifier if it was in the address, and the date. We do not store your IP address or browser details. We delete answers after two years, and sooner if you ask us to at admin@purpledirective.com.
 
 ## AI on other websites
 
@@ -36,45 +36,35 @@ Quell can hide AI buttons, panels and chat assistants on the websites you visit,
 
 The part that hides buttons and panels on pages runs on every site, so it needs your browser's access to all sites. Quell asks once, on your click, and gives the access back when nothing uses it. Blocking the scripts of the AI chat services needs no site access. You can pause all of it for a site from Quell's popup, and switch each part off: AI buttons and panels, AI chat assistants, support chats that use AI, and AI session recording. The last two are off until you turn them on, because blocking a support chat can remove a site's own help chat.
 
-The page-level rules cover specific sites that we checked: AI buttons and panels on YouTube (the Ask buttons, AI summaries and the Ask questions section), Amazon (Rufus, now shown as Alexa for shopping, its suggested questions, Top highlights, Customers say and a few related buttons), X (Grok buttons and the Grok drawer, and the Today's News panel), and a list of documentation and shopping sites, plus the chat launchers of many AI chat services. Quora is not covered. Reddit's AI features did not appear for our test account, so we do not claim to hide them. AI features that only some accounts or regions see may be missed.
-
 What this does not do. AI crawlers and AI features that run on a website's servers are not affected, and no browser extension can stop them. AI built into the browser itself is not affected. Features that appear only when you are signed in to a site may not be covered, because Quell's rules are written from the logged-out pages. Quell hides what you see and blocks what loads in your browser; it does not delete anything an AI service already holds.
 
 ## Information we collect
 
-**Information you give us.** Such as your name, email address, phone number and postal address; account, profile and preference information; professional information, such as your organization and role; order, billing and payment information, which our payment providers process; your communications with us, including by email, forms, chat and phone; survey responses and reviews; and content you upload, create or share through the Services.
+**Information you give us.** Such as your name and email address, your communications with us, a problem report you send, and your answers on the uninstall page.
 
-**Information we collect automatically.** When you use the Services or open our emails, we and our service providers and partners may collect information such as device, browser and connection information (including IP address and device identifiers), approximate location, the pages, content and features you view and use, how you interact with them, links you click, searches, errors and performance, the date and time of your visits, and the pages that referred you. We collect it using cookies, pixels, tags, scripts, software development kits, logs and similar technologies.
-
-**Information from other sources.** Such as service providers, payment providers, business, marketing and advertising partners, analytics and data providers, providers of business and contact information, social networks, services you choose to connect to the Services, and publicly available sources. We may combine it with information we already have.
-
-**Information we infer.** We may derive information from other information, such as the organization or industry associated with an IP address or email domain, your general location, and your likely interests and preferences.
+**Information we collect automatically.** When you use the Services or open our emails, we and our service providers may collect information such as device, browser and connection information, the pages and features you use, errors and performance, and the date and time of your visits.
 
 ## How we use information
 
 We may use information to:
 
 - provide, operate, maintain and personalize the Services;
-- process transactions and send related notices, such as receipts;
 - respond to your requests and provide support;
-- communicate with you, including about the Services and, where permitted, about products, offers and events we think may interest you;
-- market and advertise our products, including on other websites and services, and measure how well our marketing works;
-- understand how the Services are used and who uses them, conduct research and analytics, improve the Services, and develop new products, features and technologies, including machine-learning and AI models;
+- communicate with you about the Services;
+- understand how the Services are used and who uses them, conduct research and analytics, improve the Services, and develop new products and features;
 - keep the Services and our users secure, and detect, prevent and respond to fraud, abuse and other harmful activity;
 - comply with law, enforce our terms and protect our rights; and
 - for other purposes we describe when we collect the information, or with your consent.
 
-We may monitor or record communications with us, such as support chats and calls, where the law allows. We may create aggregated, de-identified or anonymized information and use it for any lawful purpose. We will not try to re-identify it except as the law permits.
+We may create aggregated, de-identified or anonymized information and use it for any lawful purpose. We will not try to re-identify it except as the law permits.
 
 ## How we share information
 
 We may share information:
 
-- **With service providers** that help us operate the Services, such as hosting, security, payment processing, communications, customer support, analytics and AI-assisted features. They may use it only to provide services to us.
-- **With marketing and analytics partners**, that help us understand how the Services are used and run and measure our marketing, under terms that limit how they may use it.
-- **With business partners**, such as partners we offer products, events or content with.
+- **With service providers** that help us operate the Services, such as hosting, security, communications, customer support, analytics and AI-assisted features. They may use it only to provide services to us.
 - **With our affiliates**, meaning businesses under common ownership or control with us.
-- **At your direction or with your consent**, such as when you share content with others, post a review, or connect another service.
+- **At your direction or with your consent.**
 - **For legal reasons**, when we believe it is needed to comply with law or legal process, respond to government requests, enforce our terms, or protect the rights, property or safety of our users, the public or us.
 - **In a business transfer**, such as a merger, acquisition, financing, reorganization, bankruptcy or sale of assets, including during negotiations.
 - **In aggregated or de-identified form**, which does not identify you.
@@ -83,7 +73,7 @@ We do not sell your personal information or share it for targeted advertising.
 
 ## Cookies and similar technologies
 
-We and our service providers and partners use cookies, pixels, tags, scripts, local storage and similar technologies to keep the Services working, remember your preferences, understand how the Services are used, keep them secure, and measure and improve our content and marketing, including across devices. Some of these tools record how visitors interact with pages. You can control cookies through your browser settings; some features may not work without cookies. Browsers' "Do Not Track" signals have no common standard and we do not respond to them.
+Our website, purpledirective.com, does not set cookies for analytics or advertising and loads no advertising or third-party tracking scripts. Our emails may tell us whether they were opened. You can control cookies through your browser settings.
 
 ## How long we keep information
 
@@ -91,17 +81,17 @@ We keep information for as long as we need it for the purposes described in this
 
 ## How we protect information
 
-We use reasonable administrative, technical and physical measures designed to protect information. No method of transmission or storage is completely secure, so we cannot guarantee the security of information.
+We use reasonable administrative, technical and physical measures designed to protect information. Information is encrypted in transit, access is limited to people who need it, and access is logged. No method of transmission or storage is completely secure, so we cannot guarantee the security of information. If an incident affects information we hold for a customer, we notify that customer without undue delay, and as our agreement or Business Associate Agreement requires. Report security issues to admin@purpledirective.com.
 
 ## Your choices and rights
 
-You can review and update information you have given us by contacting us. You can opt out of marketing emails using the link in them; we may still send you messages about your account, purchases or requests.
+You can review and update information you have given us by contacting us. You can opt out of marketing emails using the link in them; we may still send you messages about your requests.
 
-Depending on where you live, you may have the right to know about, access, correct, delete or get a copy of your personal information, and to opt out of certain uses, such as targeted advertising or profiling. To make a request, email support@purpledirective.com. We may need to verify your identity before acting on it. Where the law allows, an authorized agent may make a request for you. If we decline your request, you may appeal by replying to our decision. We will not discriminate against you for exercising these rights.
+Depending on where you live, you may have the right to know about, access, correct, delete or get a copy of your personal information, and to opt out of certain uses, such as targeted advertising or profiling. To make a request, email admin@purpledirective.com. We may need to verify your identity before acting on it. Where the law allows, an authorized agent may make a request for you. If we decline your request, you may appeal by replying to our decision. We will not discriminate against you for exercising these rights.
 
 ## US state privacy disclosures
 
-Some US state laws ask us to describe our practices using their categories. In the past 12 months we may have collected these categories of personal information: identifiers, such as name, email address, IP address and device identifiers; customer records, such as billing and contact details; commercial information, such as purchases; internet or other electronic network activity; approximate geolocation; audio, electronic or similar information, such as recorded calls or chats; professional or employment information; and inferences drawn from any of these. We collect them from the sources, use them for the purposes, and disclose them to the kinds of recipients described above. We do not sell personal information or share it for cross-context behavioral advertising, including the personal information of anyone under 16. We do not use or disclose sensitive personal information to infer characteristics about you. We keep each category for as long as described in "How long we keep information".
+Some US state laws ask us to describe our practices using their categories. In the past 12 months we may have collected these categories of personal information: identifiers, such as name, email address, IP address and device identifiers; internet or other electronic network activity; and approximate geolocation. We collect them from the sources, use them for the purposes, and disclose them to the kinds of recipients described above. We do not sell personal information or share it for cross-context behavioral advertising, including the personal information of anyone under 16. We do not use or disclose sensitive personal information to infer characteristics about you. We keep each category for as long as described in "How long we keep information".
 
 ## Visitors outside the United States
 
@@ -109,11 +99,11 @@ Where the law of your country applies, such as in the European Economic Area or 
 
 ## Children
 
-The Services are not directed to children under 13, and we do not knowingly collect personal information from them. If you believe a child has given us personal information, contact us and we will take steps to delete it.
+The Services are not directed to children under 18, and we do not knowingly collect personal information from them. If you believe a child has given us personal information, contact us and we will take steps to delete it.
 
 ## Where information is processed
 
-We are based in the United States. Information may be processed in the United States and other countries where we or our service providers operate, which may have different data protection laws from where you live.
+We are based in the United States. All customer data is stored in the United States. Our network provider may route traffic through other countries.
 
 ## Changes to this policy
 
@@ -121,7 +111,7 @@ We may update this policy from time to time. When we do, we will post the new ve
 
 ## Contact us
 
-Questions or requests about this policy: support@purpledirective.com. Purple Directive.
+Questions about this policy: support@purpledirective.com. Privacy requests and security reports: admin@purpledirective.com.
 
 ---
 
