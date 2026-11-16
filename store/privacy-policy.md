@@ -125,4 +125,4 @@ Questions or requests about this policy: support@purpledirective.com. Purple Dir
 
 ---
 
-<sup>1</sup> Purple Directive is a trade name (d/b/a) of Misam Trading, Inc., a Texas corporation based in Spring, Texas, which is the legal party to this policy.
+<sup>1</sup> Purple Directive is a trade name (d/b/a) of Misam Trading, Inc., a Texas corporation, which is the legal party to this policy.
